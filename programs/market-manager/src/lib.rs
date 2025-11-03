@@ -58,8 +58,11 @@ pub mod market_manager {
     }
 
     /// Settle market after oracle provides outcome
-    pub fn settle_market(ctx: Context<SettleMarket>) -> Result<()> {
-        instructions::settle_market::handler(ctx)
+    pub fn settle_market(
+        ctx: Context<SettleMarket>,
+        winning_outcome_index: u8
+    ) -> Result<()> {
+        instructions::settle_market::handler(ctx, winning_outcome_index)
     }
 
     /// Claim winnings from a settled market

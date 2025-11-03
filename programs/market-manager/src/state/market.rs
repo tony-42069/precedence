@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 use crate::constants::MAX_OUTCOMES;
 
+
 #[account]
 pub struct Market {
-    /// Unique identifier for the case
-    pub case_id: String,                    // Max 64 chars
+    /// Unique identifier for the case (fixed size)
+    pub case_id: [u8; 64],                 // Fixed 64 chars
 
     /// Market creator
     pub creator: Pubkey,
@@ -44,20 +45,8 @@ pub struct Market {
 }
 
 impl Market {
-    pub const LEN: usize = 8 +              // discriminator
-        (4 + 64) +                          // case_id
-        32 +                                // creator
-        32 +                                // oracle
-        (4 + MAX_OUTCOMES * Outcome::LEN) + // outcomes vec
-        8 +                                 // total_liquidity
-        8 +                                 // total_bets
-        1 +                                 // status
-        8 +                                 // settlement_time
-        (1 + 1) +                           // winning_outcome option
-        2 +                                 // fee_bps
-        8 +                                 // created_at
-        (1 + 8) +                           // settled_at option
-        1;                                  // bump
+    // Note: Using 8 + 2000 for initial testing - will calculate proper size later
+    pub const LEN: usize = 8 + 2000; // discriminator + data (will optimize later)
 
     pub fn is_active(&self) -> bool {
         matches!(self.status, MarketStatus::Active)
@@ -84,7 +73,7 @@ pub enum MarketStatus {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct Outcome {
     /// Name of the outcome (e.g., "Plaintiff Wins")
-    pub name: String,               // Max 64 chars
+    pub name: [u8; 64],             // Fixed 64 chars
 
     /// Total shares for this outcome
     pub total_shares: u64,

@@ -149,4 +149,6 @@ backend/ml/__pycache__/
 
 # Status and planning documents (local tracking)
 STATUS.md
-implementation-plan.md
+
+# Implementation plans (tracked in git)
+# implementation-plan.md
