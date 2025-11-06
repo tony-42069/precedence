@@ -15,27 +15,35 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Database configuration from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://precedence:password@localhost:5432/precedence_db")
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+DATABASE_URL = os.getenv("DATABASE_URL")
+DEBUG = os.getenv("DEBUG", "True").lower() == "true"
 
 # Create engine
-if DEBUG:
-    # Use SQLite for development/testing
+if DATABASE_URL:
+    # Use specified DATABASE_URL
+    if DATABASE_URL.startswith("sqlite"):
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            echo=DEBUG
+        )
+    else:
+        engine = create_engine(
+            DATABASE_URL,
+            pool_size=10,
+            max_overflow=20,
+            pool_pre_ping=True,
+            echo=DEBUG
+        )
+else:
+    # Default to SQLite for development
     DATABASE_URL = "sqlite:///./precedence_dev.db"
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
-        echo=True
-    )
-else:
-    # Use PostgreSQL for production
-    engine = create_engine(
-        DATABASE_URL,
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,
-        echo=False
+        echo=DEBUG
     )
 
 # Create session maker
