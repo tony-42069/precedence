@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precedence - AI-Powered Legal Prediction Markets</title>
+    <meta name="description" content="Predict legal outcomes with AI-powered insights. Trade on high-profile cases using Polymarket's proven infrastructure.">
+    <link rel="icon" href="public/precedence-logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Primary Colors */
+            --royal-blue: #0052FF;
+            --deep-purple: #6366F1;
+            --gold: #FBBF24;
+
+            /* Secondary Colors */
+            --charcoal: #18181B;
+            --slate-gray: #64748B;
+            --light-gray: #F1F5F9;
+            --off-white: #FAFAFA;
+
+            /* Semantic Colors */
+            --success-green: #10B981;
+            --error-red: #EF4444;
+            --warning-orange: #F59E0B;
+            --info-blue: #3B82F6;
+
+            /* Spacing (8px base unit) */
+            --space-xxs: 0.25rem;  /* 4px */
+            --space-xs: 0.5rem;    /* 8px */
+            --space-sm: 0.75rem;   /* 12px */
+            --space-md: 1rem;      /* 16px */
+            --space-lg: 1.5rem;    /* 24px */
+            --space-xl: 2rem;      /* 32px */
+            --space-2xl: 3rem;     /* 48px */
+            --space-3xl: 4rem;     /* 64px */
+            --space-4xl: 6rem;     /* 96px */
+            --space-5xl: 8rem;     /* 128px */
+
+            /* Border Radius */
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --radius-full: 9999px;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --shadow-brand: 0 8px 24px rgba(0, 82, 255, 0.3);
+
+            /* Easing */
+            --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+            --ease-out: cubic-bezier(0.0, 0, 0.2, 1);
+            --ease-in: cubic-bezier(0.4, 0, 1, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--charcoal);
+            background: var(--off-white);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 var(--space-2xl);
+        }
+
+        /* Header */
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: var(--space-lg) 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            box-shadow: var(--shadow-sm);
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            height: 40px;
+            width: auto;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: var(--space-2xl);
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--charcoal);
+            font-weight: 500;
+            font-size: 16px;
+            transition: color 0.2s var(--ease-in-out);
+        }
+
+        .nav-links a:hover {
+            color: var(--royal-blue);
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: var(--space-5xl) 0 var(--space-4xl);
+            background: linear-gradient(135deg, var(--royal-blue) 0%, var(--deep-purple) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.03)"/><circle cx="90" cy="40" r="0.5" fill="rgba(255,255,255,0.03)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+        }
+
+        .hero-logo {
+            width: 200px;
+            height: 200px;
+            margin-bottom: var(--space-2xl);
+            border-radius: var(--radius-full);
+            box-shadow: var(--shadow-brand);
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: var(--space-lg);
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero .subtitle {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: var(--space-xl);
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero p {
+            font-size: 18px;
+            max-width: 600px;
+            margin: 0 auto var(--space-3xl);
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--gold) 0%, var(--deep-purple) 100%);
+            color: var(--charcoal);
+            padding: var(--space-lg) var(--space-2xl);
+            border-radius: var(--radius-md);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            transition: transform 0.2s var(--ease-in-out), box-shadow 0.2s var(--ease-in-out);
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            z-index: 1;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(251, 191, 36, 0.4);
+        }
+
+        /* Features Section */
+        .features {
+            background: white;
+            padding: var(--space-4xl) 0;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1.3;
+            margin-bottom: var(--space-3xl);
+            color: var(--charcoal);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-2xl);
+            margin-bottom: var(--space-4xl);
+        }
+
+        .feature-card {
+            background: white;
+            padding: var(--space-2xl);
+            border-radius: var(--radius-lg);
+            text-align: center;
+            transition: transform 0.3s var(--ease-in-out), box-shadow 0.3s var(--ease-in-out);
+            border: 1px solid var(--light-gray);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--royal-blue), var(--deep-purple));
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: var(--space-lg);
+            display: block;
+        }
+
+        .feature-card h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: var(--space-md);
+            color: var(--charcoal);
+        }
+
+        .feature-card p {
+            color: var(--slate-gray);
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        /* Technology Section */
+        .technology {
+            background: var(--light-gray);
+            padding: var(--space-4xl) 0;
+        }
+
+        .technology h2 {
+            text-align: center;
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1.3;
+            margin-bottom: var(--space-3xl);
+            color: var(--charcoal);
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-xl);
+        }
+
+        .tech-item {
+            background: white;
+            padding: var(--space-xl);
+            border-radius: var(--radius-lg);
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.3s var(--ease-in-out), box-shadow 0.3s var(--ease-in-out);
+        }
+
+        .tech-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .tech-logo {
+            height: 60px;
+            margin-bottom: var(--space-lg);
+            filter: grayscale(100%);
+            transition: filter 0.3s var(--ease-in-out);
+        }
+
+        .tech-item:hover .tech-logo {
+            filter: grayscale(0%);
+        }
+
+        .tech-item h4 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: var(--space-sm);
+            color: var(--charcoal);
+        }
+
+        .tech-item p {
+            color: var(--slate-gray);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Stats Section */
+        .stats {
+            background: linear-gradient(135deg, var(--charcoal) 0%, #0A1F44 100%);
+            color: white;
+            padding: var(--space-3xl) 0;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-2xl);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .stat-item h3 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: var(--space-sm);
+            color: var(--gold);
+        }
+
+        .stat-item p {
+            opacity: 0.9;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--charcoal);
+            color: white;
+            padding: var(--space-3xl) 0 var(--space-xl);
+            text-align: center;
+        }
+
+        .footer-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-2xl);
+            margin-bottom: var(--space-2xl);
+        }
+
+        .footer-section h4 {
+            margin-bottom: var(--space-md);
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .footer-section ul {
+            list-style: none;
+        }
+
+        .footer-section ul li {
+            margin-bottom: var(--space-sm);
+        }
+
+        .footer-section a {
+            color: var(--slate-gray);
+            text-decoration: none;
+            transition: color 0.2s var(--ease-in-out);
+            font-size: 14px;
+        }
+
+        .footer-section a:hover {
+            color: var(--royal-blue);
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #444;
+            padding-top: var(--space-xl);
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        /* Focus States for Accessibility */
+        *:focus-visible {
+            outline: 2px solid var(--royal-blue);
+            outline-offset: 2px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1023px) {
+            .container {
+                padding: 0 var(--space-lg);
+            }
+
+            .hero h1 {
+                font-size: 36px;
+            }
+
+            .hero .subtitle {
+                font-size: 20px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .features-grid,
+            .tech-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 639px) {
+            .hero {
+                padding: var(--space-4xl) 0 var(--space-3xl);
+            }
+
+            .hero h1 {
+                font-size: 30px;
+            }
+
+            .hero .subtitle {
+                font-size: 18px;
+            }
+
+            .hero-logo {
+                width: 150px;
+                height: 150px;
+            }
+
+            .features h2,
+            .technology h2 {
+                font-size: 30px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="container">
+            <img src="public/precedence-logo.png" alt="Precedence Logo" class="logo">
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#technology">Technology</a></li>
+                <li><a href="https://github.com/tony-42069/precedence" target="_blank">GitHub</a></li>
+                <li><a href="https://polymarket.com/builders" target="_blank">Apply</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <img src="public/precedence-logo.png" alt="Precedence Logo - Gavel and Market Chart Symbol" class="hero-logo">
+            <h1>⚖️ Precedence</h1>
+            <p class="subtitle">Know What Comes Next</p>
+            <p>AI-Powered Legal Prediction Markets. Trade on high-profile case outcomes with machine learning insights, powered by Polymarket's proven infrastructure and CourtListener's semantic search.</p>
+            <a href="https://github.com/tony-42069/precedence" class="cta-button" target="_blank">View on GitHub →</a>
+        </div>
+    </section>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2>🚀 Key Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <span class="feature-icon">🔍</span>
+                    <h3>Semantic Legal Search</h3>
+                    <p>Natural language queries that understand legal meaning beyond keywords. Find cases using plain English through CourtListener's advanced search.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">🤖</span>
+                    <h3>AI Judge Analysis</h3>
+                    <p>ML models trained on thousands of judicial opinions. Predict outcomes based on historical patterns and judge behavior analysis.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">💰</span>
+                    <h3>Polymarket Integration</h3>
+                    <p>Leverage proven trading infrastructure with $39M+ daily volume. Gas-free trading on Polygon with instant settlement.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">📊</span>
+                    <h3>Real-Time Intelligence</h3>
+                    <p>Live market prices + AI predictions side-by-side. Track positions and P&L with real-time updates.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">⚡</span>
+                    <h3>High-Profile Cases</h3>
+                    <p>Supreme Court, major criminal trials, regulatory battles. Curated markets for serious traders only.</p>
+                </div>
+                <div class="feature-card">
+                    <span class="feature-icon">🎯</span>
+                    <h3>Builder Rewards</h3>
+                    <p>Earn revenue share on trading volume. $1M+ in grants available through Polymarket's builder program.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="technology" id="technology">
+        <div class="container">
+            <h2>🛠️ Technology Stack</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <img src="https://img.shields.io/badge/Polymarket-Builder-7C3AED?style=for-the-badge&logo=ethereum&logoColor=white" alt="Polymarket Builder Program" class="tech-logo">
+                    <h4>Polymarket CLOB</h4>
+                    <p>Central Limit Order Book for efficient matching and deep liquidity. $39M+ daily volume across 10,000+ markets.</p>
+                </div>
+                <div class="tech-item">
+                    <img src="https://img.shields.io/badge/CourtListener-API-0066CC?style=for-the-badge&logo=data&logoColor=white" alt="CourtListener Semantic API" class="tech-logo">
+                    <h4>CourtListener API</h4>
+                    <p>Semantic search with 2TB of legal embeddings. Natural language queries across all US case law.</p>
+                </div>
+                <div class="tech-item">
+                    <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="FastAPI Backend" class="tech-logo">
+                    <h4>FastAPI Backend</h4>
+                    <p>High-performance async API with ML integration. PostgreSQL for case data, Redis for caching.</p>
+                </div>
+                <div class="tech-item">
+                    <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="Next.js Frontend" class="tech-logo">
+                    <h4>Next.js Frontend</h4>
+                    <p>Modern React framework with wallet integration. Real-time updates and responsive design.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>$39M+</h3>
+                    <p>Daily Trading Volume</p>
+                </div>
+                <div class="stat-item">
+                    <h3>10,000+</h3>
+                    <p>Active Markets</p>
+                </div>
+                <div class="stat-item">
+                    <h3>2TB</h3>
+                    <p>Legal Embeddings</p>
+                </div>
+                <div class="stat-item">
+                    <h3>$1M+</h3>
+                    <p>Builder Grants</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Platform</h4>
+                    <ul>
+                        <li><a href="https://github.com/tony-42069/precedence" target="_blank">GitHub</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#technology">Technology</a></li>
+                        <li><a href="README.md">Documentation</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Integrations</h4>
+                    <ul>
+                        <li><a href="https://polymarket.com" target="_blank">Polymarket</a></li>
+                        <li><a href="https://www.courtlistener.com" target="_blank">CourtListener</a></li>
+                        <li><a href="https://polygon.technology" target="_blank">Polygon</a></li>
+                        <li><a href="https://www.courtlistener.com/help/api/" target="_blank">API Docs</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://discord.gg/precedence" target="_blank">Discord</a></li>
+                        <li><a href="https://twitter.com/PrecedenceMarket" target="_blank">Twitter</a></li>
+                        <li><a href="https://polymarket.com/builders" target="_blank">Builder Program</a></li>
+                        <li><a href="mailto:hello@precedence.market">Contact</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2025 Precedence. Built with ❤️ by <a href="https://github.com/tony-42069" target="_blank">@tony-42069</a></p>
+                <p>Powered by Polymarket • CourtListener • AI/ML</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
