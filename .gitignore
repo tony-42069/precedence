@@ -149,6 +149,7 @@ backend/ml/__pycache__/
 
 # Status and planning documents (local tracking)
 STATUS.md
+polymarket-transition-plan.md
 
 # Implementation plans (tracked in git)
 # implementation-plan.md
