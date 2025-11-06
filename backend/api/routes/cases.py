@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 
-from ...integrations.court_listener import court_listener, search_cases, get_opinion_details, get_cluster_details
+from backend.integrations.court_listener import court_listener, search_cases, get_opinion_details, get_cluster_details
 
 logger = logging.getLogger(__name__)
 

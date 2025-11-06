@@ -16,12 +16,16 @@ const colors = {
 };
 
 interface Market {
-  id: string;
-  title: string;
-  description: string;
-  probability: number;
-  volume: number;
-  endDate: string;
+  id?: string;
+  market?: string;  // Polymarket uses 'market' for title
+  description?: string;
+  volume?: number;
+  closed?: boolean;
+  active?: boolean;
+  // Additional fields for display
+  title?: string;
+  probability?: number;
+  endDate?: string;
 }
 
 export default function Home() {
@@ -40,7 +44,8 @@ export default function Home() {
           const marketsResponse = await fetch('http://localhost:8000/api/markets');
           if (marketsResponse.ok) {
             const data = await marketsResponse.json();
-            setMarkets(data.markets || []);
+            // Backend returns markets directly as an array
+            setMarkets(Array.isArray(data) ? data : (data.markets || []));
           }
         } else {
           setBackendStatus('offline');
@@ -124,31 +129,23 @@ export default function Home() {
             </div>
           ) : markets.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {markets.map((market) => (
-                <div key={market.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <h3 className="font-semibold text-gray-900 mb-2">{market.title}</h3>
-                  <p className="text-sm text-gray-600 mb-3">{market.description}</p>
+              {markets.map((market, index) => (
+                <div key={market.id || index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <h3 className="font-semibold text-gray-900 mb-2">{market.market || 'Market Title'}</h3>
+                  <p className="text-sm text-gray-600 mb-3">{market.description || 'Market description'}</p>
 
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium text-gray-700">Probability</span>
-                    <span className="text-lg font-bold" style={{ color: colors.royalBlue }}>
-                      {market.probability}%
+                    <span className="text-sm font-medium text-gray-700">Status</span>
+                    <span className={`text-sm font-medium px-2 py-1 rounded ${
+                      market.closed ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                    }`}>
+                      {market.closed ? 'Closed' : 'Active'}
                     </span>
-                  </div>
-
-                  <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
-                    <div
-                      className="h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${market.probability}%`,
-                        background: `linear-gradient(90deg, ${colors.successGreen || '#10B981'}, ${colors.gold})`
-                      }}
-                    ></div>
                   </div>
 
                   <div className="flex justify-between text-sm text-gray-600">
                     <span>Volume: ${market.volume?.toLocaleString() || '0'}</span>
-                    <span>Ends: {new Date(market.endDate).toLocaleDateString()}</span>
+                    <span>Polymarket</span>
                   </div>
                 </div>
               ))}

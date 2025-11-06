@@ -4,6 +4,12 @@ FastAPI backend for Precedence
 Main application entry point with routing, middleware, and configuration.
 """
 
+from dotenv import load_dotenv
+import os
+
+# Load environment variables FIRST
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -13,8 +19,8 @@ from fastapi.responses import JSONResponse
 import time
 import os
 
-from .routes import cases, markets, predictions
-from ..database import init_db, get_db
+from backend.api.routes import cases, markets, predictions
+from backend.database import init_db, get_db
 
 # Configure logging
 logging.basicConfig(
@@ -56,7 +62,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],  # Allow frontend dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
