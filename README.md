@@ -2,7 +2,7 @@
 
 # ⚖️ Precedence
 
-<img src="public/precedence-logo.png" alt="Precedence Logo" width="200" height="200">
+<img src="public/precedence-logo.png" alt="Precedence Logo" width="500" height="500">
 
 ### *Know What Comes Next*
 
