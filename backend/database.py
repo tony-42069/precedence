@@ -1,57 +1,147 @@
 """
-Database connection and session management for Precedence backend.
+Database models and configuration for Precedence
 
-Adapted from litigation-simulator/database.py
+SQLAlchemy models for cases, markets, predictions, and users.
 """
 
 import os
-from sqlalchemy import create_engine, MetaData
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
-import logging
+from sqlalchemy.orm import sessionmaker, Session, relationship
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
-# Database configuration from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL")
-DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+# Database URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./precedence_dev.db")
 
 # Create engine
-if DATABASE_URL:
-    # Use specified DATABASE_URL
-    if DATABASE_URL.startswith("sqlite"):
-        engine = create_engine(
-            DATABASE_URL,
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-            echo=DEBUG
-        )
-    else:
-        engine = create_engine(
-            DATABASE_URL,
-            pool_size=10,
-            max_overflow=20,
-            pool_pre_ping=True,
-            echo=DEBUG
-        )
-else:
-    # Default to SQLite for development
-    DATABASE_URL = "sqlite:///./precedence_dev.db"
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        echo=DEBUG
-    )
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+)
 
-# Create session maker
+# Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create metadata and base
-metadata = MetaData()
-Base = declarative_base(metadata=metadata)
+# Base class for models
+Base = declarative_base()
+
+# Database models
+class Case(Base):
+    """Legal case model from CourtListener."""
+    __tablename__ = "cases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    court_listener_id = Column(Integer, unique=True, index=True)
+    case_name = Column(String(500))
+    court = Column(String(200))
+    date_filed = Column(DateTime)
+    status = Column(String(100))
+    docket_number = Column(String(100))
+    case_type = Column(String(100))
+    jurisdiction = Column(String(100))
+
+    # Raw data from CourtListener
+    raw_data = Column(JSON)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    predictions = relationship("CasePrediction", back_populates="case")
+
+class Market(Base):
+    """Prediction market model from Polymarket."""
+    __tablename__ = "markets"
+
+    id = Column(String(100), primary_key=True, index=True)
+    market_name = Column(String(500))
+    description = Column(Text)
+    volume = Column(Float, default=0.0)
+    active = Column(Boolean, default=True)
+    closed = Column(Boolean, default=False)
+    end_date = Column(DateTime)
+
+    # Market specifics
+    category = Column(String(100))
+    tags = Column(JSON)  # List of tags
+    outcomes = Column(JSON)  # Possible outcomes
+
+    # Raw data from Polymarket
+    raw_data = Column(JSON)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    predictions = relationship("MarketPrediction", back_populates="market")
+
+class CasePrediction(Base):
+    """AI predictions for case outcomes."""
+    __tablename__ = "case_predictions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, ForeignKey("cases.id"), index=True)
+
+    # Prediction data
+    predicted_outcome = Column(String(200))
+    confidence = Column(Float)
+    reasoning = Column(Text)
+
+    # Model metadata
+    model_version = Column(String(50))
+    features_used = Column(JSON)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    case = relationship("Case", back_populates="predictions")
+
+class MarketPrediction(Base):
+    """AI analysis for prediction markets."""
+    __tablename__ = "market_predictions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    market_id = Column(String(100), ForeignKey("markets.id"), index=True)
+
+    # Analysis data
+    recommendation = Column(String(200))  # BUY, SELL, HOLD
+    confidence = Column(Float)
+    reasoning = Column(Text)
+    expected_return = Column(Float)
+
+    # Market data at time of analysis
+    market_price = Column(Float)
+    market_volume = Column(Float)
+
+    # Model metadata
+    model_version = Column(String(50))
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    market = relationship("Market", back_populates="predictions")
+
+class User(Base):
+    """User model for authentication and preferences."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, index=True)
+    username = Column(String(100), unique=True, index=True)
+    hashed_password = Column(String(255))
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+
+    # User preferences
+    preferences = Column(JSON)
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 def get_db() -> Session:
     """
@@ -70,30 +160,15 @@ def create_all_tables():
     """
     Create all database tables.
     """
-    try:
-        logger.info("Creating database tables...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {str(e)}")
-        raise
+    Base.metadata.create_all(bind=engine)
 
-def init_database():
+def init_db():
     """
     Initialize database with required setup.
     """
-    try:
-        # Create tables
-        create_all_tables()
-
-        # Additional initialization can go here
-        # e.g., seed data, indexes, etc.
-
-        logger.info("Database initialization completed")
-    except Exception as e:
-        logger.error(f"Database initialization failed: {str(e)}")
-        raise
+    create_all_tables()
 
 if __name__ == "__main__":
     # Initialize database when run directly
-    init_database()
+    init_db()
+    print("Database initialized successfully!")

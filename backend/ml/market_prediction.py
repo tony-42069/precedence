@@ -451,3 +451,155 @@ class MarketPredictor:
             "model_confidence": len(factors),  # Simple confidence proxy
             "prediction_basis": f"Based on analysis of {len(factors)} case factors"
         }
+
+# Global predictor instance
+_market_predictor = None
+
+def get_market_predictor() -> MarketPredictor:
+    """Get or create global market predictor instance."""
+    global _market_predictor
+    if _market_predictor is None:
+        _market_predictor = MarketPredictor()
+    return _market_predictor
+
+def predict_case_outcome(case_id: Optional[int] = None, case_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Predict case outcome using AI/ML models.
+
+    This is a convenience function that uses the MarketPredictor class.
+
+    Args:
+        case_id: Optional case ID for reference
+        case_data: Case data dictionary
+
+    Returns:
+        Prediction results dictionary
+    """
+    try:
+        predictor = get_market_predictor()
+
+        # If no case data provided, create mock data for demonstration
+        if not case_data:
+            case_data = {
+                "case_type": "civil",
+                "case_facts": "Contract dispute between two parties regarding service agreement terms",
+                "jurisdiction": {"level": "federal", "court": "district"},
+                "judge_id": "judge_123",
+                "case_age_months": 12,
+                "precedent_strength": 0.7
+            }
+
+        # Get prediction
+        prediction = predictor.predict_outcome_probabilities(case_data)
+
+        # Add case_id if provided
+        if case_id:
+            prediction["case_id"] = case_id
+
+        return prediction
+
+    except Exception as e:
+        logger.error(f"Error in predict_case_outcome: {str(e)}")
+        # Return fallback prediction
+        return {
+            "predicted_outcome": "PLAINTIFF_WIN",
+            "confidence": 0.55,
+            "probabilities": {
+                "PLAINTIFF_WIN": 0.55,
+                "DEFENDANT_WIN": 0.35,
+                "SETTLEMENT": 0.10
+            },
+            "reasoning": "Fallback prediction due to model unavailability",
+            "market_recommendations": {
+                "suggested_outcomes": ["PLAINTIFF_WIN", "DEFENDANT_WIN", "SETTLEMENT"],
+                "initial_odds": {"PLAINTIFF_WIN": 1.8, "DEFENDANT_WIN": 2.9, "SETTLEMENT": 10.0}
+            },
+            "feature_impact": {
+                "key_factors": [{"factor": "model_unavailable", "impact": "unknown"}]
+            }
+        }
+
+def analyze_market_opportunity(market_data: Optional[Dict[str, Any]] = None, case_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Analyze market opportunity for prediction markets.
+
+    Args:
+        market_data: Market data from Polymarket
+        case_data: Related case data
+
+    Returns:
+        Market analysis results
+    """
+    try:
+        predictor = get_market_predictor()
+
+        # If no market data provided, create mock analysis
+        if not market_data:
+            return {
+                "market_id": "unknown",
+                "recommendation": "HOLD",
+                "confidence": 0.6,
+                "reasoning": "Insufficient market data for analysis",
+                "expected_return": 0.0,
+                "market_price": 0.5,
+                "market_volume": 0.0,
+                "analysis_timestamp": datetime.now().isoformat(),
+                "model_version": "market_analyzer_v1.0"
+            }
+
+        # Extract market information
+        market_info = market_data.get("market", {})
+        price_info = market_data.get("price", {})
+
+        # Simple analysis based on available data
+        current_price = price_info.get("mid_price", 0.5)
+        volume = market_info.get("volume", 0)
+
+        # Generate recommendation based on price and volume
+        if current_price < 0.3:
+            recommendation = "BUY"
+            confidence = 0.7
+            reasoning = "Price indicates undervaluation relative to market conditions"
+        elif current_price > 0.7:
+            recommendation = "SELL"
+            confidence = 0.7
+            reasoning = "Price indicates overvaluation relative to market conditions"
+        else:
+            recommendation = "HOLD"
+            confidence = 0.5
+            reasoning = "Price is at fair value, wait for better opportunities"
+
+        # Calculate expected return (simplified)
+        expected_return = abs(0.5 - current_price) * 2  # Rough estimate
+
+        return {
+            "market_id": market_info.get("id", "unknown"),
+            "recommendation": recommendation,
+            "confidence": confidence,
+            "reasoning": reasoning,
+            "expected_return": expected_return,
+            "market_price": current_price,
+            "market_volume": volume,
+            "analysis_timestamp": datetime.now().isoformat(),
+            "model_version": "market_analyzer_v1.0",
+            "trading_signals": {
+                "momentum": "neutral",
+                "volatility": "medium" if volume > 1000 else "low",
+                "liquidity_score": min(volume / 10000, 1.0)  # Normalized 0-1
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error in analyze_market_opportunity: {str(e)}")
+        # Return fallback analysis
+        return {
+            "market_id": "unknown",
+            "recommendation": "HOLD",
+            "confidence": 0.5,
+            "reasoning": "Analysis unavailable due to technical issues",
+            "expected_return": 0.0,
+            "market_price": 0.5,
+            "market_volume": 0.0,
+            "analysis_timestamp": datetime.now().isoformat(),
+            "model_version": "market_analyzer_v1.0_fallback"
+        }
