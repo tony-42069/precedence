@@ -223,12 +223,31 @@ class JudgeProfiler:
 
         # Train topic model if not already trained
         if self.topic_model is None:
-            self.topic_model = NMF(
-                n_components=n_topics,
-                random_state=42,
-                alpha=0.1,
-                l1_ratio=0.5
-            )
+            # Use parameters compatible with current sklearn version
+            try:
+                # Try newer sklearn parameters
+                self.topic_model = NMF(
+                    n_components=n_topics,
+                    random_state=42,
+                    alpha_W=0.1,
+                    alpha_H=0.1,
+                    l1_ratio=0.5
+                )
+            except TypeError:
+                # Fallback for older sklearn versions
+                try:
+                    self.topic_model = NMF(
+                        n_components=n_topics,
+                        random_state=42,
+                        alpha=0.1,
+                        l1_ratio=0.5
+                    )
+                except TypeError:
+                    # Final fallback - minimal parameters
+                    self.topic_model = NMF(
+                        n_components=n_topics,
+                        random_state=42
+                    )
 
         # Transform the TF-IDF features to topic space
         W = self.topic_model.fit_transform(X)
