@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 import time
 import os
 
-from backend.api.routes import cases, markets, predictions
+from backend.api.routes import cases, markets, predictions, trading
 from backend.database import init_db, get_db
 
 # Configure logging
@@ -120,6 +120,11 @@ app.include_router(
     predictions.router,
     prefix="/api/predictions",
     tags=["predictions"]
+)
+
+app.include_router(
+    trading.router,
+    tags=["trading"]
 )
 
 # Health check endpoint

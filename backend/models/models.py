@@ -7,6 +7,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -36,7 +37,7 @@ class Judge(Base):
     birth_year = Column(Integer)
     education = Column(Text)
     prior_positions = Column(Text)
-    metadata = Column(JSON)
+    judge_metadata = Column(JSON)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -63,7 +64,7 @@ class Case(Base):
     case_type = Column(String(50))
     judges = Column(JSON)
     status = Column(String(50))
-    metadata = Column(JSON)
+    case_metadata = Column(JSON)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -79,7 +80,7 @@ class Opinion(Base):
     citation = Column(String(255))
     precedential = Column(Boolean)
     citation_count = Column(Integer)
-    metadata = Column(JSON)
+    opinion_metadata = Column(JSON)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -92,7 +93,7 @@ class OralArgument(Base):
     panel = Column(JSON)
     transcript = Column(Text)
     audio_url = Column(String(255))
-    metadata = Column(JSON)
+    argument_metadata = Column(JSON)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
 
@@ -211,7 +212,7 @@ class Market(Base):
     creator_address = Column(String(44))
 
     # Metadata
-    metadata = Column(JSON)
+    market_metadata = Column(JSON)
 
     # Audit
     created_at = Column(DateTime)
@@ -403,6 +404,34 @@ class CaseEvent(Base):
     # Audit
     created_at = Column(DateTime)
 
+
+class Trade(Base):
+    """
+    Trades placed through Precedence platform for Polymarket attribution.
+    """
+    __tablename__ = "trades"
+    id = Column(Integer, primary_key=True)
+
+    # Polymarket market reference
+    market_id = Column(String(100), nullable=False)
+
+    # User information
+    user_wallet = Column(String(44), nullable=False)
+
+    # Trade details
+    side = Column(String(10), nullable=False)  # "YES" or "NO"
+    amount = Column(Float, nullable=False)  # Amount in USDC
+    price = Column(Float, nullable=False)  # Price at time of trade
+
+    # Polymarket response
+    order_id = Column(String(100))
+    transaction_hash = Column(String(100))
+
+    # Status
+    status = Column(String(20), default="confirmed")  # confirmed, failed, pending
+
+    # Audit
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class PlatformStatistic(Base):
     """

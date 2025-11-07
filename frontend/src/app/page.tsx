@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from "next/image";
 import { useWallet } from '../hooks/useWallet';
+import { TradingModal } from '../components/TradingModal';
 
 // Brand colors from our design system
 const colors = {
@@ -37,6 +38,8 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [showMarketModal, setShowMarketModal] = useState(false);
+  const [showTradingModal, setShowTradingModal] = useState(false);
+  const [tradingMarket, setTradingMarket] = useState<Market | null>(null);
 
   // Wallet functionality
   const { walletState, connectPhantom, connectMetaMask, disconnect, checkWalletAvailability } = useWallet();
@@ -348,15 +351,39 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Action Button */}
+                  {/* Trading Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => {
+                        setTradingMarket(market);
+                        setShowTradingModal(true);
+                      }}
+                      disabled={!walletState.connected}
+                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+                    >
+                      Buy YES
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTradingMarket(market);
+                        setShowTradingModal(true);
+                      }}
+                      disabled={!walletState.connected}
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+                    >
+                      Buy NO
+                    </button>
+                  </div>
+
+                  {/* View Market Button */}
                   <button
                     onClick={() => {
                       setSelectedMarket(market);
                       setShowMarketModal(true);
                     }}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                    className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
                   >
-                    View Market
+                    View Details
                   </button>
                 </div>
 
@@ -524,6 +551,13 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Trading Modal */}
+      <TradingModal
+        market={tradingMarket}
+        isOpen={showTradingModal}
+        onClose={() => setShowTradingModal(false)}
+      />
     </div>
   );
 }
