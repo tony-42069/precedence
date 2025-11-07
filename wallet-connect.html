@@ -57,13 +57,14 @@
         .logo {
             width: 64px;
             height: 64px;
-            background: var(--gradient-primary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: block;
             margin: 0 auto var(--space-lg) auto;
             box-shadow: var(--shadow-brand);
+            border-radius: 8px;
+            background-image: url('public/precedence-logo.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
         }
 
         .logo-text {
@@ -88,8 +89,8 @@
         }
 
         .wallet-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid var(--light-gray);
             border-radius: var(--radius-lg);
             padding: var(--space-lg);
             cursor: pointer;
@@ -101,12 +102,15 @@
             font-size: 16px;
             font-weight: 600;
             backdrop-filter: blur(10px);
+            color: var(--royal-blue);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         .wallet-btn:hover {
             border-color: var(--royal-blue);
-            background: rgba(0, 82, 255, 0.1);
+            background: rgba(255, 255, 255, 1);
             transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 82, 255, 0.2);
         }
 
         .wallet-btn:disabled {
@@ -185,9 +189,7 @@
 <body>
     <div class="container">
         <div class="logo-section">
-            <div class="logo">
-                <span style="color: white; font-size: 24px; font-weight: bold;">P</span>
-            </div>
+            <div class="logo"></div>
             <h1 class="logo-text">Precedence</h1>
             <p class="subtitle">Connect your wallet to start trading on legal prediction markets</p>
         </div>
@@ -199,14 +201,11 @@
 
         <div class="wallet-grid">
             <button id="phantom-btn" class="wallet-btn" disabled>
-                <img src="https://phantom.app/img/logo.png" alt="Phantom" class="wallet-icon">
+                <img src="public/phantom-wallet-logo.svg" alt="Phantom" class="wallet-icon">
                 <span>Connect Phantom</span>
             </button>
             <button id="metamask-btn" class="wallet-btn" disabled>
-                <svg class="wallet-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" fill="#F6851B"/>
-                    <path d="M16 4C9.373 4 4 9.373 4 16s5.373 12 12 12 12-5.373 12-12S22.627 4 16 4zm6.5 8.5c-.5 0-.9.4-.9.9v8.2c0 .5.4.9.9.9s.9-.4.9-.9V13.4c0-.5-.4-.9-.9-.9zm-13 0c-.5 0-.9.4-.9.9v8.2c0 .5.4.9.9.9s.9-.4.9-.9V13.4c0-.5-.4-.9-.9-.9z" fill="white"/>
-                </svg>
+                <img src="public/MetaMask-icon-fox.svg" alt="MetaMask" class="wallet-icon">
                 <span>Connect MetaMask</span>
             </button>
         </div>
@@ -230,7 +229,7 @@
                 phantomAvailable = true;
                 document.getElementById('phantom-btn').disabled = false;
                 document.getElementById('phantom-btn').innerHTML = `
-                    <img src="https://phantom.app/img/logo.png" alt="Phantom" class="wallet-icon">
+                    <img src="public/phantom-wallet-logo.svg" alt="Phantom" class="wallet-icon">
                     <span>Connect Phantom</span>
                 `;
             }

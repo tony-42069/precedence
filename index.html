@@ -143,6 +143,7 @@
         /* --- FEATURED MARKETS SECTION --- */
         #markets { background-color: var(--light-gray); }
         .markets-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-xl); }
+        .market-card-link { text-decoration: none; color: inherit; display: block; }
         .market-card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--light-gray); overflow: hidden; box-shadow: var(--shadow-sm); transition: transform 0.3s, box-shadow 0.3s; }
         .market-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-lg); }
         .market-card-content { padding: var(--space-lg); }
@@ -249,7 +250,7 @@
                             The world's first platform for trading on high-profile legal cases, powered by AI analysis and Polymarket's high-liquidity trading engine. Gain your decisive edge.
                         </p>
                         <div class="hero-actions">
-                            <a href="#markets" class="btn btn-primary">
+                            <a href="wallet-connect.html" class="btn btn-primary">
                                 <i data-lucide="bar-chart-3" class="button-icon"></i>
                                 Explore Markets
                             </a>
@@ -332,51 +333,57 @@
                     <p>Trade on the outcomes of the world's most talked-about legal battles. Odds are updated in real-time.</p>
                 </div>
                 <div class="markets-grid">
-                    <div class="market-card fade-in">
-                        <div class="market-card-content">
-                            <div class="market-card-header">
-                                <div>
-                                    <p class="market-category">SUPREME COURT</p>
-                                    <h3>Will SCOTUS strike down Trump's tariff authority?</h3>
+                    <a href="wallet-connect.html" class="market-card-link">
+                        <div class="market-card fade-in">
+                            <div class="market-card-content">
+                                <div class="market-card-header">
+                                    <div>
+                                        <p class="market-category">SUPREME COURT</p>
+                                        <h3>Will SCOTUS strike down Trump's tariff authority?</h3>
+                                    </div>
+                                    <div class="market-odds">38¢</div>
                                 </div>
-                                <div class="market-odds">38¢</div>
-                            </div>
-                            <div class="market-outcomes">
-                                <button class="outcome-btn yes">YES 38¢</button>
-                                <button class="outcome-btn no">NO 62¢</button>
+                                <div class="market-outcomes">
+                                    <button class="outcome-btn yes" onclick="event.preventDefault(); window.location.href='wallet-connect.html';">YES 38¢</button>
+                                    <button class="outcome-btn no" onclick="event.preventDefault(); window.location.href='wallet-connect.html';">NO 62¢</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="market-card fade-in" style="transition-delay: 0.1s;">
-                        <div class="market-card-content">
-                            <div class="market-card-header">
-                                <div>
-                                    <p class="market-category">CRIMINAL TRIAL</p>
-                                    <h3>Will Sean Combs be found guilty in his federal trial?</h3>
+                    </a>
+                    <a href="wallet-connect.html" class="market-card-link">
+                        <div class="market-card fade-in" style="transition-delay: 0.1s;">
+                            <div class="market-card-content">
+                                <div class="market-card-header">
+                                    <div>
+                                        <p class="market-category">CRIMINAL TRIAL</p>
+                                        <h3>Will Sean Combs be found guilty in his federal trial?</h3>
+                                    </div>
+                                    <div class="market-odds">72¢</div>
                                 </div>
-                                <div class="market-odds">72¢</div>
-                            </div>
-                            <div class="market-outcomes">
-                                <button class="outcome-btn yes">YES 72¢</button>
-                                <button class="outcome-btn no">NO 28¢</button>
+                                <div class="market-outcomes">
+                                    <button class="outcome-btn yes" onclick="event.preventDefault(); window.location.href='wallet-connect.html';">YES 72¢</button>
+                                    <button class="outcome-btn no" onclick="event.preventDefault(); window.location.href='wallet-connect.html';">NO 28¢</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="market-card fade-in" style="transition-delay: 0.2s;">
-                        <div class="market-card-content">
-                            <div class="market-card-header">
-                                <div>
-                                    <p class="market-category">REGULATORY LAW</p>
-                                    <h3>Will the TikTok divestiture law be blocked by courts?</h3>
+                    </a>
+                    <a href="wallet-connect.html" class="market-card-link">
+                        <div class="market-card fade-in" style="transition-delay: 0.2s;">
+                            <div class="market-card-content">
+                                <div class="market-card-header">
+                                    <div>
+                                        <p class="market-category">REGULATORY LAW</p>
+                                        <h3>Will the TikTok divestiture law be blocked by courts?</h3>
+                                    </div>
+                                    <div class="market-odds">55¢</div>
                                 </div>
-                                <div class="market-odds">55¢</div>
-                            </div>
-                            <div class="market-outcomes">
-                                <button class="outcome-btn yes">YES 55¢</button>
-                                <button class="outcome-btn no">NO 45¢</button>
+                                <div class="market-outcomes">
+                                    <button class="outcome-btn yes" onclick="event.preventDefault(); window.location.href='wallet-connect.html';">YES 55¢</button>
+                                    <button class="outcome-btn no" onclick="event.preventDefault(); window.location.href='wallet-connect.html';">NO 45¢</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </a>
                 </div>
             </div>
         </section>
