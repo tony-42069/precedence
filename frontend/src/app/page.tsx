@@ -25,6 +25,9 @@ interface Market {
   closed?: boolean;
   active?: boolean;
   tags?: string[];
+  // Price fields from backend
+  current_yes_price?: number;
+  current_no_price?: number;
   // Additional fields for display
   title?: string;
   probability?: number;
@@ -333,6 +336,13 @@ export default function Home() {
                     {market.question || 'Market Question'}
                   </h3>
 
+                  {/* Price info for trading buttons */}
+                  {market.current_yes_price !== undefined && market.current_no_price !== undefined && (
+                    <div className="text-xs text-slate-500 mb-3 text-center">
+                      1 share = ${(market.current_yes_price * 100).toFixed(2)} YES / ${(market.current_no_price * 100).toFixed(2)} NO
+                    </div>
+                  )}
+
                   {/* Description */}
                   {market.description && (
                     <p className="text-sm text-slate-600 mb-4 line-clamp-2">
@@ -359,9 +369,14 @@ export default function Home() {
                         setShowTradingModal(true);
                       }}
                       disabled={!walletState.connected}
-                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm flex flex-col items-center"
                     >
-                      Buy YES
+                      <span>Buy YES</span>
+                      {market.current_yes_price !== undefined && (
+                        <span className="text-xs opacity-90">
+                          ${(market.current_yes_price * 100).toFixed(2)}
+                        </span>
+                      )}
                     </button>
                     <button
                       onClick={() => {
@@ -369,9 +384,14 @@ export default function Home() {
                         setShowTradingModal(true);
                       }}
                       disabled={!walletState.connected}
-                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm flex flex-col items-center"
                     >
-                      Buy NO
+                      <span>Buy NO</span>
+                      {market.current_no_price !== undefined && (
+                        <span className="text-xs opacity-90">
+                          ${(market.current_no_price * 100).toFixed(2)}
+                        </span>
+                      )}
                     </button>
                   </div>
 

@@ -154,7 +154,7 @@ class PolymarketClient:
             raise
 
     def get_legal_prediction_markets(self, limit: int = 20) -> List[Dict]:
-        """Get legal markets using Gamma API (better metadata)"""
+        """Get legal markets with prices from Gamma API (no CLOB calls needed)"""
         try:
             import httpx
 
@@ -199,10 +199,48 @@ class PolymarketClient:
                 text = f"{question} {description} {' '.join(tags)}"
 
                 if any(keyword in text for keyword in legal_keywords):
+                    # ADD PRICES FROM GAMMA API (no CLOB call!)
+                    try:
+                        # Debug: check what outcomePrices looks like
+                        outcome_prices_raw = market.get('outcomePrices', '["0.5", "0.5"]')
+                        logger.info(f"Raw outcomePrices for market {market.get('id')}: {outcome_prices_raw} (type: {type(outcome_prices_raw)})")
+
+                        # Gamma API already includes prices!
+                        outcome_prices = outcome_prices_raw
+
+                        # Parse if string (it's probably already a string from JSON response)
+                        if isinstance(outcome_prices, str):
+                            import json
+                            # Remove escaped quotes if present
+                            if outcome_prices.startswith('"') and outcome_prices.endswith('"'):
+                                outcome_prices = outcome_prices[1:-1]  # Remove surrounding quotes
+                            outcome_prices = json.loads(outcome_prices)
+
+                        # Ensure it's a list
+                        if not isinstance(outcome_prices, list):
+                            outcome_prices = [0.5, 0.5]
+
+                        # Add to market
+                        market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                        market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+
+                        logger.info(f"Parsed prices for market {market.get('id')}: YES={market['current_yes_price']}, NO={market['current_no_price']}")
+
+                    except Exception as e:
+                        logger.warning(f"Failed to parse outcomePrices for market {market.get('id')}: {e}")
+                        logger.warning(f"Raw value was: {outcome_prices_raw}")
+                        # Fallback to 50/50
+                        market['current_yes_price'] = 0.5
+                        market['current_no_price'] = 0.5
+
                     legal_markets.append(market)
 
-            logger.info(f"Found {len(legal_markets)} legal markets from {len(all_markets)} total (Gamma API)")
-            return legal_markets[:limit]
+            # Sort by volume
+            legal_markets.sort(key=lambda x: x.get('volume', 0), reverse=True)
+
+            results = legal_markets[:limit]
+            logger.info(f"Found {len(results)} legal markets with prices from {len(all_markets)} total (Gamma API)")
+            return results
 
         except Exception as e:
             logger.error(f"Failed to get legal markets from Gamma API: {e}")
