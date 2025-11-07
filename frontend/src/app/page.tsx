@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from "next/image";
+import { useWallet } from '../hooks/useWallet';
 
 // Brand colors from our design system
 const colors = {
@@ -34,6 +35,11 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
+  const [showMarketModal, setShowMarketModal] = useState(false);
+
+  // Wallet functionality
+  const { walletState, connectPhantom, connectMetaMask, disconnect, checkWalletAvailability } = useWallet();
 
   // Test backend connection and fetch markets
   useEffect(() => {
@@ -91,13 +97,9 @@ export default function Home() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg mr-3">
-                <Image
-                  src="/precedence-logo.png"
-                  alt="Precedence"
-                  width={24}
-                  height={24}
-                  className="brightness-0 invert"
-                />
+                <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
+                  <span className="text-blue-600 font-bold text-sm">P</span>
+                </div>
               </div>
               <div>
                 <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -109,6 +111,77 @@ export default function Home() {
 
             {/* Status & Controls */}
             <div className="flex items-center space-x-4">
+              {/* Wallet Connection */}
+              {!walletState.connected ? (
+                <div className="flex items-center space-x-2">
+                  {checkWalletAvailability().hasPhantom && (
+                    <button
+                      onClick={connectPhantom}
+                      disabled={walletState.connecting}
+                      className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                    >
+                      <span>🖼️</span>
+                      <span>{walletState.connecting ? 'Connecting...' : 'Phantom'}</span>
+                    </button>
+                  )}
+                  {checkWalletAvailability().hasMetaMask && (
+                    <button
+                      onClick={connectMetaMask}
+                      disabled={walletState.connecting}
+                      className="bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                    >
+                      <span>🦊</span>
+                      <span>{walletState.connecting ? 'Connecting...' : 'MetaMask'}</span>
+                    </button>
+                  )}
+                  {!checkWalletAvailability().hasPhantom && !checkWalletAvailability().hasMetaMask && (
+                    <div className="bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-lg max-w-xs">
+                      <div className="text-sm text-yellow-800 font-medium mb-1">Wallets Required</div>
+                      <div className="text-xs text-yellow-700">
+                        Install <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900">Phantom</a> or{' '}
+                        <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900">MetaMask</a> to trade
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  {/* Wallet Status */}
+                  <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        walletState.network === 'solana' ? 'bg-purple-500' : 'bg-orange-500'
+                      }`}></div>
+                      <div className="text-sm">
+                        <div className="font-medium text-green-800">
+                          {walletState.network === 'solana' ? 'Phantom' : 'MetaMask'}
+                        </div>
+                        <div className="text-green-600 text-xs">
+                          {walletState.address?.slice(0, 6)}...{walletState.address?.slice(-4)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Balance */}
+                  {walletState.balance && (
+                    <div className="bg-slate-50 px-3 py-2 rounded-lg">
+                      <div className="text-sm font-medium text-slate-700">
+                        {walletState.balance} {walletState.network === 'solana' ? 'SOL' : 'ETH'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Disconnect */}
+                  <button
+                    onClick={disconnect}
+                    className="text-slate-500 hover:text-slate-700 text-sm underline"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              )}
+
               {/* Backend Status */}
               <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1 rounded-full">
                 <div className={`w-2 h-2 rounded-full ${
@@ -243,7 +316,10 @@ export default function Home() {
                     </span>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-slate-900">
-                        ${market.volume?.toLocaleString() || '0'}
+                        ${Number(market.volume || 0).toLocaleString('en-US', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0
+                        })}
                       </div>
                       <div className="text-xs text-slate-500">Volume</div>
                     </div>
@@ -273,7 +349,13 @@ export default function Home() {
                   )}
 
                   {/* Action Button */}
-                  <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-sm hover:shadow-md">
+                  <button
+                    onClick={() => {
+                      setSelectedMarket(market);
+                      setShowMarketModal(true);
+                    }}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
                     View Market
                   </button>
                 </div>
@@ -313,7 +395,7 @@ export default function Home() {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600 mb-1">
-                ${markets.reduce((sum, m) => sum + (m.volume || 0), 0).toLocaleString()}
+                ${(markets.reduce((sum, m) => sum + (m.volume || 0), 0) / 1000000).toFixed(1)}M
               </div>
               <div className="text-sm text-slate-600">Total Volume</div>
             </div>
@@ -328,6 +410,120 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Market Details Modal */}
+      {showMarketModal && selectedMarket && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-8">
+              {/* Modal Header */}
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center space-x-3">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    selectedMarket.closed
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {selectedMarket.closed ? 'Closed' : 'Active'}
+                  </span>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-slate-900">
+                      ${Number(selectedMarket.volume || 0).toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0
+                      })}
+                    </div>
+                    <div className="text-sm text-slate-500">Trading Volume</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowMarketModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Market Question */}
+              <h2 className="text-2xl font-bold text-slate-900 mb-4 leading-tight">
+                {selectedMarket.question || 'Market Question'}
+              </h2>
+
+              {/* Full Description */}
+              {selectedMarket.description && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">Description</h3>
+                  <p className="text-slate-700 leading-relaxed">
+                    {selectedMarket.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Market Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-3">Market Details</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Status:</span>
+                      <span className={`font-medium ${selectedMarket.closed ? 'text-red-600' : 'text-green-600'}`}>
+                        {selectedMarket.closed ? 'Closed' : 'Active'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Volume:</span>
+                      <span className="font-medium">
+                        ${Number(selectedMarket.volume || 0).toLocaleString('en-US', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Platform:</span>
+                      <span className="font-medium text-blue-600">Polymarket</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-3">Market ID</h3>
+                  <code className="bg-slate-100 px-3 py-2 rounded text-sm font-mono text-slate-800 break-all">
+                    {selectedMarket.id || 'N/A'}
+                  </code>
+                </div>
+              </div>
+
+              {/* Tags */}
+              {selectedMarket.tags && selectedMarket.tags.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-3">Tags</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedMarket.tags.map((tag, index) => (
+                      <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex space-x-4">
+                <button className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium py-3 px-6 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-sm hover:shadow-md">
+                  Trade on Polymarket
+                </button>
+                <button
+                  onClick={() => setShowMarketModal(false)}
+                  className="px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
