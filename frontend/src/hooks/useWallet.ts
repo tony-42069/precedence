@@ -115,6 +115,43 @@ export const useWallet = () => {
     });
   };
 
+  // Check for stored wallet connection on mount
+  useEffect(() => {
+    const checkStoredConnection = () => {
+      try {
+        const connected = sessionStorage.getItem('wallet_connected') === 'true';
+        const walletType = sessionStorage.getItem('wallet_type') as 'phantom' | 'metamask' | null;
+        const address = sessionStorage.getItem('wallet_address');
+
+        if (connected && walletType && address) {
+          // Restore wallet state from sessionStorage
+          const network = walletType === 'phantom' ? 'solana' : 'ethereum';
+
+          setWalletState({
+            connected: true,
+            address,
+            balance: null, // Would need to refetch balance
+            network,
+            walletType,
+            connecting: false,
+            error: null,
+          });
+
+          // Clear the stored data after restoring
+          sessionStorage.removeItem('wallet_connected');
+          sessionStorage.removeItem('wallet_type');
+          sessionStorage.removeItem('wallet_address');
+        }
+      } catch (error) {
+        console.warn('Failed to restore wallet connection from sessionStorage:', error);
+      }
+    };
+
+    // Check for stored connection after a short delay to ensure DOM is ready
+    const timer = setTimeout(checkStoredConnection, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Listen for account changes
   useEffect(() => {
     if (window.ethereum) {

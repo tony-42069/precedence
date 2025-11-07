@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect Wallet - Precedence</title>
+    <meta name="description" content="Connect your wallet to start trading on legal prediction markets.">
+    <link rel="icon" href="public/precedence-logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --royal-blue: #0052FF;
+            --deep-purple: #6366F1;
+            --gold: #FBBF24;
+            --charcoal: #18181B;
+            --slate-gray: #64748B;
+            --light-gray: #F1F5F9;
+            --off-white: #FAFAFA;
+            --success-green: #10B981;
+            --error-red: #EF4444;
+
+            --gradient-primary: linear-gradient(135deg, var(--royal-blue) 0%, var(--deep-purple) 100%);
+            --gradient-dark: linear-gradient(135deg, var(--charcoal) 0%, var(--navy-blue) 100%);
+            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.15);
+            --shadow-brand: 0 8px 24px rgba(0, 82, 255, 0.3);
+            --radius-lg: 12px;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --space-2xl: 3rem;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0A1F44 0%, #18181B 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-xl);
+        }
+
+        .container {
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo-section {
+            margin-bottom: var(--space-2xl);
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            background: var(--gradient-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--space-lg) auto;
+            box-shadow: var(--shadow-brand);
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--slate-gray);
+            font-size: 16px;
+            margin-bottom: var(--space-2xl);
+        }
+
+        .wallet-grid {
+            display: grid;
+            gap: var(--space-lg);
+            margin-bottom: var(--space-2xl);
+        }
+
+        .wallet-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-md);
+            font-size: 16px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .wallet-btn:hover {
+            border-color: var(--royal-blue);
+            background: rgba(0, 82, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .wallet-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .wallet-icon {
+            width: 32px;
+            height: 32px;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            color: #FCA5A5;
+        }
+
+        .error-message h3 {
+            color: var(--error-red);
+            margin-bottom: var(--space-sm);
+        }
+
+        .skip-link {
+            color: var(--slate-gray);
+            text-decoration: none;
+            font-size: 14px;
+            display: inline-block;
+            margin-top: var(--space-lg);
+            padding: var(--space-sm);
+            border-radius: 6px;
+            transition: color 0.2s;
+        }
+
+        .skip-link:hover {
+            color: var(--royal-blue);
+            background: rgba(0, 82, 255, 0.1);
+        }
+
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-md);
+            color: var(--slate-gray);
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid var(--royal-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: var(--space-lg);
+            }
+            .wallet-btn {
+                padding: var(--space-md);
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo-section">
+            <div class="logo">
+                <span style="color: white; font-size: 24px; font-weight: bold;">P</span>
+            </div>
+            <h1 class="logo-text">Precedence</h1>
+            <p class="subtitle">Connect your wallet to start trading on legal prediction markets</p>
+        </div>
+
+        <div id="error-message" class="error-message" style="display: none;">
+            <h3>Wallet Not Detected</h3>
+            <p>Please install a Solana-compatible wallet to continue.</p>
+        </div>
+
+        <div class="wallet-grid">
+            <button id="phantom-btn" class="wallet-btn" disabled>
+                <img src="https://phantom.app/img/logo.png" alt="Phantom" class="wallet-icon">
+                <span>Connect Phantom</span>
+            </button>
+            <button id="metamask-btn" class="wallet-btn" disabled>
+                <svg class="wallet-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 0C7.163 0 0 7.163 0 16s7.163 16 16 16 16-7.163 16-16S24.837 0 16 0z" fill="#F6851B"/>
+                    <path d="M16 4C9.373 4 4 9.373 4 16s5.373 12 12 12 12-5.373 12-12S22.627 4 16 4zm6.5 8.5c-.5 0-.9.4-.9.9v8.2c0 .5.4.9.9.9s.9-.4.9-.9V13.4c0-.5-.4-.9-.9-.9zm-13 0c-.5 0-.9.4-.9.9v8.2c0 .5.4.9.9.9s.9-.4.9-.9V13.4c0-.5-.4-.9-.9-.9z" fill="white"/>
+                </svg>
+                <span>Connect MetaMask</span>
+            </button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <span>Connecting...</span>
+        </div>
+
+        <a href="http://localhost:3000" class="skip-link">Continue without wallet (view only)</a>
+    </div>
+
+    <script>
+        // Wallet detection and connection logic
+        let phantomAvailable = false;
+        let metaMaskAvailable = false;
+
+        // Check for Phantom (Solana)
+        function checkPhantom() {
+            if (window.solana && window.solana.isPhantom) {
+                phantomAvailable = true;
+                document.getElementById('phantom-btn').disabled = false;
+                document.getElementById('phantom-btn').innerHTML = `
+                    <img src="https://phantom.app/img/logo.png" alt="Phantom" class="wallet-icon">
+                    <span>Connect Phantom</span>
+                `;
+            }
+        }
+
+        // Check for MetaMask (Ethereum)
+        function checkMetaMask() {
+            if (window.ethereum && window.ethereum.isMetaMask) {
+                metaMaskAvailable = true;
+                document.getElementById('metamask-btn').disabled = false;
+            }
+        }
+
+        // Check wallets on load
+        window.addEventListener('load', () => {
+            checkPhantom();
+            checkMetaMask();
+
+            // Show error if no wallets detected
+            if (!phantomAvailable && !metaMaskAvailable) {
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').innerHTML = `
+                    <h3>No Wallet Detected</h3>
+                    <p>Please install <a href="https://phantom.app" target="_blank" style="color: #F6851B;">Phantom</a> or <a href="https://metamask.io" target="_blank" style="color: #F6851B;">MetaMask</a> to continue trading.</p>
+                `;
+            }
+        });
+
+        // Phantom connection
+        document.getElementById('phantom-btn').addEventListener('click', async () => {
+            if (!phantomAvailable) return;
+
+            try {
+                document.getElementById('loading').style.display = 'flex';
+                document.querySelector('.wallet-grid').style.display = 'none';
+
+                // Connect to Phantom
+                const response = await window.solana.connect();
+                const publicKey = response.publicKey.toString();
+
+                // Store wallet info in sessionStorage for the main app
+                sessionStorage.setItem('wallet_connected', 'true');
+                sessionStorage.setItem('wallet_type', 'phantom');
+                sessionStorage.setItem('wallet_address', publicKey);
+
+                // Redirect to main app
+                window.location.href = 'http://localhost:3000';
+
+            } catch (error) {
+                console.error('Phantom connection failed:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('.wallet-grid').style.display = 'grid';
+
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').innerHTML = `
+                    <h3>Connection Failed</h3>
+                    <p>Please try again or check if Phantom is unlocked.</p>
+                `;
+            }
+        });
+
+        // MetaMask connection
+        document.getElementById('metamask-btn').addEventListener('click', async () => {
+            if (!metaMaskAvailable) return;
+
+            try {
+                document.getElementById('loading').style.display = 'flex';
+                document.querySelector('.wallet-grid').style.display = 'none';
+
+                // Connect to MetaMask
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const address = accounts[0];
+
+                // Store wallet info in sessionStorage for the main app
+                sessionStorage.setItem('wallet_connected', 'true');
+                sessionStorage.setItem('wallet_type', 'metamask');
+                sessionStorage.setItem('wallet_address', address);
+
+                // Redirect to main app
+                window.location.href = 'http://localhost:3000';
+
+            } catch (error) {
+                console.error('MetaMask connection failed:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('.wallet-grid').style.display = 'grid';
+
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('error-message').innerHTML = `
+                    <h3>Connection Failed</h3>
+                    <p>Please try again or check if MetaMask is unlocked.</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
