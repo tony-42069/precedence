@@ -17,11 +17,12 @@ const colors = {
 
 interface Market {
   id?: string;
-  market?: string;  // Polymarket uses 'market' for title
+  question?: string;  // Gamma API uses 'question' for the market title
   description?: string;
   volume?: number;
   closed?: boolean;
   active?: boolean;
+  tags?: string[];
   // Additional fields for display
   title?: string;
   probability?: number;
@@ -40,8 +41,8 @@ export default function Home() {
         const response = await fetch('http://localhost:8000/health');
         if (response.ok) {
           setBackendStatus('online');
-          // Fetch markets
-          const marketsResponse = await fetch('http://localhost:8000/api/markets');
+          // Fetch legal markets only
+          const marketsResponse = await fetch('http://localhost:8000/api/markets/legal');
           if (marketsResponse.ok) {
             const data = await marketsResponse.json();
             // Backend returns markets directly as an array
@@ -131,7 +132,7 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {markets.map((market, index) => (
                 <div key={market.id || index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <h3 className="font-semibold text-gray-900 mb-2">{market.market || 'Market Title'}</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">{market.question || 'Market Question'}</h3>
                   <p className="text-sm text-gray-600 mb-3">{market.description || 'Market description'}</p>
 
                   <div className="flex items-center justify-between mb-3">

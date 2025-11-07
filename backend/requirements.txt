@@ -28,4 +28,5 @@ pytest==7.4.3
 
 # Utilities
 python-dotenv==1.0.0
-aiofiles==23.2.1 
+aiofiles==23.2.1
+httpx==0.25.2

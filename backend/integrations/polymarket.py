@@ -154,48 +154,58 @@ class PolymarketClient:
             raise
 
     def get_legal_prediction_markets(self, limit: int = 20) -> List[Dict]:
-        """
-        Get markets specifically related to legal cases and court outcomes.
-
-        Focuses on markets about:
-        - Supreme Court cases
-        - Legal outcomes
-        - Court decisions
-        - Regulatory rulings
-
-        Returns:
-            List of legal prediction markets
-        """
+        """Get legal markets using Gamma API (better metadata)"""
         try:
-            # Search for legal-related markets
+            import httpx
+
+            gamma_url = "https://gamma-api.polymarket.com/markets"
+
+            # Fetch active, non-closed markets with pagination
+            all_markets = []
+            offset = 0
+
+            while len(all_markets) < 200:
+                params = {
+                    "active": True,
+                    "closed": False,
+                    "archived": False,
+                    "limit": 100,
+                    "offset": offset
+                }
+
+                response = httpx.get(gamma_url, params=params)
+                batch = response.json()
+
+                if not batch:
+                    break
+
+                all_markets.extend(batch)
+                offset += 100
+
+            # Now filter for legal markets using better metadata
             legal_keywords = [
-                "supreme court", "scotus", "court", "judge", "justice",
-                "legal", "law", "case", "ruling", "decision", "verdict",
-                "trial", "lawsuit", "litigation", "appeal", "constitutional"
+                "supreme court", "scotus", "court case",
+                "lawsuit", "litigation", "sec", "fcc", "ftc"
             ]
 
-            all_markets = self.get_markets(limit=200)  # Get many to filter
             legal_markets = []
-
             for market in all_markets:
-                market_text = (
-                    market.get('market', '').lower() +
-                    ' ' + market.get('description', '').lower()
-                )
+                # Gamma API provides better fields
+                question = market.get('question', '').lower()
+                description = market.get('description', '').lower()
+                tags = [tag.lower() for tag in market.get('tags', [])]
 
-                # Check if any legal keywords are in the market text
-                if any(keyword in market_text for keyword in legal_keywords):
+                # Check if it's legal-related
+                text = f"{question} {description} {' '.join(tags)}"
+
+                if any(keyword in text for keyword in legal_keywords):
                     legal_markets.append(market)
 
-            # Sort by volume (most active first)
-            legal_markets.sort(key=lambda x: x.get('volume', 0), reverse=True)
-
-            results = legal_markets[:limit]
-            logger.info(f"Found {len(results)} legal prediction markets")
-            return results
+            logger.info(f"Found {len(legal_markets)} legal markets from {len(all_markets)} total (Gamma API)")
+            return legal_markets[:limit]
 
         except Exception as e:
-            logger.error(f"Failed to get legal markets: {e}")
+            logger.error(f"Failed to get legal markets from Gamma API: {e}")
             raise
 
     def get_market_price(self, market_id: str) -> Dict:
