@@ -8,6 +8,9 @@ import { usePredictions, MarketWithAI } from '../hooks/usePredictions';
 import { TradingModal } from '../components/TradingModal';
 import { AIConfidenceBadge, AIConfidenceDetailed } from '../components/AIConfidenceIndicator';
 import { Sidebar, MobileMenuButton } from '../components/Sidebar';
+import { MarketActivityWidget } from '../components/MarketActivityWidget';
+import { TopMarketsWidget } from '../components/TopMarketsWidget';
+import { AIInsightsWidget } from '../components/AIInsightsWidget';
 
 // Brand colors from our design system
 const colors = {
@@ -279,6 +282,26 @@ export default function Home() {
                       <div className="text-slate-300">Trading</div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dashboard Widgets */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Market Overview</h2>
+                <p className="text-slate-600">Real-time insights and trending activity</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div className="lg:col-span-1">
+                  <MarketActivityWidget />
+                </div>
+                <div className="lg:col-span-1">
+                  <TopMarketsWidget />
+                </div>
+                <div className="lg:col-span-1">
+                  <AIInsightsWidget />
                 </div>
               </div>
             </div>
