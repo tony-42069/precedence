@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import Image from "next/image";
 import { useWallet } from '../hooks/useWallet';
+import { usePredictions, MarketWithAI } from '../hooks/usePredictions';
 import { TradingModal } from '../components/TradingModal';
+import { AIConfidenceBadge, AIConfidenceDetailed } from '../components/AIConfidenceIndicator';
 
 // Brand colors from our design system
 const colors = {
@@ -47,6 +49,14 @@ export default function Home() {
   // Wallet functionality
   const { walletState, connectPhantom, connectMetaMask, disconnect, checkWalletAvailability } = useWallet();
 
+  // AI Predictions functionality
+  const {
+    enhanceMarketsWithAI,
+    getCachedPrediction,
+    isLoadingPrediction,
+    getPredictionError
+  } = usePredictions();
+
   // Test backend connection and fetch markets
   useEffect(() => {
     const checkBackend = async () => {
@@ -59,7 +69,20 @@ export default function Home() {
           if (marketsResponse.ok) {
             const data = await marketsResponse.json();
             // Backend returns markets directly as an array
-            setMarkets(Array.isArray(data) ? data : (data.markets || []));
+            const rawMarkets = Array.isArray(data) ? data : (data.markets || []);
+            setMarkets(rawMarkets);
+
+            // Enhance markets with AI predictions
+            if (rawMarkets.length > 0) {
+              console.log('Enhancing markets with AI predictions...');
+              const enhancedMarkets = await enhanceMarketsWithAI(rawMarkets); // Process all markets
+              // Update markets with AI-enhanced versions where available
+              const finalMarkets = rawMarkets.map((market: Market) => {
+                const enhanced = enhancedMarkets.find(em => em.id === market.id);
+                return enhanced || market;
+              });
+              setMarkets(finalMarkets);
+            }
           }
         } else {
           setBackendStatus('offline');
@@ -73,7 +96,7 @@ export default function Home() {
     };
 
     checkBackend();
-  }, []);
+  }, [enhanceMarketsWithAI]);
 
   // Filter markets based on selected category
   const filteredMarkets = markets.filter(market => {
@@ -206,6 +229,8 @@ export default function Home() {
                   {filteredMarkets.length} Markets
                 </span>
               </div>
+
+
             </div>
           </div>
         </div>
@@ -311,15 +336,23 @@ export default function Home() {
             {filteredMarkets.map((market, index) => (
               <div key={market.id || index} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                 <div className="p-6">
-                  {/* Status Badge */}
+                  {/* Status Badges */}
                   <div className="flex justify-between items-start mb-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      market.closed
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {market.closed ? 'Closed' : 'Active'}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        market.closed
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {market.closed ? 'Closed' : 'Active'}
+                      </span>
+                      {getCachedPrediction(market.id || '') && (
+                        <AIConfidenceBadge
+                          prediction={getCachedPrediction(market.id || '')!}
+                          size="sm"
+                        />
+                      )}
+                    </div>
                     <div className="text-right">
                       <div className="text-sm font-semibold text-slate-900">
                         ${Number(market.volume || 0).toLocaleString('en-US', {
@@ -330,6 +363,8 @@ export default function Home() {
                       <div className="text-xs text-slate-500">Volume</div>
                     </div>
                   </div>
+
+
 
                   {/* Question */}
                   <h3 className="text-lg font-semibold text-slate-900 mb-3 leading-tight">
@@ -540,6 +575,37 @@ export default function Home() {
                   </code>
                 </div>
               </div>
+
+              {/* AI Analysis Section */}
+              {getCachedPrediction(selectedMarket.id || '') && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-3 flex items-center">
+                    <span className="w-5 h-5 mr-2 text-blue-600">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M9.5 2A2.5 2.5 0 007 4.5v3A2.5 2.5 0 009.5 10h5A2.5 2.5 0 0017 7.5v-3A2.5 2.5 0 0014.5 2h-5z"
+                          fill="currentColor"
+                          opacity="0.3"
+                        />
+                        <path
+                          d="M12 12c2.5 0 4.5-1.5 4.5-3.5S14.5 5 12 5s-4.5 1.5-4.5 3.5S9.5 12 12 12z"
+                          fill="currentColor"
+                        />
+                        <path
+                          d="M7 15.5A2.5 2.5 0 019.5 18v3A2.5 2.5 0 007 18.5v-3zM17 15.5A2.5 2.5 0 0014.5 18v3A2.5 2.5 0 0017 18.5v-3z"
+                          fill="currentColor"
+                          opacity="0.6"
+                        />
+                        <circle cx="12" cy="16" r="2" fill="currentColor" />
+                      </svg>
+                    </span>
+                    AI Analysis
+                  </h3>
+                  <AIConfidenceDetailed
+                    prediction={getCachedPrediction(selectedMarket.id || '')!}
+                  />
+                </div>
+              )}
 
               {/* Tags */}
               {selectedMarket.tags && selectedMarket.tags.length > 0 && (

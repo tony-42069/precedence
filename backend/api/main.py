@@ -19,8 +19,8 @@ from fastapi.responses import JSONResponse
 import time
 import os
 
-from backend.api.routes import cases, markets, predictions, trading
-from backend.database import init_db, get_db
+from .routes import cases, markets, predictions, trading
+from ..database import init_db, get_db
 
 # Configure logging
 logging.basicConfig(
