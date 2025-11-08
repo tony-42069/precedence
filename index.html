@@ -216,6 +216,218 @@
             .hero h1 { font-size: 36px; }
             .numbers-grid { grid-template-columns: repeat(2, 1fr); }
         }
+
+        /* --- MODAL STYLES --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 82, 255, 0.3);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s var(--ease-in-out);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, rgba(239, 246, 255, 0.95) 0%, rgba(219, 234, 254, 0.95) 100%), url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            background-size: 60px 60px;
+            border-radius: var(--radius-xl);
+            padding: var(--space-2xl);
+            max-width: 480px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.3s var(--ease-in-out);
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: var(--space-2xl);
+        }
+
+        .modal-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
+        }
+
+        .modal-logo-icon {
+            width: 48px;
+            height: 48px;
+            background-image: url('public/precedence-logo.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border-radius: var(--radius-md);
+        }
+
+        .modal-title {
+            font-size: 28px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        .modal-subtitle {
+            color: var(--slate-gray);
+            font-size: 16px;
+            margin: 0;
+        }
+
+        .modal-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            color: #FCA5A5;
+        }
+
+        .modal-error h3 {
+            color: var(--error-red);
+            margin-bottom: var(--space-sm);
+            font-size: 16px;
+        }
+
+        .modal-wallet-grid {
+            display: grid;
+            gap: var(--space-lg);
+            margin-bottom: var(--space-2xl);
+        }
+
+        .modal-wallet-btn {
+            background: var(--royal-blue);
+            border: 2px solid var(--royal-blue);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-md);
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 82, 255, 0.3);
+        }
+
+        .modal-wallet-btn:hover:not(:disabled) {
+            background: var(--deep-purple);
+            border-color: var(--deep-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+        }
+
+        .modal-wallet-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .modal-wallet-icon {
+            width: 32px;
+            height: 32px;
+        }
+
+        .modal-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-md);
+            color: var(--slate-gray);
+            margin-bottom: var(--space-lg);
+        }
+
+        .modal-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-top: 2px solid var(--royal-blue);
+            border-radius: 50%;
+            animation: modal-spin 1s linear infinite;
+        }
+
+        @keyframes modal-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: var(--space-md);
+            right: var(--space-md);
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--slate-gray);
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .modal-close-btn:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+            color: var(--charcoal);
+        }
+
+        .modal-footer {
+            text-align: center;
+            margin-top: var(--space-lg);
+            padding-top: var(--space-lg);
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-view-only-link {
+            color: var(--slate-gray);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .modal-view-only-link:hover {
+            color: var(--royal-blue);
+            text-decoration: underline;
+        }
+
+        @media (max-width: 640px) {
+            .modal-content {
+                padding: var(--space-lg);
+                margin: var(--space-lg);
+            }
+            .modal-wallet-btn {
+                padding: var(--space-md);
+                font-size: 14px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -451,6 +663,49 @@
         </div>
     </footer>
 
+    <!-- WALLET CONNECTION MODAL -->
+    <div id="wallet-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-logo">
+                    <div class="modal-logo-icon"></div>
+                    <h2 class="modal-title">Precedence</h2>
+                </div>
+                <p class="modal-subtitle">Connect your wallet to start trading on legal prediction markets</p>
+            </div>
+
+            <div id="modal-error" class="modal-error" style="display: none;">
+                <h3>Wallet Not Detected</h3>
+                <p>Please install a Solana-compatible wallet to continue.</p>
+            </div>
+
+            <div class="modal-wallet-grid">
+                <button id="modal-phantom-btn" class="modal-wallet-btn" disabled>
+                    <img src="public/phantom-wallet-logo.svg" alt="Phantom" class="modal-wallet-icon">
+                    <span>Connect Phantom</span>
+                </button>
+                <button id="modal-metamask-btn" class="modal-wallet-btn" disabled>
+                    <img src="public/MetaMask-icon-fox.svg" alt="MetaMask" class="modal-wallet-icon">
+                    <span>Connect MetaMask</span>
+                </button>
+            </div>
+
+            <!-- View Only Link -->
+            <div class="modal-footer">
+                <a href="http://localhost:3000" class="modal-view-only-link">
+                    Continue without wallet (view only)
+                </a>
+            </div>
+
+            <div class="modal-loading" id="modal-loading" style="display: none;">
+                <div class="modal-spinner"></div>
+                <span>Connecting...</span>
+            </div>
+
+            <button id="modal-close" class="modal-close-btn">×</button>
+        </div>
+    </div>
+
     <script>
         // --- LUCIDE ICONS ---
         lucide.createIcons();
@@ -533,6 +788,143 @@
         }, { threshold: 0.5 });
         
         counters.forEach(counter => counterObserver.observe(counter));
+
+        // --- WALLET MODAL FUNCTIONALITY ---
+        const modal = document.getElementById('wallet-modal');
+        const modalClose = document.getElementById('modal-close');
+        const modalPhantomBtn = document.getElementById('modal-phantom-btn');
+        const modalMetaMaskBtn = document.getElementById('modal-metamask-btn');
+        const modalError = document.getElementById('modal-error');
+        const modalLoading = document.getElementById('modal-loading');
+
+        let phantomAvailable = false;
+        let metaMaskAvailable = false;
+
+        // Modal functions
+        function showModal() {
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideModal() {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            // Reset modal state
+            modalError.style.display = 'none';
+            modalLoading.style.display = 'none';
+            modalPhantomBtn.disabled = !phantomAvailable;
+            modalMetaMaskBtn.disabled = !metaMaskAvailable;
+        }
+
+        // Check for Phantom (Solana)
+        function checkPhantom() {
+            if (window.solana && window.solana.isPhantom) {
+                phantomAvailable = true;
+                modalPhantomBtn.disabled = false;
+                modalPhantomBtn.innerHTML = `
+                    <img src="public/phantom-wallet-logo.svg" alt="Phantom" class="modal-wallet-icon">
+                    <span>Connect Phantom</span>
+                `;
+            }
+        }
+
+        // Check for MetaMask (Ethereum)
+        function checkMetaMask() {
+            if (window.ethereum && window.ethereum.isMetaMask) {
+                metaMaskAvailable = true;
+                modalMetaMaskBtn.disabled = false;
+            }
+        }
+
+        // Check wallets on load
+        window.addEventListener('load', () => {
+            checkPhantom();
+            checkMetaMask();
+        });
+
+        // Modal event listeners
+        document.querySelectorAll('a[href="wallet-connect.html"]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                showModal();
+            });
+        });
+
+        modalClose.addEventListener('click', hideModal);
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                hideModal();
+            }
+        });
+
+        // Phantom connection
+        modalPhantomBtn.addEventListener('click', async () => {
+            if (!phantomAvailable) return;
+
+            try {
+                modalLoading.style.display = 'flex';
+                modalError.style.display = 'none';
+                document.querySelector('.modal-wallet-grid').style.display = 'none';
+
+                // Connect to Phantom
+                const response = await window.solana.connect();
+                const publicKey = response.publicKey.toString();
+
+                // Store wallet info in sessionStorage for the main app
+                sessionStorage.setItem('wallet_connected', 'true');
+                sessionStorage.setItem('wallet_type', 'phantom');
+                sessionStorage.setItem('wallet_address', publicKey);
+
+                // Redirect to main app
+                window.location.href = 'http://localhost:3000';
+
+            } catch (error) {
+                console.error('Phantom connection failed:', error);
+                modalLoading.style.display = 'none';
+                document.querySelector('.modal-wallet-grid').style.display = 'grid';
+
+                modalError.style.display = 'block';
+                modalError.innerHTML = `
+                    <h3>Connection Failed</h3>
+                    <p>Please try again or check if Phantom is unlocked.</p>
+                `;
+            }
+        });
+
+        // MetaMask connection
+        modalMetaMaskBtn.addEventListener('click', async () => {
+            if (!metaMaskAvailable) return;
+
+            try {
+                modalLoading.style.display = 'flex';
+                modalError.style.display = 'none';
+                document.querySelector('.modal-wallet-grid').style.display = 'none';
+
+                // Connect to MetaMask
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                const address = accounts[0];
+
+                // Store wallet info in sessionStorage for the main app
+                sessionStorage.setItem('wallet_connected', 'true');
+                sessionStorage.setItem('wallet_type', 'metamask');
+                sessionStorage.setItem('wallet_address', address);
+
+                // Redirect to main app
+                window.location.href = 'http://localhost:3000';
+
+            } catch (error) {
+                console.error('MetaMask connection failed:', error);
+                modalLoading.style.display = 'none';
+                document.querySelector('.modal-wallet-grid').style.display = 'grid';
+
+                modalError.style.display = 'block';
+                modalError.innerHTML = `
+                    <h3>Connection Failed</h3>
+                    <p>Please try again or check if MetaMask is unlocked.</p>
+                `;
+            }
+        });
 
     </script>
 </body>
