@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import Image from "next/image";
 import { useWallet } from '../hooks/useWallet';
 import { usePredictions, MarketWithAI } from '../hooks/usePredictions';
 import { TradingModal } from '../components/TradingModal';
 import { AIConfidenceBadge, AIConfidenceDetailed } from '../components/AIConfidenceIndicator';
+import { Sidebar, MobileMenuButton } from '../components/Sidebar';
 
 // Brand colors from our design system
 const colors = {
@@ -37,6 +39,7 @@ interface Market {
 }
 
 export default function Home() {
+  const pathname = usePathname();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -45,6 +48,7 @@ export default function Home() {
   const [showMarketModal, setShowMarketModal] = useState(false);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [tradingMarket, setTradingMarket] = useState<Market | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Wallet functionality
   const { walletState, connectPhantom, connectMetaMask, disconnect, checkWalletAvailability } = useWallet();
@@ -98,6 +102,14 @@ export default function Home() {
     checkBackend();
   }, [enhanceMarketsWithAI]);
 
+  // Get current view from pathname
+  const currentView = pathname === '/' ? 'dashboard' :
+                     pathname === '/cases' ? 'cases' :
+                     pathname === '/markets' ? 'markets' :
+                     pathname === '/predictions' ? 'predictions' :
+                     pathname === '/portfolio' ? 'portfolio' :
+                     pathname === '/profile' ? 'profile' : 'dashboard';
+
   // Filter markets based on selected category
   const filteredMarkets = markets.filter(market => {
     if (selectedCategory === 'all') return true;
@@ -119,379 +131,722 @@ export default function Home() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Navigation Header */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg mr-3">
-                <div className="w-6 h-6 bg-white rounded flex items-center justify-center">
-                  <span className="text-blue-600 font-bold text-sm">P</span>
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* Sidebar */}
+      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+
+      {/* Mobile Menu Button */}
+      <MobileMenuButton onClick={() => setSidebarOpen(!sidebarOpen)} isOpen={sidebarOpen} />
+
+      {/* Main Content */}
+      <div className="flex-1 lg:ml-64">
+        {/* Navigation Header */}
+        <nav className="bg-white border-b border-slate-200 sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div></div>
+
+              {/* Status & Controls */}
+              <div className="flex items-center space-x-4">
+                {/* Wallet Connection */}
+                {!walletState.connected ? (
+                  <div className="flex items-center space-x-2">
+                    {checkWalletAvailability().hasPhantom && (
+                      <button
+                        onClick={connectPhantom}
+                        disabled={walletState.connecting}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                      >
+                        <span>🖼️</span>
+                        <span>{walletState.connecting ? 'Connecting...' : 'Phantom'}</span>
+                      </button>
+                    )}
+                    {checkWalletAvailability().hasMetaMask && (
+                      <button
+                        onClick={connectMetaMask}
+                        disabled={walletState.connecting}
+                        className="bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
+                      >
+                        <span>🦊</span>
+                        <span>{walletState.connecting ? 'Connecting...' : 'MetaMask'}</span>
+                      </button>
+                    )}
+                    {!checkWalletAvailability().hasPhantom && !checkWalletAvailability().hasMetaMask && (
+                      <div className="bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-lg max-w-xs">
+                        <div className="text-sm text-yellow-800 font-medium mb-1">Wallets Required</div>
+                        <div className="text-xs text-yellow-700">
+                          Install <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900">Phantom</a> or{' '}
+                          <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900">MetaMask</a> to trade
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-3">
+                    {/* Wallet Status */}
+                    <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          walletState.network === 'solana' ? 'bg-purple-500' : 'bg-orange-500'
+                        }`}></div>
+                        <div className="text-sm">
+                          <div className="font-medium text-green-800">
+                            {walletState.network === 'solana' ? 'Phantom' : 'MetaMask'}
+                          </div>
+                          <div className="text-green-600 text-xs">
+                            {walletState.address?.slice(0, 6)}...{walletState.address?.slice(-4)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Balance */}
+                    {walletState.balance && (
+                      <div className="bg-slate-50 px-3 py-2 rounded-lg">
+                        <div className="text-sm font-medium text-slate-700">
+                          {walletState.balance} {walletState.network === 'solana' ? 'SOL' : 'ETH'}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Disconnect */}
+                    <button
+                      onClick={disconnect}
+                      className="text-slate-500 hover:text-slate-700 text-sm underline"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                )}
+
+                {/* Backend Status */}
+                <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1 rounded-full">
+                  <div className={`w-2 h-2 rounded-full ${
+                    backendStatus === 'online' ? 'bg-green-500' :
+                    backendStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
+                  }`}></div>
+                  <span className="text-sm font-medium text-slate-700">
+                    {backendStatus === 'checking' ? 'Connecting...' :
+                     backendStatus === 'online' ? 'Live' : 'Offline'}
+                  </span>
+                </div>
+
+                {/* Market Count */}
+                <div className="bg-blue-50 px-3 py-1 rounded-full">
+                  <span className="text-sm font-medium text-blue-700">
+                    {filteredMarkets.length} Markets
+                  </span>
                 </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Precedence
-                </h1>
-                <p className="text-xs text-slate-500">Legal Prediction Markets</p>
+            </div>
+          </div>
+        </nav>
+
+        {/* Dynamic Content Based on Current View */}
+        {currentView === 'dashboard' && (
+          <>
+            {/* Hero Dashboard */}
+            <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 text-white">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                <div className="text-center">
+                  <h1 className="text-5xl font-bold mb-6">
+                    Predict Legal
+                    <span className="block bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                      Outcomes
+                    </span>
+                  </h1>
+                  <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-8">
+                    Trade on Supreme Court decisions, regulatory rulings, and high-profile legal cases
+                    with AI-powered market intelligence.
+                  </p>
+
+                  {/* Key Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                      <div className="text-3xl font-bold text-yellow-400 mb-2">$2.4M</div>
+                      <div className="text-slate-300">24h Volume</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                      <div className="text-3xl font-bold text-green-400 mb-2">{markets.length}</div>
+                      <div className="text-slate-300">Active Markets</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                      <div className="text-3xl font-bold text-blue-400 mb-2">AI</div>
+                      <div className="text-slate-300">Powered</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                      <div className="text-3xl font-bold text-purple-400 mb-2">24/7</div>
+                      <div className="text-slate-300">Trading</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Status & Controls */}
-            <div className="flex items-center space-x-4">
-              {/* Wallet Connection */}
-              {!walletState.connected ? (
-                <div className="flex items-center space-x-2">
-                  {checkWalletAvailability().hasPhantom && (
-                    <button
-                      onClick={connectPhantom}
-                      disabled={walletState.connecting}
-                      className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
-                    >
-                      <span>🖼️</span>
-                      <span>{walletState.connecting ? 'Connecting...' : 'Phantom'}</span>
-                    </button>
-                  )}
-                  {checkWalletAvailability().hasMetaMask && (
-                    <button
-                      onClick={connectMetaMask}
-                      disabled={walletState.connecting}
-                      className="bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2"
-                    >
-                      <span>🦊</span>
-                      <span>{walletState.connecting ? 'Connecting...' : 'MetaMask'}</span>
-                    </button>
-                  )}
-                  {!checkWalletAvailability().hasPhantom && !checkWalletAvailability().hasMetaMask && (
-                    <div className="bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-lg max-w-xs">
-                      <div className="text-sm text-yellow-800 font-medium mb-1">Wallets Required</div>
-                      <div className="text-xs text-yellow-700">
-                        Install <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900">Phantom</a> or{' '}
-                        <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900">MetaMask</a> to trade
+            {/* Main Dashboard */}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {/* Category Filters */}
+              <div className="mb-8">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === 'all'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    All Markets
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('supreme-court')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === 'supreme-court'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    🏛️ Supreme Court
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('regulatory')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === 'regulatory'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    ⚖️ Regulatory
+                  </button>
+                  <button
+                    onClick={() => setSelectedCategory('constitutional')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === 'constitutional'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    📜 Constitutional
+                  </button>
+                </div>
+              </div>
+
+              {/* Markets Grid */}
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-lg text-slate-600">Loading legal markets...</p>
+                    <p className="text-sm text-slate-500 mt-2">Fetching data from Polymarket</p>
+                  </div>
+                </div>
+              ) : filteredMarkets.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {filteredMarkets.map((market, index) => (
+                    <div key={market.id || index} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                      <div className="p-6">
+                        {/* Status Badges */}
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center space-x-2">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              market.closed
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}>
+                              {market.closed ? 'Closed' : 'Active'}
+                            </span>
+                            {getCachedPrediction(market.id || '') && (
+                              <AIConfidenceBadge
+                                prediction={getCachedPrediction(market.id || '')!}
+                                size="sm"
+                              />
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-slate-900">
+                              ${Number(market.volume || 0).toLocaleString('en-US', {
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0
+                              })}
+                            </div>
+                            <div className="text-xs text-slate-500">Volume</div>
+                          </div>
+                        </div>
+
+                        {/* Question */}
+                        <h3 className="text-lg font-semibold text-slate-900 mb-3 leading-tight">
+                          {market.question || 'Market Question'}
+                        </h3>
+
+                        {/* Price info for trading buttons */}
+                        {market.current_yes_price !== undefined && market.current_no_price !== undefined && (
+                          <div className="text-xs text-slate-500 mb-3 text-center">
+                            1 share = ${(market.current_yes_price * 100).toFixed(2)} YES / ${(market.current_no_price * 100).toFixed(2)} NO
+                          </div>
+                        )}
+
+                        {/* Description */}
+                        {market.description && (
+                          <p className="text-sm text-slate-600 mb-4 line-clamp-2">
+                            {market.description}
+                          </p>
+                        )}
+
+                        {/* Tags */}
+                        {market.tags && market.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-4">
+                            {market.tags.slice(0, 3).map((tag, tagIndex) => (
+                              <span key={tagIndex} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Trading Buttons */}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => {
+                              setTradingMarket(market);
+                              setShowTradingModal(true);
+                            }}
+                            disabled={!walletState.connected}
+                            className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm flex flex-col items-center"
+                          >
+                            <span>Buy YES</span>
+                            {market.current_yes_price !== undefined && (
+                              <span className="text-xs opacity-90">
+                                ${(market.current_yes_price * 100).toFixed(2)}
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTradingMarket(market);
+                              setShowTradingModal(true);
+                            }}
+                            disabled={!walletState.connected}
+                            className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm flex flex-col items-center"
+                          >
+                            <span>Buy NO</span>
+                            {market.current_no_price !== undefined && (
+                              <span className="text-xs opacity-90">
+                                ${(market.current_no_price * 100).toFixed(2)}
+                              </span>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* View Market Button */}
+                        <button
+                          onClick={() => {
+                            setSelectedMarket(market);
+                            setShowMarketModal(true);
+                          }}
+                          className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+                        >
+                          View Details
+                        </button>
                       </div>
+
+                      {/* Bottom accent */}
+                      <div className="h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-b-xl"></div>
                     </div>
-                  )}
+                  ))}
                 </div>
               ) : (
-                <div className="flex items-center space-x-3">
-                  {/* Wallet Status */}
-                  <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        walletState.network === 'solana' ? 'bg-purple-500' : 'bg-orange-500'
-                      }`}></div>
-                      <div className="text-sm">
-                        <div className="font-medium text-green-800">
-                          {walletState.network === 'solana' ? 'Phantom' : 'MetaMask'}
-                        </div>
-                        <div className="text-green-600 text-xs">
-                          {walletState.address?.slice(0, 6)}...{walletState.address?.slice(-4)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Balance */}
-                  {walletState.balance && (
-                    <div className="bg-slate-50 px-3 py-2 rounded-lg">
-                      <div className="text-sm font-medium text-slate-700">
-                        {walletState.balance} {walletState.network === 'solana' ? 'SOL' : 'ETH'}
-                      </div>
+                <div className="text-center py-20">
+                  <div className="text-6xl mb-4">⚖️</div>
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">No markets found</h3>
+                  <p className="text-slate-600 mb-4">
+                    {backendStatus === 'offline'
+                      ? 'Backend server is offline. Please start the server to load markets.'
+                      : `No markets found in the "${selectedCategory}" category.`
+                    }
+                  </p>
+                  {backendStatus === 'offline' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+                      <p className="text-yellow-800 text-sm">
+                        Run: <code className="bg-yellow-100 px-2 py-1 rounded">python -m uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000</code>
+                      </p>
                     </div>
                   )}
-
-                  {/* Disconnect */}
-                  <button
-                    onClick={disconnect}
-                    className="text-slate-500 hover:text-slate-700 text-sm underline"
-                  >
-                    Disconnect
-                  </button>
                 </div>
               )}
 
-              {/* Backend Status */}
-              <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1 rounded-full">
-                <div className={`w-2 h-2 rounded-full ${
-                  backendStatus === 'online' ? 'bg-green-500' :
-                  backendStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
-                }`}></div>
-                <span className="text-sm font-medium text-slate-700">
-                  {backendStatus === 'checking' ? 'Connecting...' :
-                   backendStatus === 'online' ? 'Live' : 'Offline'}
-                </span>
+              {/* Footer Stats */}
+              <div className="mt-16 bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+                <h3 className="text-xl font-bold text-slate-900 mb-6 text-center">Platform Statistics</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600 mb-1">{markets.length}</div>
+                    <div className="text-sm text-slate-600">Legal Markets</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600 mb-1">
+                      ${(markets.reduce((sum, m) => sum + (m.volume || 0), 0) / 1000000).toFixed(1)}M
+                    </div>
+                    <div className="text-sm text-slate-600">Total Volume</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600 mb-1">24/7</div>
+                    <div className="text-sm text-slate-600">Trading Hours</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-600 mb-1">AI</div>
+                    <div className="text-sm text-slate-600">Enhanced</div>
+                  </div>
+                </div>
               </div>
+            </main>
+          </>
+        )}
 
-              {/* Market Count */}
-              <div className="bg-blue-50 px-3 py-1 rounded-full">
-                <span className="text-sm font-medium text-blue-700">
-                  {filteredMarkets.length} Markets
-                </span>
-              </div>
-
-
+        {currentView === 'cases' && (
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-4">Court Cases</h1>
+              <p className="text-slate-600">Search legal cases and create prediction markets</p>
             </div>
-          </div>
-        </div>
-      </nav>
 
-      {/* Hero Dashboard */}
-      <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center">
-            <h1 className="text-5xl font-bold mb-6">
-              Predict Legal
-              <span className="block bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                Outcomes
-              </span>
-            </h1>
-            <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-8">
-              Trade on Supreme Court decisions, regulatory rulings, and high-profile legal cases
-              with AI-powered market intelligence.
-            </p>
-
-            {/* Key Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-3xl font-bold text-yellow-400 mb-2">$2.4M</div>
-                <div className="text-slate-300">24h Volume</div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-3xl font-bold text-green-400 mb-2">{markets.length}</div>
-                <div className="text-slate-300">Active Markets</div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-3xl font-bold text-blue-400 mb-2">AI</div>
-                <div className="text-slate-300">Powered</div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <div className="text-3xl font-bold text-purple-400 mb-2">24/7</div>
-                <div className="text-slate-300">Trading</div>
+            {/* Search Interface */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 mb-8">
+              <div className="max-w-2xl mx-auto">
+                <h2 className="text-xl font-semibold text-slate-900 mb-4 text-center">
+                  🔍 Search Court Cases
+                </h2>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    placeholder="Search for legal cases (e.g., 'social media regulation', 'environmental law')..."
+                    className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    Search
+                  </button>
+                </div>
+                <p className="text-sm text-slate-500 mt-3 text-center">
+                  Powered by CourtListener API with semantic search
+                </p>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Main Dashboard */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Category Filters */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === 'all'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
-              }`}
-            >
-              All Markets
-            </button>
-            <button
-              onClick={() => setSelectedCategory('supreme-court')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === 'supreme-court'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
-              }`}
-            >
-              🏛️ Supreme Court
-            </button>
-            <button
-              onClick={() => setSelectedCategory('regulatory')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === 'regulatory'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
-              }`}
-            >
-              ⚖️ Regulatory
-            </button>
-            <button
-              onClick={() => setSelectedCategory('constitutional')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                selectedCategory === 'constitutional'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
-              }`}
-            >
-              📜 Constitutional
-            </button>
-          </div>
-        </div>
-
-        {/* Markets Grid */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-lg text-slate-600">Loading legal markets...</p>
-              <p className="text-sm text-slate-500 mt-2">Fetching data from Polymarket</p>
+            {/* Featured Case Categories */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="text-3xl mb-3">🏛️</div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Supreme Court</h3>
+                <p className="text-sm text-slate-600">High-profile constitutional cases</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="text-3xl mb-3">⚖️</div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Regulatory</h3>
+                <p className="text-sm text-slate-600">SEC, FCC, and agency decisions</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="text-3xl mb-3">📜</div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Constitutional</h3>
+                <p className="text-sm text-slate-600">First Amendment and rights cases</p>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="text-3xl mb-3">🏢</div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">Corporate</h3>
+                <p className="text-sm text-slate-600">Business law and litigation</p>
+              </div>
             </div>
-          </div>
-        ) : filteredMarkets.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredMarkets.map((market, index) => (
-              <div key={market.id || index} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-                <div className="p-6">
-                  {/* Status Badges */}
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center space-x-2">
+
+            {/* Recent Cases */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+              <h3 className="text-xl font-semibold text-slate-900 mb-6">Recent Supreme Court Cases</h3>
+              <div className="space-y-4">
+                {[
+                  { title: "Social Media Content Moderation Case", court: "Supreme Court", date: "2024", status: "Active" },
+                  { title: "Environmental Regulation Challenge", court: "Supreme Court", date: "2024", status: "Active" },
+                  { title: "Digital Privacy Rights Case", court: "Supreme Court", date: "2024", status: "Pending" },
+                  { title: "Corporate Governance Dispute", court: "Supreme Court", date: "2024", status: "Active" }
+                ].map((case_, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-slate-900">{case_.title}</h4>
+                      <p className="text-sm text-slate-600">{case_.court} • {case_.date}</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        market.closed
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-green-100 text-green-800'
+                        case_.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {market.closed ? 'Closed' : 'Active'}
+                        {case_.status}
                       </span>
+                      <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Create Market
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </main>
+        )}
+
+        {currentView === 'markets' && (
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-4">Markets</h1>
+              <p className="text-slate-600">Browse and trade on legal prediction markets</p>
+            </div>
+
+            {/* Category Filters */}
+            <div className="mb-8">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === 'all'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                  }`}
+                >
+                  All Markets
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('supreme-court')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === 'supreme-court'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                  }`}
+                >
+                  🏛️ Supreme Court
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('regulatory')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === 'regulatory'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                  }`}
+                >
+                  ⚖️ Regulatory
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('constitutional')}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === 'constitutional'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300'
+                  }`}
+                >
+                  📜 Constitutional
+                </button>
+              </div>
+            </div>
+
+            {/* Markets Grid - Same as dashboard */}
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-lg text-slate-600">Loading legal markets...</p>
+                  <p className="text-sm text-slate-500 mt-2">Fetching data from Polymarket</p>
+                </div>
+              </div>
+            ) : filteredMarkets.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredMarkets.map((market, index) => (
+                  <div key={market.id || index} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                    <div className="p-6">
+                      {/* Status Badges */}
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center space-x-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            market.closed
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {market.closed ? 'Closed' : 'Active'}
+                          </span>
+                          {getCachedPrediction(market.id || '') && (
+                            <AIConfidenceBadge
+                              prediction={getCachedPrediction(market.id || '')!}
+                              size="sm"
+                            />
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-slate-900">
+                            ${Number(market.volume || 0).toLocaleString('en-US', {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0
+                            })}
+                          </div>
+                          <div className="text-xs text-slate-500">Volume</div>
+                        </div>
+                      </div>
+
+                      {/* Question */}
+                      <h3 className="text-lg font-semibold text-slate-900 mb-3 leading-tight">
+                        {market.question || 'Market Question'}
+                      </h3>
+
+                      {/* Trading Buttons */}
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setTradingMarket(market);
+                            setShowTradingModal(true);
+                          }}
+                          disabled={!walletState.connected}
+                          className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+                        >
+                          Buy YES
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTradingMarket(market);
+                            setShowTradingModal(true);
+                          }}
+                          disabled={!walletState.connected}
+                          className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+                        >
+                          Buy NO
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <div className="text-6xl mb-4">📊</div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">No markets found</h3>
+                <p className="text-slate-600">Try adjusting your filters or check back later.</p>
+              </div>
+            )}
+          </main>
+        )}
+
+        {currentView === 'predictions' && (
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-4">AI Predictions</h1>
+              <p className="text-slate-600">Explore AI-powered market predictions and judge analysis</p>
+            </div>
+
+            {/* AI Insights Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-blue-600 mb-2">
+                    {markets.filter(m => getCachedPrediction(m.id || '')).length}
+                  </div>
+                  <div className="text-sm text-slate-600">Markets with AI Predictions</div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-600 mb-2">85%</div>
+                  <div className="text-sm text-slate-600">Average Confidence</div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-purple-600 mb-2">9</div>
+                  <div className="text-sm text-slate-600">Supreme Court Judges</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Markets with AI Predictions */}
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-lg text-slate-600">Loading AI predictions...</p>
+                </div>
+              </div>
+            ) : markets.filter(m => getCachedPrediction(m.id || '')).length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {markets.filter(m => getCachedPrediction(m.id || '')).map((market, index) => (
+                  <div key={market.id || index} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-semibold text-slate-900 flex-1 mr-4">
+                        {market.question || 'Market Question'}
+                      </h3>
                       {getCachedPrediction(market.id || '') && (
                         <AIConfidenceBadge
                           prediction={getCachedPrediction(market.id || '')!}
-                          size="sm"
+                          size="lg"
                         />
                       )}
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold text-slate-900">
-                        ${Number(market.volume || 0).toLocaleString('en-US', {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0
-                        })}
-                      </div>
-                      <div className="text-xs text-slate-500">Volume</div>
-                    </div>
-                  </div>
 
+                    {getCachedPrediction(market.id || '') && (
+                      <AIConfidenceDetailed
+                        prediction={getCachedPrediction(market.id || '')!}
+                      />
+                    )}
 
-
-                  {/* Question */}
-                  <h3 className="text-lg font-semibold text-slate-900 mb-3 leading-tight">
-                    {market.question || 'Market Question'}
-                  </h3>
-
-                  {/* Price info for trading buttons */}
-                  {market.current_yes_price !== undefined && market.current_no_price !== undefined && (
-                    <div className="text-xs text-slate-500 mb-3 text-center">
-                      1 share = ${(market.current_yes_price * 100).toFixed(2)} YES / ${(market.current_no_price * 100).toFixed(2)} NO
-                    </div>
-                  )}
-
-                  {/* Description */}
-                  {market.description && (
-                    <p className="text-sm text-slate-600 mb-4 line-clamp-2">
-                      {market.description}
-                    </p>
-                  )}
-
-                  {/* Tags */}
-                  {market.tags && market.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-4">
-                      {market.tags.slice(0, 3).map((tag, tagIndex) => (
-                        <span key={tagIndex} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Trading Buttons */}
-                  <div className="flex space-x-2">
                     <button
                       onClick={() => {
-                        setTradingMarket(market);
-                        setShowTradingModal(true);
+                        setSelectedMarket(market);
+                        setShowMarketModal(true);
                       }}
-                      disabled={!walletState.connected}
-                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm flex flex-col items-center"
+                      className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
                     >
-                      <span>Buy YES</span>
-                      {market.current_yes_price !== undefined && (
-                        <span className="text-xs opacity-90">
-                          ${(market.current_yes_price * 100).toFixed(2)}
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTradingMarket(market);
-                        setShowTradingModal(true);
-                      }}
-                      disabled={!walletState.connected}
-                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm flex flex-col items-center"
-                    >
-                      <span>Buy NO</span>
-                      {market.current_no_price !== undefined && (
-                        <span className="text-xs opacity-90">
-                          ${(market.current_no_price * 100).toFixed(2)}
-                        </span>
-                      )}
+                      View Full Analysis
                     </button>
                   </div>
-
-                  {/* View Market Button */}
-                  <button
-                    onClick={() => {
-                      setSelectedMarket(market);
-                      setShowMarketModal(true);
-                    }}
-                    className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
-                  >
-                    View Details
-                  </button>
-                </div>
-
-                {/* Bottom accent */}
-                <div className="h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-b-xl"></div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">⚖️</div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">No markets found</h3>
-            <p className="text-slate-600 mb-4">
-              {backendStatus === 'offline'
-                ? 'Backend server is offline. Please start the server to load markets.'
-                : `No markets found in the "${selectedCategory}" category.`
-              }
-            </p>
-            {backendStatus === 'offline' && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
-                <p className="text-yellow-800 text-sm">
-                  Run: <code className="bg-yellow-100 px-2 py-1 rounded">python -m uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000</code>
-                </p>
+            ) : (
+              <div className="text-center py-20">
+                <div className="text-6xl mb-4">🤖</div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">AI Predictions Loading</h3>
+                <p className="text-slate-600">Our AI is analyzing legal markets. Check back soon!</p>
               </div>
             )}
-          </div>
+          </main>
         )}
 
-        {/* Footer Stats */}
-        <div className="mt-16 bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-          <h3 className="text-xl font-bold text-slate-900 mb-6 text-center">Platform Statistics</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600 mb-1">{markets.length}</div>
-              <div className="text-sm text-slate-600">Legal Markets</div>
+        {currentView === 'portfolio' && (
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-4">Portfolio</h1>
+              <p className="text-slate-600">Track your positions and trading performance</p>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600 mb-1">
-                ${(markets.reduce((sum, m) => sum + (m.volume || 0), 0) / 1000000).toFixed(1)}M
+
+            <div className="text-center py-20">
+              <div className="text-6xl mb-4">💼</div>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">Portfolio Coming Soon</h3>
+              <p className="text-slate-600 mb-4">Track your positions, P&L, and trading history</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                <p className="text-blue-800 text-sm">
+                  Portfolio tracking will be available after implementing real trading functionality.
+                </p>
               </div>
-              <div className="text-sm text-slate-600">Total Volume</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600 mb-1">24/7</div>
-              <div className="text-sm text-slate-600">Trading Hours</div>
+          </main>
+        )}
+
+        {currentView === 'profile' && (
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-4">Profile</h1>
+              <p className="text-slate-600">Manage your account settings and preferences</p>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600 mb-1">AI</div>
-              <div className="text-sm text-slate-600">Enhanced</div>
+
+            <div className="text-center py-20">
+              <div className="text-6xl mb-4">👤</div>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">Profile Settings</h3>
+              <p className="text-slate-600 mb-4">Account management and preferences</p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md mx-auto">
+                <p className="text-green-800 text-sm">
+                  Basic profile features available. Advanced settings coming in future updates.
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
-      </main>
+          </main>
+        )}
+      </div>
 
       {/* Market Details Modal */}
       {showMarketModal && selectedMarket && (
