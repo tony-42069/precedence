@@ -249,37 +249,58 @@ export default function Home() {
         {currentView === 'dashboard' && (
           <>
             {/* Hero Dashboard */}
-            <div className="bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900 text-white">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                <div className="text-center">
-                  <h1 className="text-5xl font-bold mb-6">
+            <div className="mx-4 mt-8 mb-8">
+              <div
+                className="relative border border-slate-200 rounded-2xl p-8 lg:p-16 shadow-sm overflow-hidden"
+                style={{
+                  background: `
+                    linear-gradient(135deg, rgba(239, 246, 255, 0.95) 0%, rgba(219, 234, 254, 0.95) 100%),
+                    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+                  `,
+                  backgroundSize: '60px 60px'
+                }}
+              >
+                {/* Subtle chart lines overlay */}
+                <div
+                  className="absolute inset-0 opacity-5"
+                  style={{
+                    background: `
+                      linear-gradient(90deg, transparent 0%, rgba(99, 102, 241, 0.1) 50%, transparent 100%),
+                      linear-gradient(0deg, transparent 0%, rgba(99, 102, 241, 0.05) 50%, transparent 100%)
+                    `,
+                    backgroundSize: '100px 100px'
+                  }}
+                />
+
+                <div className="relative z-10 text-center">
+                  <h1 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-6">
                     Predict Legal
                     <span className="block bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                       Outcomes
                     </span>
                   </h1>
-                  <p className="text-xl text-slate-300 max-w-3xl mx-auto mb-8">
+                  <p className="text-lg lg:text-xl text-slate-600 max-w-3xl mx-auto mb-8">
                     Trade on Supreme Court decisions, regulatory rulings, and high-profile legal cases
                     with AI-powered market intelligence.
                   </p>
 
                   {/* Key Stats */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-3xl font-bold text-yellow-400 mb-2">$2.4M</div>
-                      <div className="text-slate-300">24h Volume</div>
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-sm">
+                      <div className="text-3xl font-bold text-yellow-600 mb-2">$2.4M</div>
+                      <div className="text-slate-600">24h Volume</div>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-3xl font-bold text-green-400 mb-2">{markets.length}</div>
-                      <div className="text-slate-300">Active Markets</div>
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-sm">
+                      <div className="text-3xl font-bold text-green-600 mb-2">{markets.length}</div>
+                      <div className="text-slate-600">Active Markets</div>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-3xl font-bold text-blue-400 mb-2">AI</div>
-                      <div className="text-slate-300">Powered</div>
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-sm">
+                      <div className="text-3xl font-bold text-blue-600 mb-2">AI</div>
+                      <div className="text-slate-600">Powered</div>
                     </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                      <div className="text-3xl font-bold text-purple-400 mb-2">24/7</div>
-                      <div className="text-slate-300">Trading</div>
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-slate-200 shadow-sm">
+                      <div className="text-3xl font-bold text-purple-600 mb-2">24/7</div>
+                      <div className="text-slate-600">Trading</div>
                     </div>
                   </div>
                 </div>
