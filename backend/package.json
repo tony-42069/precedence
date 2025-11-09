@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "start": "node trading_service.js"
   },
   "keywords": [],
   "author": "",
@@ -16,5 +18,14 @@
     "dotenv": "^17.2.3",
     "ethers": "^6.15.0",
     "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "express-rate-limit": "^8.2.1",
+    "jest": "^30.2.0",
+    "joi": "^18.0.1",
+    "nock": "^14.0.10",
+    "node-cache": "^5.1.2",
+    "supertest": "^7.1.4"
   }
 }

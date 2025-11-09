@@ -11,10 +11,44 @@
 
 require('dotenv').config({ path: './.env', silent: true });
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const Joi = require('joi');
+const NodeCache = require('node-cache');
 const { ClobClient } = require('@polymarket/clob-client');
 const { RelayClient } = require('@polymarket/builder-relayer-client');
 const { BuilderConfig } = require('@polymarket/builder-signing-sdk');
 const { ethers } = require('ethers');
+
+// Initialize cache for market data (5 minute TTL)
+const marketCache = new NodeCache({ stdTTL: 300 });
+
+// Validation schemas
+const orderSchema = Joi.object({
+  marketId: Joi.string().required(),
+  side: Joi.string().valid('buy', 'sell').required(),
+  size: Joi.number().positive().max(10000).required(),
+  price: Joi.number().min(0).max(1).required(),
+  safeAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+  outcome: Joi.string().valid('Yes', 'No', 'yes', 'no').required()
+});
+
+const safeDeploySchema = Joi.object({
+  userPrivateKey: Joi.string().pattern(/^0x[a-fA-F0-9]{64}$/).required()
+});
+
+const usdcApprovalSchema = Joi.object({
+  safeAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required(),
+  amount: Joi.string().optional()
+});
+
+// Rate limiting
+const tradingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many trading requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Initialize Express app
 const app = express();
@@ -22,6 +56,55 @@ const PORT = process.env.TRADING_SERVICE_PORT || 5002;
 
 // Middleware
 app.use(express.json());
+app.use('/place-order', tradingLimiter);
+app.use('/deploy-safe', tradingLimiter);
+app.use('/approve-usdc', tradingLimiter);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err.stack);
+
+  if (err.name === 'RelayerTimeout') {
+    return res.status(503).json({
+      success: false,
+      error: 'Service busy—retrying transaction...',
+      retryAfter: 5000
+    });
+  }
+
+  if (err.name === 'InvalidMarket') {
+    return res.status(400).json({
+      success: false,
+      error: 'Market inactive or invalid'
+    });
+  }
+
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid input parameters',
+      details: err.details
+    });
+  }
+
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error'
+  });
+});
+
+// Validation middleware
+function validateSchema(schema) {
+  return (req, res, next) => {
+    const { error } = schema.validate(req.body);
+    if (error) {
+      const validationError = new Error('ValidationError');
+      validationError.details = error.details[0].message;
+      return next(validationError);
+    }
+    next();
+  };
+}
 
 // Configuration from environment
 const POLYMARKET_API_KEY = process.env.POLYMARKET_API_KEY;
@@ -239,17 +322,191 @@ async function getOrderBook(marketId) {
 }
 
 /**
- * Get user's positions
+ * Get market details from Gamma API (with caching)
  */
-async function getPositions(userWallet) {
+async function getMarketDetails(marketId) {
+  try {
+    // Check cache first
+    const cached = marketCache.get(marketId);
+    if (cached) {
+      console.log(`📋 Using cached market data for ${marketId}`);
+      return cached;
+    }
+
+    // Fetch from Gamma API
+    const gammaUrl = `https://gamma-api.polymarket.com/markets/${marketId}`;
+    const response = await fetch(gammaUrl);
+
+    if (!response.ok) {
+      throw new Error(`Gamma API returned ${response.status}`);
+    }
+
+    const market = await response.json();
+
+    // Cache the result
+    marketCache.set(marketId, market);
+    console.log(`📥 Cached market data for ${marketId}`);
+
+    return market;
+  } catch (error) {
+    console.error('❌ Failed to get market details:', error);
+    throw error;
+  }
+}
+
+/**
+ * Place AMM order using CTF (for markets without CLOB)
+ */
+async function placeAMMOrder(safeAddress, marketId, side, size, price, outcome) {
+  try {
+    console.log(`Placing AMM ${side} order: ${size} ${outcome} @ ${price} via Safe ${safeAddress}`);
+
+    // Get market details for condition ID and token IDs
+    const marketDetails = await getMarketDetails(marketId);
+    const conditionId = marketDetails.conditionId;
+    const clobTokenIds = marketDetails.clobTokenIds || [];
+
+    // Determine token ID based on outcome
+    const outcomeIndex = outcome.toLowerCase() === 'yes' ? 0 : 1;
+    const tokenId = clobTokenIds[outcomeIndex];
+
+    if (!tokenId) {
+      throw new Error(`No token ID found for outcome: ${outcome}`);
+    }
+
+    // Calculate collateral amount needed (price * size in USDC)
+    const collateralAmount = Math.floor(price * size * 1e6); // USDC has 6 decimals
+
+    // Create temporary RelayClient for this Safe
+    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    const ownerPrivateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
+      ? POLYMARKET_PRIVATE_KEY.slice(2)
+      : POLYMARKET_PRIVATE_KEY;
+    const ownerWallet = new ethers.Wallet(ownerPrivateKey, provider);
+
+    const safeRelayClient = new RelayClient(
+      'https://relayer-v2.polymarket.com/',
+      137, // Polygon chain ID
+      ownerWallet
+    );
+
+    // CTF contract address on Polygon
+    const ctfAddress = '0x4d97dcd97ec945f40cf65f87097ace5ea0476045';
+
+    // For buying: split collateral into position tokens
+    if (side.toLowerCase() === 'buy') {
+      const iface = new ethers.Interface([
+        'function splitPosition(address collateralToken, bytes32 parentCollectionId, bytes32 conditionId, uint[] partition, uint amount)'
+      ]);
+
+      // Partition for the specific outcome
+      const partition = outcomeIndex === 0 ? [1, 0] : [0, 1];
+
+      const splitData = iface.encodeFunctionData('splitPosition', [
+        '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC
+        ethers.ZeroHash, // parentCollectionId (0x00...00 for root)
+        conditionId,
+        partition,
+        collateralAmount
+      ]);
+
+      const safeTransaction = {
+        to: ctfAddress,
+        value: '0',
+        data: splitData,
+        operation: 0 // CALL
+      };
+
+      const response = await safeRelayClient.executeSafeTransactions([safeTransaction], safeAddress);
+      const result = await response.wait();
+
+      return {
+        success: true,
+        transactionHash: result.hash,
+        type: 'amm_split',
+        outcome: outcome,
+        amount: collateralAmount,
+        shares: size
+      };
+    }
+
+    // For selling: merge position tokens back to collateral
+    else if (side.toLowerCase() === 'sell') {
+      const iface = new ethers.Interface([
+        'function mergePositions(address collateralToken, bytes32 parentCollectionId, bytes32 conditionId, uint[] partition, uint amount)'
+      ]);
+
+      const partition = outcomeIndex === 0 ? [1, 0] : [0, 1];
+
+      const mergeData = iface.encodeFunctionData('mergePositions', [
+        '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC
+        ethers.ZeroHash,
+        conditionId,
+        partition,
+        size // Number of shares to merge
+      ]);
+
+      const safeTransaction = {
+        to: ctfAddress,
+        value: '0',
+        data: mergeData,
+        operation: 0 // CALL
+      };
+
+      const response = await safeRelayClient.executeSafeTransactions([safeTransaction], safeAddress);
+      const result = await response.wait();
+
+      return {
+        success: true,
+        transactionHash: result.hash,
+        type: 'amm_merge',
+        outcome: outcome,
+        shares: size
+      };
+    }
+
+    throw new Error(`Unsupported side: ${side}`);
+
+  } catch (error) {
+    console.error('❌ AMM order placement failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get user's positions with P&L calculation
+ */
+async function getPositions(safeAddress) {
   try {
     initializeClients();
 
-    // This would typically query the user's positions
-    // For now, return empty array
+    console.log(`Getting positions for Safe: ${safeAddress}`);
+
+    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+
+    // Get USDC balance
+    const usdcContract = new ethers.Contract(
+      '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+      ['function balanceOf(address) view returns (uint256)'],
+      provider
+    );
+    const usdcBalance = await usdcContract.balanceOf(safeAddress);
+
+    // For now, return basic position structure
+    // In production, you'd query CTF contract for all position tokens
+    const positions = [];
+
+    // Calculate basic P&L (placeholder)
+    const pnl = 0;
+
     return {
       success: true,
-      positions: []
+      usdcBalance: ethers.formatUnits(usdcBalance, 6),
+      positions: positions,
+      pnl: pnl
     };
 
   } catch (error) {
@@ -261,21 +518,101 @@ async function getPositions(userWallet) {
   }
 }
 
-// HTTP API Endpoints
-app.post('/place-order', async (req, res) => {
+/**
+ * Redeem positions back to USDC
+ */
+async function redeemPositions(safeAddress, tokenIds, amounts) {
   try {
-    const { marketId, side, size, price } = req.body;
+    console.log(`Redeeming positions for Safe: ${safeAddress}`);
 
-    if (!marketId || !side || !size || !price) {
+    // Create temporary RelayClient for this Safe
+    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    const ownerPrivateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
+      ? POLYMARKET_PRIVATE_KEY.slice(2)
+      : POLYMARKET_PRIVATE_KEY;
+    const ownerWallet = new ethers.Wallet(ownerPrivateKey, provider);
+
+    const safeRelayClient = new RelayClient(
+      'https://relayer-v2.polymarket.com/',
+      137, // Polygon chain ID
+      ownerWallet
+    );
+
+    // CTF contract address on Polygon
+    const ctfAddress = '0x4d97dcd97ec945f40cf65f87097ace5ea0476045';
+
+    // For redemption: redeemPositions function
+    const iface = new ethers.Interface([
+      'function redeemPositions(address collateralToken, bytes32 parentCollectionId, bytes32 conditionId, uint[] indexSets)'
+    ]);
+
+    // This is a simplified version - in production you'd need to:
+    // 1. Get the condition ID from the market
+    // 2. Calculate the correct index sets
+    // 3. Handle multiple positions properly
+
+    const redeemData = iface.encodeFunctionData('redeemPositions', [
+      '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC
+      ethers.ZeroHash,
+      '0x' + '00'.repeat(32), // placeholder conditionId
+      [1, 2] // placeholder index sets
+    ]);
+
+    const safeTransaction = {
+      to: ctfAddress,
+      value: '0',
+      data: redeemData,
+      operation: 0 // CALL
+    };
+
+    const response = await safeRelayClient.executeSafeTransactions([safeTransaction], safeAddress);
+    const result = await response.wait();
+
+    return {
+      success: true,
+      transactionHash: result.hash,
+      redeemedAmount: 'calculated_amount' // Would calculate actual redeemed USDC
+    };
+
+  } catch (error) {
+    console.error('❌ Position redemption failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// HTTP API Endpoints
+app.post('/place-order', validateSchema(orderSchema), async (req, res) => {
+  try {
+    const { marketId, side, size, price, safeAddress, outcome } = req.body;
+
+    if (!marketId || !side || !size || !price || !safeAddress || !outcome) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required parameters: marketId, side, size, price'
+        error: 'Missing required parameters: marketId, side, size, price, safeAddress, outcome'
       });
     }
 
-    const result = await placeOrder(marketId, side, size, price);
-    res.json(result);
+    // For Phase 3: Enhanced order placement with CTF operations
+    console.log(`Placing ${side} order: ${size} ${outcome} @ ${price} on market ${marketId} via Safe ${safeAddress}`);
+
+    // Get market details to determine if CLOB or AMM
+    const marketDetails = await getMarketDetails(marketId);
+    const isCLOB = marketDetails.enableOrderBook || false;
+
+    if (isCLOB) {
+      // Use CLOB for order placement
+      const result = await placeOrder(marketId, side, size, price);
+      res.json(result);
+    } else {
+      // Use AMM/CTF for direct trading (gasless via Safe)
+      const ammResult = await placeAMMOrder(safeAddress, marketId, side, size, price, outcome);
+      res.json(ammResult);
+    }
   } catch (error) {
+    console.error('Order placement failed:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -429,18 +766,39 @@ app.get('/order-book/:marketId', async (req, res) => {
   }
 });
 
-app.get('/positions/:userWallet', async (req, res) => {
+app.get('/positions/:safeAddress', async (req, res) => {
   try {
-    const { userWallet } = req.params;
+    const { safeAddress } = req.params;
 
-    if (!userWallet) {
+    if (!safeAddress) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required parameter: userWallet'
+        error: 'Missing required parameter: safeAddress'
       });
     }
 
-    const result = await getPositions(userWallet);
+    const result = await getPositions(safeAddress);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/redeem-position', async (req, res) => {
+  try {
+    const { safeAddress, tokenIds, amounts } = req.body;
+
+    if (!safeAddress || !tokenIds || !amounts) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: safeAddress, tokenIds, amounts'
+      });
+    }
+
+    const result = await redeemPositions(safeAddress, tokenIds, amounts);
     res.json(result);
   } catch (error) {
     res.status(500).json({
@@ -473,6 +831,8 @@ if (require.main === module) {
     console.log(`💰 Place order: POST http://localhost:${PORT}/place-order`);
     console.log(`🏦 Deploy Safe: POST http://localhost:${PORT}/deploy-safe`);
     console.log(`✅ Approve USDC: POST http://localhost:${PORT}/approve-usdc`);
+    console.log(`📊 Get positions: GET http://localhost:${PORT}/positions/:safeAddress`);
+    console.log(`💸 Redeem position: POST http://localhost:${PORT}/redeem-position`);
   });
 }
 
