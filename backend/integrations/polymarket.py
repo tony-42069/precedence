@@ -1,53 +1,47 @@
 """
-Polymarket Integration for Precedence
+Polymarket Builder Integration for Precedence
 
-Provides access to Polymarket's CLOB (Central Limit Order Book) API.
-Handles market fetching, order placement, and position tracking for prediction markets.
+Provides access to Polymarket's Builder program APIs:
+- Uses official @polymarket/clob-client with Builder attribution
+- Integrates with signing server for secure header generation
+- Supports gasless transactions via relayer
+- Manages Safe wallet deployment and operations
 """
 
 import os
 import logging
+import json
+import subprocess
 from typing import Dict, List, Optional, Any
-from py_clob_client.client import ClobClient, BookParams
-from py_clob_client.constants import POLYGON
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 class PolymarketClient:
-    """Client for Polymarket CLOB integration."""
+    """Client for Polymarket Builder program integration."""
 
     def __init__(self):
         # Get credentials from environment
         self.api_key = os.getenv("POLYMARKET_API_KEY")
-        self.private_key = os.getenv("POLYMARKET_PRIVATE_KEY")  # For signing transactions
-        self.host = "https://clob.polymarket.com"  # Production CLOB
+        self.private_key = os.getenv("POLYMARKET_PRIVATE_KEY")
+        self.signing_server_url = os.getenv("POLYMARKET_SIGNING_SERVER_URL", "http://localhost:5001/sign")
 
         if not self.api_key:
             logger.warning("POLYMARKET_API_KEY not found in environment variables")
 
         if not self.private_key:
             logger.warning("POLYMARKET_PRIVATE_KEY not found - order placement will not work")
-            logger.info("For Polymarket integration, you need:")
-            logger.info("1. POLYMARKET_API_KEY (from Builder program)")
-            logger.info("2. POLYMARKET_PRIVATE_KEY (wallet private key for signing)")
 
-        # Initialize client (private key is required for signing)
-        try:
-            self.client = ClobClient(
-                host=self.host,
-                key=self.private_key,  # This should be the private key for signing
-                chain_id=POLYGON
-            )
-            logger.info("Initialized Polymarket client successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize Polymarket client: {e}")
-            logger.error("This is likely due to missing or invalid POLYMARKET_PRIVATE_KEY")
-            self.client = None
+        # Trading service HTTP endpoint
+        self.trading_service_url = os.getenv("TRADING_SERVICE_URL", "http://localhost:5002")
+
+        logger.info("Initialized Polymarket Builder client")
+        logger.info(f"Trading service URL: {self.trading_service_url}")
+        logger.info(f"Signing server URL: {self.signing_server_url}")
 
     def get_markets(self, limit: int = 20, closed: bool = False) -> List[Dict]:
         """
-        Get available markets from Polymarket.
+        Get available markets from Polymarket Gamma API.
 
         Args:
             limit: Maximum number of markets to return
@@ -57,22 +51,31 @@ class PolymarketClient:
             List of market dictionaries
         """
         try:
-            # Try the basic get_markets call first
-            response = self.client.get_markets()
-            markets = response.get('data', [])
+            # Use Gamma API for market data (same as get_legal_prediction_markets)
+            import httpx
 
-            # Filter and limit results
-            if not closed:
-                # Filter out closed markets if requested
-                markets = [m for m in markets if not m.get('closed', False)]
+            gamma_url = "https://gamma-api.polymarket.com/markets"
+            params = {
+                "active": not closed,
+                "closed": closed,
+                "archived": False,
+                "limit": limit
+            }
 
-            # Sort by volume (most active first)
-            markets.sort(key=lambda x: x.get('volume', 0), reverse=True)
+            response = httpx.get(gamma_url, params=params)
+            markets = response.json()
 
-            # Limit results
-            markets = markets[:limit]
+            # Sort by volume (most active first) - handle string/int volume values
+            def get_volume(market):
+                volume = market.get('volume', 0)
+                try:
+                    return float(volume) if volume else 0
+                except (ValueError, TypeError):
+                    return 0
 
-            logger.info(f"Retrieved {len(markets)} markets from Polymarket")
+            markets.sort(key=get_volume, reverse=True)
+
+            logger.info(f"Retrieved {len(markets)} markets from Polymarket Gamma API")
             return markets
 
         except Exception as e:
@@ -81,7 +84,7 @@ class PolymarketClient:
 
     def get_market_details(self, market_id: str) -> Dict:
         """
-        Get detailed information about a specific market.
+        Get detailed information about a specific market from Gamma API.
 
         Args:
             market_id: Polymarket market ID
@@ -90,9 +93,17 @@ class PolymarketClient:
             Dict containing market details
         """
         try:
-            market = self.client.get_market(market_id)
-            logger.info(f"Retrieved details for market {market_id}")
-            return market
+            import httpx
+
+            gamma_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
+            response = httpx.get(gamma_url)
+
+            if response.status_code == 200:
+                market = response.json()
+                logger.info(f"Retrieved details for market {market_id}")
+                return market
+            else:
+                raise Exception(f"Gamma API returned status {response.status_code}")
 
         except Exception as e:
             logger.error(f"Failed to get market details for {market_id}: {e}")
@@ -100,7 +111,7 @@ class PolymarketClient:
 
     def get_market_orderbook(self, market_id: str) -> Dict:
         """
-        Get the order book for a specific market.
+        Get the order book for a specific market using Node.js service.
 
         Args:
             market_id: Polymarket market ID
@@ -109,10 +120,13 @@ class PolymarketClient:
             Dict containing bid/ask order book
         """
         try:
-            book_params = BookParams(token_id=market_id)
-            orderbook = self.client.get_order_book(book_params)
-            logger.info(f"Retrieved orderbook for market {market_id}")
-            return orderbook
+            result = self._call_trading_service('getOrderBook', [market_id])
+
+            if result.get('success'):
+                logger.info(f"Retrieved orderbook for market {market_id}")
+                return result.get('orderBook', {})
+            else:
+                raise Exception(result.get('error', 'Unknown error'))
 
         except Exception as e:
             logger.error(f"Failed to get orderbook for {market_id}: {e}")
@@ -295,54 +309,177 @@ class PolymarketClient:
                            side: str,
                            size: float,
                            price: float,
-                           test: bool = True) -> Dict:
+                           test: bool = False) -> Dict:
         """
-        Create a market order (for testing - use test=True).
+        Create a market order using Polymarket Builder SDKs.
 
         Args:
             market_id: Polymarket market ID
             side: 'buy' or 'sell'
             size: Order size
             price: Limit price
-            test: If True, only validate order without executing
+            test: If True, validate without executing (not implemented yet)
 
         Returns:
             Dict containing order result
         """
         try:
-            # For now, just validate the order structure
-            # In production, this would create actual orders
+            logger.info(f"Placing {side} order: {size} @ {price} on market {market_id}")
 
-            order_data = {
-                'market_id': market_id,
-                'side': side,
-                'size': size,
-                'price': price,
-                'test': test
-            }
+            # Call Node.js trading service
+            result = self._call_trading_service('placeOrder', [
+                market_id, side, str(size), str(price)
+            ])
 
-            if test:
-                logger.info(f"TEST ORDER: Would place {side} order for {size} at {price} on market {market_id}")
-                return {
-                    'success': True,
-                    'test': True,
-                    'message': 'Test order validated successfully',
-                    'order_data': order_data
-                }
+            if result.get('success'):
+                logger.info(f"✅ Order placed successfully: {result}")
+                return result
             else:
-                # Production order placement would go here
-                logger.warning("Production order placement not implemented yet")
-                return {
-                    'success': False,
-                    'message': 'Production orders not yet implemented',
-                    'order_data': order_data
-                }
+                logger.error(f"❌ Order placement failed: {result.get('error')}")
+                return result
 
         except Exception as e:
             logger.error(f"Failed to create order: {e}")
             return {
                 'success': False,
                 'error': str(e)
+            }
+
+    def deploy_safe_wallet(self, user_wallet: str) -> Dict:
+        """
+        Deploy a Safe wallet for a user.
+
+        Args:
+            user_wallet: User's wallet address
+
+        Returns:
+            Dict containing deployment result
+        """
+        try:
+            logger.info(f"Deploying Safe wallet for user: {user_wallet}")
+
+            result = self._call_trading_service('deploySafeWallet', [user_wallet])
+
+            if result.get('success'):
+                logger.info(f"✅ Safe wallet deployed: {result.get('safeAddress')}")
+                return result
+            else:
+                logger.error(f"❌ Safe deployment failed: {result.get('error')}")
+                return result
+
+        except Exception as e:
+            logger.error(f"Failed to deploy Safe wallet: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def approve_usdc(self, safe_address: str) -> Dict:
+        """
+        Approve USDC spending for Conditional Tokens Framework.
+
+        Args:
+            safe_address: Safe wallet address
+
+        Returns:
+            Dict containing approval result
+        """
+        try:
+            logger.info(f"Approving USDC for Safe: {safe_address}")
+
+            result = self._call_trading_service('approveUSDC', [safe_address])
+
+            if result.get('success'):
+                logger.info(f"✅ USDC approved: {result.get('transactionHash')}")
+                return result
+            else:
+                logger.error(f"❌ USDC approval failed: {result.get('error')}")
+                return result
+
+        except Exception as e:
+            logger.error(f"Failed to approve USDC: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _call_trading_service(self, method: str, args: list) -> Dict:
+        """
+        Call the Node.js trading service via HTTP.
+
+        Args:
+            method: Method name to call
+            args: Arguments to pass
+
+        Returns:
+            Dict containing result
+        """
+        try:
+            import requests
+
+            # Map method names to HTTP endpoints
+            endpoint_map = {
+                'getOrderBook': f'/order-book/{args[0]}',
+                'placeOrder': '/place-order',
+                'deploySafeWallet': '/deploy-safe',
+                'approveUSDC': '/approve-usdc',
+                'getPositions': f'/positions/{args[0]}'
+            }
+
+            if method not in endpoint_map:
+                return {
+                    'success': False,
+                    'error': f'Unknown method: {method}'
+                }
+
+            endpoint = endpoint_map[method]
+            url = f"{self.trading_service_url}{endpoint}"
+
+            # Prepare request data based on method
+            if method == 'placeOrder':
+                # POST with JSON body
+                data = {
+                    'marketId': args[0],
+                    'side': args[1],
+                    'size': args[2],
+                    'price': args[3]
+                }
+                response = requests.post(url, json=data, timeout=30)
+            elif method == 'deploySafeWallet':
+                # POST with JSON body
+                data = {'userWalletAddress': args[0]}
+                response = requests.post(url, json=data, timeout=30)
+            elif method == 'approveUSDC':
+                # POST with JSON body
+                data = {'safeAddress': args[0]}
+                response = requests.post(url, json=data, timeout=30)
+            else:
+                # GET request
+                response = requests.get(url, timeout=30)
+
+            # Check response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}: {response.text}'
+                }
+
+        except requests.exceptions.Timeout:
+            return {
+                'success': False,
+                'error': 'Trading service timeout'
+            }
+        except requests.exceptions.ConnectionError:
+            return {
+                'success': False,
+                'error': 'Cannot connect to trading service. Is it running?'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Failed to call trading service: {str(e)}'
             }
 
 # Global client instance
