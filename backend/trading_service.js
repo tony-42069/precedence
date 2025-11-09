@@ -81,11 +81,11 @@ function initializeClients() {
       const wallet = new ethers.Wallet(privateKey, provider);
 
       // Initialize relay client for gasless transactions
+      // Note: RelayClient doesn't need builder config, but we can pass it if needed
       relayClient = new RelayClient(
         'https://relayer-v2.polymarket.com/',
         137, // Polygon chain ID
-        wallet,
-        null // No builder config needed for relay client
+        wallet
       );
 
       console.log('✅ Initialized Polymarket Relay client for gasless trading');
@@ -285,18 +285,47 @@ app.post('/place-order', async (req, res) => {
 
 app.post('/deploy-safe', async (req, res) => {
   try {
-    const { userWalletAddress } = req.body;
+    const { userPrivateKey } = req.body;
 
-    if (!userWalletAddress) {
+    if (!userPrivateKey) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required parameter: userWalletAddress'
+        error: 'Missing required parameter: userPrivateKey'
       });
     }
 
-    const result = await deploySafeWallet(userWalletAddress);
-    res.json(result);
+    // Create a temporary RelayClient for this user
+    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    const privateKey = userPrivateKey.startsWith('0x') ? userPrivateKey.slice(2) : userPrivateKey;
+    const wallet = new ethers.Wallet(privateKey, provider);
+
+    const userRelayClient = new RelayClient(
+      'https://relayer-v2.polymarket.com/',
+      137, // Polygon chain ID
+      wallet
+    );
+
+    console.log(`Deploying Safe wallet for user...`);
+
+    const response = await userRelayClient.deploySafe();
+    const result = await response.wait();
+
+    if (result && result.proxyAddress) {
+      console.log(`✅ Safe wallet deployed: ${result.proxyAddress}`);
+      res.json({
+        success: true,
+        safeAddress: result.proxyAddress,
+        transactionHash: result.transactionHash
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Safe deployment failed - no proxy address returned'
+      });
+    }
+
   } catch (error) {
+    console.error('❌ Safe deployment failed:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -315,9 +344,63 @@ app.post('/approve-usdc', async (req, res) => {
       });
     }
 
-    const result = await approveUSDC(safeAddress, amount);
-    res.json(result);
+    // Parse amount (default to max approval)
+    const approvalAmount = amount ? ethers.utils.parseUnits(amount, 6) : ethers.MaxUint256;
+
+    console.log(`Approving ${amount || 'unlimited'} USDC for Safe: ${safeAddress}`);
+
+    // Create a temporary RelayClient for this Safe
+    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+
+    // For Safe operations, we need the owner's private key
+    // In production, this would be securely managed
+    const ownerPrivateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
+      ? POLYMARKET_PRIVATE_KEY.slice(2)
+      : POLYMARKET_PRIVATE_KEY;
+    const ownerWallet = new ethers.Wallet(ownerPrivateKey, provider);
+
+    const safeRelayClient = new RelayClient(
+      'https://relayer-v2.polymarket.com/',
+      137, // Polygon chain ID
+      ownerWallet
+    );
+
+    // USDC contract address on Polygon
+    const usdcAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+    const spenderAddress = '0x4d97dcd97ec945f40cf65f87097ace5ea0476045'; // CTF
+
+    // Create approval transaction
+    const iface = new ethers.Interface([
+      'function approve(address spender, uint256 amount)'
+    ]);
+
+    const encodedApprove = iface.encodeFunctionData('approve', [spenderAddress, approvalAmount]);
+
+    const safeTransaction = {
+      to: usdcAddress,
+      value: '0',
+      data: encodedApprove,
+      operation: 0 // CALL
+    };
+
+    const response = await safeRelayClient.executeSafeTransactions([safeTransaction], safeAddress);
+    const result = await response.wait();
+
+    if (result && result.hash) {
+      console.log(`✅ USDC approval successful: ${result.hash}`);
+      res.json({
+        success: true,
+        transactionHash: result.hash
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'USDC approval failed - no transaction hash returned'
+      });
+    }
+
   } catch (error) {
+    console.error('❌ USDC approval failed:', error);
     res.status(500).json({
       success: false,
       error: error.message
