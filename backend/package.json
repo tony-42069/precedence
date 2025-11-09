@@ -15,9 +15,12 @@
   "dependencies": {
     "@polymarket/builder-relayer-client": "^0.0.6",
     "@polymarket/clob-client": "^4.22.8",
+    "@polymarket/real-time-data-client": "^1.4.0",
+    "axios": "^1.13.2",
     "dotenv": "^17.2.3",
     "ethers": "^6.15.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
