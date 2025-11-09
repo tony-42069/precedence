@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  trading-service:
+    build: .
+    ports:
+      - "5002:5002"
+    environment:
+      - NODE_ENV=production
+      - PORT=5002
+      - POLYMARKET_API_KEY=${POLYMARKET_API_KEY}
+      - POLYMARKET_SECRET_KEY=${POLYMARKET_SECRET_KEY}
+      - POLYMARKET_PASSPHRASE=${POLYMARKET_PASSPHRASE}
+      - POLYMARKET_PRIVATE_KEY=${POLYMARKET_PRIVATE_KEY}
+      - POLYMARKET_SIGNING_SERVER_URL=${POLYMARKET_SIGNING_SERVER_URL}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5002/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - precedence-network
+
+networks:
+  precedence-network:
+    driver: bridge

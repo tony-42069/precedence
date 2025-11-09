@@ -22,11 +22,16 @@ def run_smoke_test(num_trades=10):
     total_start_time = time.time()
 
     print("🧪 Starting Phase 4 Smoke Test")
-    print(f"📊 Testing {num_trades} mock trades...")
+    print(f"📊 Testing {num_trades} trades (alternating valid/invalid)...")
     print("=" * 50)
+
+    # Use a valid market ID (placeholder - would be fetched from Gamma API in real scenario)
+    valid_market_id = '71321045679252212594626385532706912750332728571942532289631379312455583992563'
+    valid_safe = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e'
 
     for i in range(num_trades):
         trade_start = time.time()
+        is_valid = i % 2 == 0  # Alternate valid/invalid
 
         try:
             # Simulate a complete trading flow
@@ -34,39 +39,60 @@ def run_smoke_test(num_trades=10):
             health_response = requests.get(f"{TRADING_SERVICE_URL}/health", timeout=5)
             health_response.raise_for_status()
 
-            # 2. Mock order placement (will fail gracefully without real funds/keys)
+            # 2. Order placement with alternating valid/invalid payloads
+            if is_valid:
+                payload = {
+                    'safeAddress': valid_safe,
+                    'marketId': valid_market_id,
+                    'side': 'buy',
+                    'size': 5 + i,
+                    'price': 0.50 + (i * 0.01),
+                    'outcome': 'Yes' if i % 2 == 0 else 'No'
+                }
+            else:
+                # Invalid payload - missing required fields
+                payload = {'safeAddress': valid_safe}  # Missing marketId, side, size, price, outcome
+
             order_response = requests.post(
                 f"{TRADING_SERVICE_URL}/place-order",
-                json={
-                    "marketId": "516710",
-                    "side": "buy",
-                    "size": 5 + i,  # Vary size for realism
-                    "price": 0.50 + (i * 0.01),  # Vary price
-                    "safeAddress": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-                    "outcome": "Yes" if i % 2 == 0 else "No"
-                },
+                json=payload,
                 timeout=30
             )
 
-            # We expect this to fail in test environment (no real keys/funds)
-            # But it should fail gracefully with proper error handling
-            if order_response.status_code in [400, 500]:
-                # This is expected - we're testing error handling
-                duration = time.time() - trade_start
-                results.append({
-                    'success': True,  # Success means proper error handling
-                    'duration': duration,
-                    'error_handled': True
-                })
-                print(f"Trade {i+1}: ✅ {duration:.2f}s (error handled)")
+            duration = time.time() - trade_start
+
+            if is_valid:
+                # Valid requests should return 200 with success or graceful API error
+                if order_response.status_code == 200:
+                    results.append({
+                        'success': True,
+                        'duration': duration,
+                        'type': 'valid'
+                    })
+                    print(f"Trade {i+1}: ✅ Valid ({order_response.status_code}) in {duration:.2f}s")
+                else:
+                    results.append({
+                        'success': False,
+                        'duration': duration,
+                        'error': f"Expected 200 for valid request, got {order_response.status_code}"
+                    })
+                    print(f"Trade {i+1}: ❌ Valid request failed with {order_response.status_code}")
             else:
-                # Unexpected response
-                results.append({
-                    'success': False,
-                    'duration': time.time() - trade_start,
-                    'error': f"Unexpected status: {order_response.status_code}"
-                })
-                print(f"Trade {i+1}: ❌ Unexpected response {order_response.status_code}")
+                # Invalid requests should return 400 validation error
+                if order_response.status_code == 400:
+                    results.append({
+                        'success': True,
+                        'duration': duration,
+                        'type': 'invalid'
+                    })
+                    print(f"Trade {i+1}: ✅ Invalid rejected ({order_response.status_code}) in {duration:.2f}s")
+                else:
+                    results.append({
+                        'success': False,
+                        'duration': duration,
+                        'error': f"Expected 400 for invalid request, got {order_response.status_code}"
+                    })
+                    print(f"Trade {i+1}: ❌ Invalid request not rejected ({order_response.status_code})")
 
         except requests.exceptions.Timeout:
             results.append({
