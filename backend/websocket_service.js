@@ -11,6 +11,10 @@ const crypto = require('crypto');
 const axios = require('axios');
 const { ethers } = require('ethers');
 
+// REST API Polling for Live Data (Phase 5 Fallback)
+const POLLING_INTERVAL = 5000; // 5 seconds
+const POLLED_MARKETS = new Map(); // marketId -> last data
+
 // Configuration
 const WS_PORT = process.env.WEBSOCKET_PORT || 5003;
 const PRIVATE_KEY = process.env.POLYMARKET_PRIVATE_KEY;
@@ -22,7 +26,8 @@ let wss = null;
 let clobCreds = null;
 const activeSubscriptions = new Map(); // clientId -> Set of tokenIds
 const marketSubscriptions = new Map(); // tokenId -> Set of clientIds
-const clobConnections = new Map(); // tokenId -> WebSocket connection
+const clobConnections = new Map(); // conditionId -> WebSocket connection
+const retryCounts = new Map(); // conditionId -> retry count
 
 /**
  * Derive CLOB API credentials using EIP-712 signing
@@ -82,6 +87,9 @@ async function deriveCLOBCredentials(privateKey, host = CLOB_HOST) {
       const response = await axios.get(`${host}/auth/derive-api-key`, { headers });
       const { key: apiKey, secret, passphrase } = response.data;
       console.log('✅ Derived existing CLOB API credentials');
+      console.log('🔑 CLOB_API_KEY:', apiKey);
+      console.log('🔐 CLOB_SECRET:', secret);
+      console.log('🔒 CLOB_PASSPHRASE:', passphrase);
       return { apiKey, secret, passphrase };
     } catch (deriveError) {
       if (deriveError.response?.status === 404) {
@@ -90,6 +98,9 @@ async function deriveCLOBCredentials(privateKey, host = CLOB_HOST) {
         const createResponse = await axios.post(`${host}/auth/api-key`, {}, { headers });
         const { key: apiKey, secret, passphrase } = createResponse.data;
         console.log('✅ Created new CLOB API credentials');
+        console.log('🔑 CLOB_API_KEY:', apiKey);
+        console.log('🔐 CLOB_SECRET:', secret);
+        console.log('🔒 CLOB_PASSPHRASE:', passphrase);
         return { apiKey, secret, passphrase };
       } else {
         throw deriveError;
@@ -146,117 +157,99 @@ function broadcastToMarketSubscribers(marketId, message) {
   }
 }
 
-/**
- * Connect to CLOB WebSocket for a specific market
- */
-function connectCLOBWebSocket(tokenId) {
-  if (clobConnections.has(tokenId)) {
-    console.log(`🔄 CLOB WS already connected for ${tokenId}`);
-    return clobConnections.get(tokenId);
+// Verified active conditionId (2025 NHL market example; CLOB-enabled, high vol)
+const ACTIVE_CONDITION_ID = '0x9915bea232fa12b20058f9cea1187ea51366352bf833393676cd0db557a58249';
+
+async function getConditionId(tokenID = null) {
+  console.log('🔍 Using verified active conditionId for 2025 market');
+  return ACTIVE_CONDITION_ID;
+}
+
+
+
+// Updated connect: Correct JSON sub with type/assets_ids (no conditionId, no action/channel)
+async function connectCLOBWebSocket(tokenId, maxRetries = 3) {
+  const assetTokenId = tokenId || TOKEN_ID;  // Use provided or hardcoded
+  const key = assetTokenId;
+  const retries = retryCounts.get(key) || 0;
+
+  if (retries >= maxRetries) {
+    console.error(`💥 Max retries for token ${assetTokenId}—aborting. Check token validity.`);
+    return;
   }
 
-  if (!clobCreds) {
-    console.error('❌ No CLOB credentials available');
-    return null;
+  if (clobConnections.has(key)) {
+    console.log(`Already subbed to asset ${assetTokenId}`);
+    return;
   }
 
   const ws = new WebSocket(`${CLOB_WS_HOST}/ws/market`);
-  console.log(`🔌 Connecting to CLOB WS for market ${tokenId}...`);
 
   ws.on('open', () => {
-    console.log(`✅ CLOB WS connected for market ${tokenId}`);
-
-    // Subscribe to market data
-    const timestamp = Date.now();
-    const subscribeMsg = signCLOBMessage(
-      'subscribe',
-      'market',
-      tokenId,
-      timestamp,
-      clobCreds.apiKey,
-      clobCreds.secret
-    );
-
+    console.log(`✅ CLOB WS Open for asset ${assetTokenId}`);
+    // Correct sub JSON per docs: type + assets_ids (tokenID array)
+    const subscribeMsg = {
+      type: 'MARKET',
+      assets_ids: [assetTokenId]  // Array of tokenIDs for events
+    };
     ws.send(JSON.stringify(subscribeMsg));
-    console.log(`📡 Subscribed to market ${tokenId} via CLOB WS`);
+    console.log('📡 Sub msg sent:', JSON.stringify(subscribeMsg));
   });
 
   ws.on('message', (data) => {
     try {
       const event = JSON.parse(data.toString());
-      console.log(`📊 CLOB Event for ${tokenId}:`, event.type);
+      console.log('🔥 CLOB Event Raw:', JSON.stringify(event, null, 2));
+      const eventType = event.event_type || event.type;
+      const payload = event;
 
-      // Transform and broadcast to frontend clients
-      let transformedEvent = null;
+      // Broadcast
+      wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: eventType, payload, timestamp: Date.now() }));
+        }
+      });
 
-      switch (event.type) {
-        case 'book':
-          transformedEvent = {
-            type: 'orderBook',
-            marketId: tokenId,
-            data: {
-              bids: event.payload.bids || [],
-              asks: event.payload.asks || [],
-              timestamp: Date.now()
-            }
-          };
-          break;
-
-        case 'price_change':
-          transformedEvent = {
-            type: 'priceChange',
-            marketId: tokenId,
-            data: {
-              price: event.payload.newPrice,
-              change: event.payload.priceChange,
-              timestamp: Date.now()
-            }
-          };
-          break;
-
-        case 'last_trade_price':
-          transformedEvent = {
-            type: 'trade',
-            marketId: tokenId,
-            data: {
-              price: event.payload.price,
-              size: event.payload.size,
-              side: event.payload.side,
-              timestamp: event.payload.timestamp
-            }
-          };
-          break;
-
-        default:
-          console.log(`📨 Unhandled CLOB event type: ${event.type}`);
-          return;
+      // Alerts (docs schema)
+      if (eventType === 'price_change') {
+        const changes = payload.price_changes || [];
+        changes.forEach(change => {
+          const newPrice = change.price;
+          console.log(`💥 Price Change: ${newPrice} (best_bid: ${change.best_bid || 'N/A'}, best_ask: ${change.best_ask || 'N/A'})`);
+          if (parseFloat(newPrice) > 0.75) console.log(`🚨 Alert >0.75 on ${change.asset_id}!`);
+        });
+      } else if (eventType === 'book') {
+        const bids = payload.bids || [];
+        const asks = payload.asks || [];
+        console.log(`📊 Book Update: ${bids.length} bids, ${asks.length} asks (top bid: ${bids[0]?.price || 'N/A'})`);
+      } else if (eventType === 'last_trade_price') {
+        console.log(`💰 Trade: ${payload.price} @ ${payload.size} (${payload.side})`);
       }
-
-      if (transformedEvent) {
-        broadcastToMarketSubscribers(tokenId, transformedEvent);
-      }
-    } catch (error) {
-      console.error('❌ Error processing CLOB message:', error);
+      retryCounts.set(key, 0);  // Success reset
+    } catch (err) {
+      console.error('CLOB Parse Error:', err);
     }
   });
 
-  ws.on('error', (error) => {
-    console.error(`❌ CLOB WS error for ${tokenId}:`, error);
+  ws.on('error', (err) => {
+    console.error(`❌ CLOB Error for ${assetTokenId}:`, err.message);
+    clobConnections.delete(key);
+    retryCounts.set(key, retries + 1);
   });
 
-  ws.on('close', () => {
-    console.log(`🔌 CLOB WS closed for ${tokenId}`);
-    clobConnections.delete(tokenId);
-
-    // Auto-reconnect if still subscribed
-    if (marketSubscriptions.has(tokenId) && marketSubscriptions.get(tokenId).size > 0) {
-      console.log(`🔄 Auto-reconnecting CLOB WS for ${tokenId} in 5 seconds...`);
-      setTimeout(() => connectCLOBWebSocket(tokenId), 5000);
+  ws.on('close', (code, reason) => {
+    console.log(`🔌 CLOB Closed for ${assetTokenId} (Code: ${code}, Reason: "${reason || 'Empty'}")`);
+    clobConnections.delete(key);
+    retryCounts.set(key, retries + 1);
+    if (code === 1006 && retries < maxRetries) {
+      console.log(`🔄 Reconnecting (Retry ${retries + 1}/${maxRetries})`);
+      setTimeout(() => connectCLOBWebSocket(tokenId, maxRetries), 5000);
+    } else if (code === 1006) {
+      console.error(`💥 Permanent fail for ${assetTokenId}—try fresh tokenID from Gamma.`);
     }
   });
 
-  clobConnections.set(tokenId, ws);
-  return ws;
+  clobConnections.set(key, ws);
 }
 
 /**
@@ -323,6 +316,64 @@ function handleClientDisconnect(clientId) {
   console.log(`👋 Client ${clientId} disconnected`);
 }
 
+// Real tokenId from docs (active binary outcome)
+const TOKEN_ID = '65818619657568813474341868652308942079804919287380422192892211131408793125422';
+
+function getL2Headers(method, path) {
+  if (!process.env.CLOB_SECRET) {
+    throw new Error('Missing CLOB_SECRET in .env - set from derived creds');
+  }
+
+  const timestamp = Date.now().toString();
+  const payload = timestamp + method.toUpperCase() + path;  // No body for GET
+  const signature = crypto.createHmac('sha256', process.env.CLOB_SECRET).update(payload).digest('hex');
+
+  return {
+    'POLY_API_KEY': process.env.CLOB_API_KEY || '',  // Empty string if undefined
+    'POLY_PASSPHRASE': process.env.CLOB_PASSPHRASE,
+    'POLY_TIMESTAMP': timestamp,
+    'POLY_SIGNATURE': signature,
+    'POLY_ADDRESS': process.env.POLY_ADDRESS,
+    'Content-Type': 'application/json'
+  };
+}
+
+// Poll with signed headers
+async function pollMarketData(tokenId) {
+  try {
+    const bookPath = `/book?token_id=${tokenId}`;
+    const bookRes = await axios.get(`https://clob.polymarket.com${bookPath}`, { headers: getL2Headers('GET', bookPath) });
+    const bookEvent = { type: 'book', payload: bookRes.data };
+
+    const tradesPath = `/trades?token_id=${tokenId}`;
+    const tradesRes = await axios.get(`https://clob.polymarket.com${tradesPath}`, { headers: getL2Headers('GET', tradesPath) });
+    const tradesEvent = { type: 'trades', payload: tradesRes.data };
+
+    const bids = bookEvent.payload.bids || [];
+    const asks = bookEvent.payload.asks || [];
+    const midpoint = (parseFloat(asks[0]?.price || 0) + parseFloat(bids[0]?.price || 0)) / 2;
+    const priceEvent = { type: 'price_change', payload: { newPrice: midpoint.toFixed(4), best_bid: bids[0]?.price, best_ask: asks[0]?.price } };
+
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        [bookEvent, tradesEvent, priceEvent].forEach(ev => client.send(JSON.stringify(ev)));
+      }
+    });
+
+    console.log(`📊 Polled ${tokenId.slice(0,10)}...: Book depth ${bids.length}/${asks.length}, Price ${midpoint.toFixed(4)}, Trades: ${tradesEvent.payload.length || 0}`);
+
+    if (parseFloat(priceEvent.payload.newPrice) > 0.75) console.log(`🚨 Poll Alert >0.75!`);
+  } catch (err) {
+    console.error('Poll Error:', err.response?.status, err.message);
+  }
+}
+
+// Start polling every 5 seconds
+function startMarketPolling() {
+  console.log('🔄 Starting REST API polling for live market data...');
+  setInterval(() => pollMarketData(TOKEN_ID), POLLING_INTERVAL);
+}
+
 /**
  * Initialize WebSocket server
  */
@@ -351,24 +402,43 @@ function initializeWebSocketServer() {
       try {
         const message = JSON.parse(data.toString());
 
-        switch (message.type) {
+        // Handle both formats: {"type": "subscribe", "marketId": "..."} or {"subscribe": "tokenId"}
+        let action = message.type;
+        let marketId = message.marketId;
+
+        // If no type field, check for subscribe/unsubscribe keys
+        if (!action) {
+          if (message.subscribe) {
+            action = 'subscribe';
+            marketId = message.subscribe;
+          } else if (message.unsubscribe) {
+            action = 'unsubscribe';
+            marketId = message.unsubscribe;
+          }
+        }
+
+        switch (action) {
           case 'subscribe':
-            if (message.marketId) {
-              subscribeClientToMarket(ws.id, message.marketId);
+            if (marketId) {
+              subscribeClientToMarket(ws.id, marketId);
               ws.send(JSON.stringify({
-                type: 'subscribed',
-                marketId: message.marketId
+                status: 'subscribed',
+                tokenID: marketId
               }));
+            } else {
+              ws.send(JSON.stringify({ error: 'Missing marketId for subscribe' }));
             }
             break;
 
           case 'unsubscribe':
-            if (message.marketId) {
-              unsubscribeClientFromMarket(ws.id, message.marketId);
+            if (marketId) {
+              unsubscribeClientFromMarket(ws.id, marketId);
               ws.send(JSON.stringify({
-                type: 'unsubscribed',
-                marketId: message.marketId
+                status: 'unsubscribed',
+                tokenID: marketId
               }));
+            } else {
+              ws.send(JSON.stringify({ error: 'Missing marketId for unsubscribe' }));
             }
             break;
 
@@ -377,13 +447,13 @@ function initializeWebSocketServer() {
             break;
 
           default:
-            console.log(`📨 Unknown message type from ${ws.id}:`, message.type);
+            console.log(`📨 Unknown message type from ${ws.id}:`, action || 'undefined');
+            ws.send(JSON.stringify({ error: 'Unknown message type' }));
         }
       } catch (error) {
         console.error('❌ Error parsing WebSocket message:', error);
         ws.send(JSON.stringify({
-          type: 'error',
-          message: 'Invalid message format'
+          error: 'Invalid JSON format'
         }));
       }
     });
@@ -433,9 +503,7 @@ function getServerStatus() {
 function shutdown() {
   console.log('🛑 Shutting down WebSocket service...');
 
-  if (rtdClient) {
-    rtdClient.disconnect();
-  }
+  // rtdClient removed - no longer used
 
   if (wss) {
     wss.clients.forEach(client => client.close());
@@ -461,10 +529,22 @@ if (require.main === module) {
       }
 
       clobCreds = await deriveCLOBCredentials(PRIVATE_KEY);
-      console.log('✅ CLOB credentials ready');
+      
+      // CRITICAL FIX: Set credentials to process.env so L2 headers can use them
+      process.env.CLOB_API_KEY = clobCreds.apiKey;
+      process.env.CLOB_SECRET = clobCreds.secret;
+      process.env.CLOB_PASSPHRASE = clobCreds.passphrase;
+      
+      console.log('✅ CLOB credentials ready and set in environment');
+      console.log('🔑 CLOB_API_KEY:', process.env.CLOB_API_KEY ? 'SET' : 'MISSING');
+      console.log('🔐 CLOB_SECRET:', process.env.CLOB_SECRET ? 'SET' : 'MISSING');
+      console.log('🔒 CLOB_PASSPHRASE:', process.env.CLOB_PASSPHRASE ? 'SET' : 'MISSING');
 
       // Initialize WebSocket server
       initializeWebSocketServer();
+
+      // Start REST API polling for live data
+      startMarketPolling();
 
       // Health check endpoint
       const http = require('http');
