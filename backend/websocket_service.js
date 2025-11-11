@@ -7,9 +7,7 @@
 
 require('dotenv').config({ path: './.env', silent: true });
 const WebSocket = require('ws');
-const crypto = require('crypto');
-const axios = require('axios');
-const { ethers } = require('ethers');
+const { ClobClient } = require('@polymarket/clob-client');
 
 // REST API Polling for Live Data (Phase 5 Fallback)
 const POLLING_INTERVAL = 5000; // 5 seconds
@@ -23,14 +21,14 @@ const CLOB_WS_HOST = 'wss://ws-subscriptions-clob.polymarket.com';
 
 // Global state
 let wss = null;
-let clobCreds = null;
+let clobClient = null; // Official Polymarket client
 const activeSubscriptions = new Map(); // clientId -> Set of tokenIds
 const marketSubscriptions = new Map(); // tokenId -> Set of clientIds
 const clobConnections = new Map(); // conditionId -> WebSocket connection
 const retryCounts = new Map(); // conditionId -> retry count
 
 /**
- * Derive CLOB API credentials using EIP-712 signing
+ * Create new CLOB API credentials using EIP-712 signing
  */
 async function deriveCLOBCredentials(privateKey, host = CLOB_HOST) {
   try {
@@ -39,7 +37,7 @@ async function deriveCLOBCredentials(privateKey, host = CLOB_HOST) {
     const timestamp = Date.now().toString();
     const nonce = '0'; // Default uint256 as string
 
-    console.log('🔑 Deriving CLOB credentials for address:', address);
+    console.log('🔑 Creating new CLOB credentials for address:', address);
 
     // EIP-712 Domain (Polygon-specific)
     const domain = {
@@ -80,34 +78,19 @@ async function deriveCLOBCredentials(privateKey, host = CLOB_HOST) {
       'Content-Type': 'application/json',
     };
 
-    console.log('📡 Deriving API key from CLOB...');
+    console.log('📡 Creating new API key...');
 
-    try {
-      // Try to derive existing API key
-      const response = await axios.get(`${host}/auth/derive-api-key`, { headers });
-      const { key: apiKey, secret, passphrase } = response.data;
-      console.log('✅ Derived existing CLOB API credentials');
-      console.log('🔑 CLOB_API_KEY:', apiKey);
-      console.log('🔐 CLOB_SECRET:', secret);
-      console.log('🔒 CLOB_PASSPHRASE:', passphrase);
-      return { apiKey, secret, passphrase };
-    } catch (deriveError) {
-      if (deriveError.response?.status === 404) {
-        console.log('📝 No existing API key found, creating new one...');
-        // Fallback: Create new API key
-        const createResponse = await axios.post(`${host}/auth/api-key`, {}, { headers });
-        const { key: apiKey, secret, passphrase } = createResponse.data;
-        console.log('✅ Created new CLOB API credentials');
-        console.log('🔑 CLOB_API_KEY:', apiKey);
-        console.log('🔐 CLOB_SECRET:', secret);
-        console.log('🔒 CLOB_PASSPHRASE:', passphrase);
-        return { apiKey, secret, passphrase };
-      } else {
-        throw deriveError;
-      }
-    }
+    // Always create new API key (as requested)
+    const createResponse = await axios.post(`${host}/auth/api-key`, {}, { headers });
+    const { key: apiKey, secret, passphrase } = createResponse.data;
+    console.log('✅ Created new CLOB API credentials');
+    console.log('🔑 CLOB_API_KEY:', apiKey);
+    console.log('🔐 CLOB_SECRET:', secret);
+    console.log('🔒 CLOB_PASSPHRASE:', passphrase);
+    return { apiKey, secret, passphrase };
+
   } catch (error) {
-    console.error('❌ Failed to derive CLOB credentials:');
+    console.error('❌ Failed to create CLOB credentials:');
     console.error('Error message:', error.message);
     console.error('Error response:', error.response?.data);
     console.error('Error status:', error.response?.status);
@@ -321,6 +304,11 @@ const TOKEN_ID = '65818619657568813474341868652308942079804919287380422192892211
 
 function getL2Headers(method, path) {
   if (!process.env.CLOB_SECRET) {
+    console.error('❌ CLOB_SECRET not set! Current env:', {
+      CLOB_API_KEY: process.env.CLOB_API_KEY ? 'SET' : 'MISSING',
+      CLOB_SECRET: process.env.CLOB_SECRET ? 'SET' : 'MISSING',
+      CLOB_PASSPHRASE: process.env.CLOB_PASSPHRASE ? 'SET' : 'MISSING'
+    });
     throw new Error('Missing CLOB_SECRET in .env - set from derived creds');
   }
 
@@ -338,33 +326,40 @@ function getL2Headers(method, path) {
   };
 }
 
-// Poll with signed headers
+// Poll using official Polymarket client
 async function pollMarketData(tokenId) {
+  if (!clobClient) {
+    console.warn('⚠️ Skipping poll - client not initialized yet');
+    return;
+  }
+
   try {
-    const bookPath = `/book?token_id=${tokenId}`;
-    const bookRes = await axios.get(`https://clob.polymarket.com${bookPath}`, { headers: getL2Headers('GET', bookPath) });
-    const bookEvent = { type: 'book', payload: bookRes.data };
+    // Get order book using official client
+    const orderBook = await clobClient.getOrderBook(tokenId);
+    const bookEvent = { type: 'book', payload: orderBook };
 
-    const tradesPath = `/trades?token_id=${tokenId}`;
-    const tradesRes = await axios.get(`https://clob.polymarket.com${tradesPath}`, { headers: getL2Headers('GET', tradesPath) });
-    const tradesEvent = { type: 'trades', payload: tradesRes.data };
+    // Get recent trades using official client
+    const trades = await clobClient.getTrades(tokenId);
+    const tradesEvent = { type: 'trades', payload: trades };
 
-    const bids = bookEvent.payload.bids || [];
-    const asks = bookEvent.payload.asks || [];
+    // Calculate price from order book
+    const bids = orderBook.bids || [];
+    const asks = orderBook.asks || [];
     const midpoint = (parseFloat(asks[0]?.price || 0) + parseFloat(bids[0]?.price || 0)) / 2;
     const priceEvent = { type: 'price_change', payload: { newPrice: midpoint.toFixed(4), best_bid: bids[0]?.price, best_ask: asks[0]?.price } };
 
+    // Broadcast to all connected clients
     wss.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         [bookEvent, tradesEvent, priceEvent].forEach(ev => client.send(JSON.stringify(ev)));
       }
     });
 
-    console.log(`📊 Polled ${tokenId.slice(0,10)}...: Book depth ${bids.length}/${asks.length}, Price ${midpoint.toFixed(4)}, Trades: ${tradesEvent.payload.length || 0}`);
+    console.log(`📊 Polled ${tokenId.slice(0,10)}...: Book depth ${bids.length}/${asks.length}, Price ${midpoint.toFixed(4)}, Trades: ${trades.length || 0}`);
 
     if (parseFloat(priceEvent.payload.newPrice) > 0.75) console.log(`🚨 Poll Alert >0.75!`);
   } catch (err) {
-    console.error('Poll Error:', err.response?.status, err.message);
+    console.error('Poll Error:', err.message);
   }
 }
 
@@ -503,13 +498,20 @@ function getServerStatus() {
 function shutdown() {
   console.log('🛑 Shutting down WebSocket service...');
 
-  // rtdClient removed - no longer used
+  // Close all CLOB connections
+  clobConnections.forEach((ws, key) => {
+    console.log(`🔌 Closing CLOB connection for ${key}`);
+    ws.close();
+  });
+  clobConnections.clear();
 
+  // Close all client connections
   if (wss) {
     wss.clients.forEach(client => client.close());
     wss.close();
   }
 
+  console.log('✅ Shutdown complete');
   process.exit(0);
 }
 
@@ -521,29 +523,27 @@ process.on('SIGTERM', shutdown);
 if (require.main === module) {
   console.log('🔥 Starting Polymarket CLOB WebSocket Service');
 
-  // Derive CLOB credentials
+  // Initialize official Polymarket client
   (async () => {
     try {
-      if (!PRIVATE_KEY) {
-        throw new Error('POLYMARKET_PRIVATE_KEY not configured');
+      if (!process.env.CLOB_API_KEY || !process.env.CLOB_SECRET || !process.env.CLOB_PASSPHRASE) {
+        throw new Error('CLOB credentials not configured in .env. Please set CLOB_API_KEY, CLOB_SECRET, and CLOB_PASSPHRASE');
       }
 
-      clobCreds = await deriveCLOBCredentials(PRIVATE_KEY);
-      
-      // CRITICAL FIX: Set credentials to process.env so L2 headers can use them
-      process.env.CLOB_API_KEY = clobCreds.apiKey;
-      process.env.CLOB_SECRET = clobCreds.secret;
-      process.env.CLOB_PASSPHRASE = clobCreds.passphrase;
-      
-      console.log('✅ CLOB credentials ready and set in environment');
-      console.log('🔑 CLOB_API_KEY:', process.env.CLOB_API_KEY ? 'SET' : 'MISSING');
-      console.log('🔐 CLOB_SECRET:', process.env.CLOB_SECRET ? 'SET' : 'MISSING');
-      console.log('🔒 CLOB_PASSPHRASE:', process.env.CLOB_PASSPHRASE ? 'SET' : 'MISSING');
+      console.log('🔑 Initializing Polymarket client with existing credentials...');
+      console.log('Debug - CLOB_API_KEY:', process.env.CLOB_API_KEY ? 'SET' : 'MISSING');
+      console.log('Debug - CLOB_SECRET:', process.env.CLOB_SECRET ? 'SET' : 'MISSING');
+      console.log('Debug - CLOB_PASSPHRASE:', process.env.CLOB_PASSPHRASE ? 'SET' : 'MISSING');
+
+      // Initialize official Polymarket client with existing credentials
+      // Constructor: new ClobClient(host, key, chainId)
+      clobClient = new ClobClient('https://clob.polymarket.com', process.env.CLOB_API_KEY, 137);
+      console.log('✅ Official Polymarket client initialized');
 
       // Initialize WebSocket server
       initializeWebSocketServer();
 
-      // Start REST API polling for live data
+      // Start REST API polling for live data (AFTER credentials are set)
       startMarketPolling();
 
       // Health check endpoint
