@@ -165,6 +165,12 @@
         }
         .text-gold { color: var(--gold); }
 
+        .text-gold-gradient {
+            background: linear-gradient(135deg, var(--gold) 0%, #FFD700 50%, var(--gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
         /* Layout Utilities */
         .container {
             max-width: var(--container);
@@ -372,7 +378,7 @@
 
         /* --- FOOTER --- */
         footer { border-top: 1px solid var(--glass-border); margin-top: 100px; padding: 80px 0 40px; background: #020203; }
-        .footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 40px; }
+        .footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 40px; }
         .footer-col h4 { color: white; margin-bottom: 24px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
         .footer-col ul { list-style: none; }
         .footer-col li { margin-bottom: 12px; }
@@ -654,8 +660,8 @@
             <ul class="nav-links">
                 <li><a href="#intelligence">Intelligence</a></li>
                 <li><a href="#markets">Live Terminal</a></li>
-                <li><a href="#research">Research</a></li>
-                <li><a href="#api">API</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><a href="#faq">FAQ</a></li>
             </ul>
             <a href="wallet-connect.html" class="btn btn-primary">Launch Terminal</a>
         </div>
@@ -670,9 +676,9 @@
                     <span style="width:8px; height:8px; background:var(--success); border-radius:50%; box-shadow:0 0 10px var(--success);"></span>
                     <span style="font-size:12px; color:white; font-weight:500;">System Operational</span>
                 </div>
-                <h1 style="font-size: 64px; font-weight: 800; line-height: 1.1; margin-bottom: 24px; letter-spacing: -1px;">
+                <h1 style="font-size: 56px; font-weight: 800; line-height: 1.1; margin-bottom: 24px; letter-spacing: -1px;">
                     Quantify <span class="text-brand">Justice.</span><br>
-                    Trade the <span class="text-white">Outcome.</span>
+                    Trade the <span class="text-gold-gradient">Outcome.</span>
                 </h1>
                 <p style="font-size: 20px; color: var(--text-gray); margin-bottom: 40px; max-width: 500px;">
                     The first institutional-grade prediction market for legal events. Powered by CourtListener data and Polymarket liquidity.
@@ -1090,8 +1096,8 @@
         <div class="container">
             <div class="footer-grid">
                 <div class="footer-col">
-                    <a href="#" style="display:flex; align-items:center; gap:10px; color:white; text-decoration:none; font-weight:700; font-size:18px; margin-bottom:20px;">
-                        <img src="public/precedence-logo.png" width="24" alt="Logo">
+                    <a href="#" style="display:flex; align-items:center; gap:12px; color:white; text-decoration:none; font-weight:700; font-size:24px; margin-bottom:20px;">
+                        <img src="public/precedence-logo.png" width="32" alt="Logo">
                         Precedence
                     </a>
                     <p style="color:var(--text-gray); font-size:14px; line-height:1.6;">
@@ -1101,19 +1107,10 @@
                 <div class="footer-col">
                     <h4>Platform</h4>
                     <ul>
-                        <li><a href="#">Intelligence</a></li>
-                        <li><a href="#">Markets</a></li>
-                        <li><a href="#">API Access</a></li>
-                        <li><a href="#">Documentation</a></li>
-                    </ul>
-                </div>
-                <div class="footer-col">
-                    <h4>Company</h4>
-                    <ul>
-                        <li><a href="#">About</a></li>
-                        <li><a href="#">Careers</a></li>
-                        <li><a href="#">Brand Kit</a></li>
-                        <li><a href="#">Legal</a></li>
+                        <li><a href="#intelligence">Intelligence</a></li>
+                        <li><a href="#markets">Live Terminal</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#faq">FAQ</a></li>
                     </ul>
                 </div>
                 <div class="footer-col">
