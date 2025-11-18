@@ -368,11 +368,19 @@
 /* --- FAQ v3.0 --- */
 .faq-grid { max-width: 800px; margin: 0 auto; }
 .faq-item {
-    background: var(--glass-bg); border: 1px solid var(--glass-border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm); margin-bottom: 16px; overflow: hidden;
     transition: all 0.3s ease;
+    position: relative;
 }
-.faq-item:hover { border-color: rgba(255,255,255,0.2); }
+.faq-item:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-2px); }
+
+/* Color accents for each FAQ item */
+.faq-item:nth-child(1) { border-top: 3px solid var(--primary); }
+.faq-item:nth-child(2) { border-top: 3px solid var(--secondary); }
+.faq-item:nth-child(3) { border-top: 3px solid var(--gold); }
+.faq-item:nth-child(4) { border-top: 3px solid var(--success); }
 
 .faq-header {
     padding: 24px; display: flex; justify-content: space-between; align-items: center;
@@ -386,9 +394,15 @@
 }
 
 /* Active State */
-.faq-item.active { background: rgba(255,255,255,0.05); border-color: var(--primary); }
+.faq-item.active { background: rgba(255,255,255,0.08); border-color: var(--primary); }
 .faq-item.active .faq-icon { transform: rotate(180deg); color: var(--primary); }
 .faq-item.active .faq-body { padding-bottom: 24px; transition: max-height 0.3s cubic-bezier(1, 0, 1, 0); }
+
+/* Hover effects for colored borders */
+.faq-item:nth-child(1):hover { box-shadow: 0 0 20px rgba(0, 82, 255, 0.3); }
+.faq-item:nth-child(2):hover { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+.faq-item:nth-child(3):hover { box-shadow: 0 0 20px rgba(251, 191, 36, 0.3); }
+.faq-item:nth-child(4):hover { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
 
 /* --- NEW COLOR ACCENTS FOR CARDS --- */
 
