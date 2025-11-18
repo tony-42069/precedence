@@ -328,7 +328,7 @@
             .bento-wide, .bento-tall { grid-column: span 1; grid-row: span 1; }
             .nav-links { display: none; }
         }
-        /* --- TIMELINE (PROCESS) v3.0 --- */
+/* --- TIMELINE (PROCESS) v3.0 --- */
 .timeline-section { position: relative; }
 .timeline-container { max-width: 700px; margin: 0 auto; position: relative; }
 
@@ -341,6 +341,13 @@
 
 .timeline-step {
     position: relative; padding-left: 80px; margin-bottom: 80px;
+    opacity: 0; transform: translateY(30px);
+    transition: all 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Animation states */
+.timeline-step.animate-in {
+    opacity: 1; transform: translateY(0);
 }
 
 /* The Neon Node */
@@ -348,12 +355,14 @@
     position: absolute; left: 15px; top: 0; width: 20px; height: 20px;
     background: var(--bg-main); border: 2px solid var(--primary); border-radius: 50%;
     box-shadow: 0 0 10px var(--primary); z-index: 2;
+    transition: all 0.5s ease;
 }
 
 /* The Step Number */
 .step-badge {
     font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--primary);
     margin-bottom: 8px; display: block; letter-spacing: 2px;
+    transition: color 0.5s ease;
 }
 
 /* --- FAQ v3.0 --- */
@@ -1093,7 +1102,7 @@
             header.addEventListener('click', () => {
                 const item = header.parentElement;
                 const body = item.querySelector('.faq-body');
-                
+
                 // Close others (optional, remove if you want multiple open)
                 document.querySelectorAll('.faq-item').forEach(otherItem => {
                     if (otherItem !== item && otherItem.classList.contains('active')) {
@@ -1111,6 +1120,33 @@
                 }
             });
         });
+
+        // --- TIMELINE SEQUENTIAL ANIMATION ---
+        const timelineSteps = document.querySelectorAll('.timeline-step');
+
+        const timelineObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    // Start the animation sequence
+                    timelineSteps.forEach((step, index) => {
+                        setTimeout(() => {
+                            step.classList.add('animate-in');
+                        }, index * 500); // 500ms delay between each step
+                    });
+                    // Stop observing after animation starts
+                    timelineObserver.unobserve(entry.target);
+                }
+            });
+        }, {
+            threshold: 0.3, // Trigger when 30% of timeline is visible
+            rootMargin: '0px 0px -100px 0px' // Trigger slightly before fully in view
+        });
+
+        // Observe the timeline container
+        const timelineContainer = document.querySelector('.timeline-container');
+        if (timelineContainer) {
+            timelineObserver.observe(timelineContainer);
+        }
 
     </script>
 </body>
