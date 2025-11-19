@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTrading } from '../hooks/useTrading';
 import { useWallet } from '../hooks/useWallet';
 import { apiService } from '../services/api';
@@ -32,29 +32,96 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   const { executeTrade, statusMessage, isLoading, isDeployingWallet, isApprovingToken, isExecutingTrade, isSuccess, isError, reset } = useTrading();
   const { walletState } = useWallet();
 
-  // Fetch live market data when modal opens
-  useEffect(() => {
-    if (isOpen && market?.id) {
-      const fetchMarketData = async () => {
-        try {
-          const data = await apiService.fetchMarketPrice(market.id);
+  // ⭐ STAGE 1.1: MARKET TYPE DETECTION
+  const marketType = useMemo(() => {
+    if (!market?.id) return 'invalid';
 
-          if (data.current_yes_price && data.current_no_price) {
-            setMarketData({
-              current_yes_price: data.current_yes_price,
-              current_no_price: data.current_no_price,
-              best_bid: data.best_bid || data.current_yes_price * 0.95,
-              best_ask: data.best_ask || data.current_yes_price * 1.05,
-            });
+    // Demo markets (returned by our resolution API)
+    if (market.id?.startsWith('demo') || market.id?.startsWith('fallback')) {
+      return 'demo';
+    }
+
+    // Real Polymarket IDs (long alphanumeric strings)
+    if (market.id?.match(/^[a-zA-Z0-9]{8,}$/) && market.active) {
+      return 'real';
+    }
+
+    // Uninitialized markets (no ID or inactive)
+    if (!market.question || !market.active) {
+      return 'uninitialized';
+    }
+
+    return 'unknown';
+  }, [market]);
+
+  // ⭐ STAGE 1.2: SMART DATA LOADING STRATEGY
+  useEffect(() => {
+    if (isOpen && market) {
+      const loadMarketData = async () => {
+        try {
+          switch (marketType) {
+            case 'demo':
+              // ✅ USE DEMO DATA DIRECTLY - NO API CALLS
+              console.log('🔧 Using demo market data:', market.id);
+              const demoPrices = {
+                current_yes_price: market.current_yes_price || 0.045,
+                current_no_price: market.current_no_price || 0.955,
+                best_bid: (market.current_yes_price || 0.045) * 0.9,
+                best_ask: (market.current_yes_price || 0.045) * 1.1,
+              };
+              setMarketData(demoPrices);
+              break;
+
+            case 'real':
+              // 🔄 FETCH REAL DATA FROM POLYMARKET
+              console.log('📈 Fetching live market data for:', market.id);
+              const data = await apiService.fetchMarketPrice(market.id);
+              if (data.current_yes_price && data.current_no_price) {
+                setMarketData({
+                  current_yes_price: data.current_yes_price,
+                  current_no_price: data.current_no_price,
+                  best_bid: data.best_bid || data.current_yes_price * 0.95,
+                  best_ask: data.best_ask || data.current_yes_price * 1.05,
+                });
+              }
+              break;
+
+            case 'uninitialized':
+              console.warn('🚧 Market not yet initialized:', market.id);
+              setMarketData({
+                current_yes_price: 0.5,
+                current_no_price: 0.5,
+                best_bid: 0.0,
+                best_ask: 1.0,
+              });
+              break;
+
+            default:
+              console.warn('❓ Unknown market type:', marketType);
+              setMarketData({
+                current_yes_price: 0.5,
+                current_no_price: 0.5,
+                best_bid: 0.45,
+                best_ask: 0.55,
+              });
           }
         } catch (error) {
-          console.warn('Failed to fetch live market data, using defaults:', error);
+          console.error('❌ Failed to load market data:', error);
+          // Fallback to demo prices if everything fails
+          if (market?.current_yes_price) {
+            setMarketData({
+              current_yes_price: market.current_yes_price,
+              current_no_price: market.current_no_price || (1 - market.current_yes_price),
+              best_bid: market.current_yes_price * 0.9,
+              best_ask: market.current_yes_price * 1.1,
+            });
+          }
         }
       };
 
-      fetchMarketData();
+      loadMarketData();
     }
-  }, [isOpen, market?.id]);
+  }, [isOpen, market, marketType]);
 
   // Reset trading state when modal closes
   useEffect(() => {
@@ -152,6 +219,16 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
         {/* Body */}
         <div className="relative p-6 space-y-6">
+
+          {/* ⭐ STAGE 3.1: DEMO MARKET VISUAL INDICATORS */}
+          {marketType === 'demo' && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
+                <Settings2 size={14} />
+                TEST MODE: Demo market for trading pipeline testing
+              </div>
+            </div>
+          )}
 
           {/* Live Price Display */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
