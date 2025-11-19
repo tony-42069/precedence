@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Gavel,
   TrendingUp,
-  BrainCircuit,
   Wallet,
   User
 } from 'lucide-react';
@@ -37,12 +36,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       href: '/markets',
       icon: TrendingUp,
       description: 'Browse Markets'
-    },
-    {
-      name: 'AI Predictions',
-      href: '/predictions',
-      icon: BrainCircuit,
-      description: 'Judge Analysis'
     },
     {
       name: 'Portfolio',

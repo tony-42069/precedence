@@ -24,6 +24,9 @@ interface CourtCase {
   status?: string;
   docketNumber?: string;
   snippet?: string;
+  // ENHANCED: Real data from CourtListener extraction
+  extracted_judge?: string;
+  inferred_type?: string;
 }
 
 interface Prediction {
@@ -92,8 +95,8 @@ export default function CasesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           case_facts: caseItem.snippet || caseItem.caseName,
-          case_type: "civil",
-          judge_id: "roberts"
+          case_type: caseItem.inferred_type || "civil",  // REAL case type from extraction
+          judge_id: caseItem.extracted_judge || "roberts"  // REAL judge from extraction
         })
       });
 
@@ -259,7 +262,7 @@ export default function CasesPage() {
                  <div>
                     <h2 className="text-xl font-bold text-white">{selectedCase.caseName}</h2>
                     <div className="flex items-center gap-2 mt-1 text-sm text-slate-400 font-mono">
-                       <span>JUDGE: ROBERTS (CJ)</span>
+                       <span>JUDGE: {selectedCase.extracted_judge || "UNKNOWN"}</span>
                        <span>•</span>
                        <span className="text-blue-400">AI CONFIDENCE: HIGH</span>
                     </div>
