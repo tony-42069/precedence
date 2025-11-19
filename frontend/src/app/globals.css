@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
+/* --- THEME VARIABLES --- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #030304;
+  --foreground: #ffffff;
+  --primary: #0052FF;
+  --secondary: #6366F1;
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-bg-hover: rgba(255, 255, 255, 0.06);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
 }
+
+/* --- CYBER GRID BACKGROUND --- */
+.cyber-grid-bg {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+  transform: perspective(1000px) rotateX(20deg) scale(1.5);
+  transform-origin: top center;
+  opacity: 0.5;
+}
+
+/* --- GLOWING ORBS --- */
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: 0;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* --- GLASS UTILITIES --- */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+}
+
+/* --- SCROLLBAR --- */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #0A0A0C; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #444; }

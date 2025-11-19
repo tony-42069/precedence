@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Gavel,
+  TrendingUp,
+  BrainCircuit,
+  Wallet,
+  User
+} from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -15,37 +23,37 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     {
       name: 'Dashboard',
       href: '/',
-      icon: '📊',
+      icon: LayoutDashboard,
       description: 'Portfolio & Overview'
     },
     {
       name: 'Court Cases',
       href: '/cases',
-      icon: '⚖️',
+      icon: Gavel,
       description: 'Search Legal Cases'
     },
     {
       name: 'Markets',
       href: '/markets',
-      icon: '📈',
+      icon: TrendingUp,
       description: 'Browse Markets'
     },
     {
       name: 'AI Predictions',
       href: '/predictions',
-      icon: '🤖',
+      icon: BrainCircuit,
       description: 'Judge Analysis'
     },
     {
       name: 'Portfolio',
       href: '/portfolio',
-      icon: '💼',
+      icon: Wallet,
       description: 'Your Positions'
     },
     {
       name: 'Profile',
       href: '/profile',
-      icon: '👤',
+      icon: User,
       description: 'Settings & History'
     }
   ];
@@ -62,71 +70,81 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
       {/* Sidebar */}
       <div className={`
-        fixed left-0 top-0 h-screen bg-indigo-500 border-r border-slate-200 shadow-lg z-40
-        transition-transform duration-300 ease-in-out
+        fixed left-0 top-0 h-screen bg-[#0A0A0C]/95 backdrop-blur-xl border-r border-white/10 z-50
+        transition-transform duration-300 ease-in-out shadow-2xl
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
         w-64 overflow-y-auto
       `}>
 
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/20">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-gradient-to-r from-blue-600/5 to-purple-600/5">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-lg overflow-hidden bg-white/10 p-1">
+            <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 border border-white/10">
               <Image
                 src="/precedence-logo.png"
                 alt="Precedence Logo"
-                width={48}
-                height={48}
+                width={40}
+                height={40}
                 className="w-full h-full object-cover"
               />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white">
-                Precedence
+              <h1 className="text-lg font-mono font-bold text-white">
+                PRECEDENCE
               </h1>
-              <p className="text-xs text-white/70">Legal Prediction Markets</p>
+              <p className="text-[10px] text-blue-400 uppercase tracking-wider font-mono">AI LEGAL TERMINAL</p>
             </div>
           </div>
 
-          {/* Mobile Close Button */}
-          <button
-            onClick={onToggle}
-            className="lg:hidden text-white/70 hover:text-white p-1"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {/* Connection Indicator */}
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span className="text-xs text-green-400 font-mono hidden lg:block">ONLINE</span>
+
+            {/* Mobile Close Button */}
+            <button
+              onClick={onToggle}
+              className="lg:hidden text-slate-400 hover:text-white p-1 ml-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
+        <nav className="flex-1 px-4 py-6 space-y-1">
           {navigationItems.map((item) => {
             const isActive = pathname === item.href;
+            const IconComponent = item.icon;
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={`
-                  flex items-center space-x-3 px-3 py-3 rounded-lg transition-all duration-200
+                  group flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-300
                   ${isActive
-                    ? 'bg-white/20 text-white border border-white/30 shadow-sm'
-                    : 'text-white/80 hover:bg-white/10 hover:text-white'
+                    ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30 shadow-[0_0_20px_rgba(37,99,235,0.1)]'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10'
                   }
                 `}
               >
-                <span className="text-lg">{item.icon}</span>
+                <IconComponent
+                  size={18}
+                  className={`${isActive ? 'text-blue-400' : 'text-slate-400 group-hover:text-white'} transition-colors`}
+                />
                 <div className="flex-1">
-                  <div className={`font-medium ${isActive ? 'text-white' : ''}`}>
+                  <div className={`font-mono text-sm ${isActive ? 'text-white font-semibold' : 'font-medium'}`}>
                     {item.name}
                   </div>
-                  <div className="text-xs text-white/60">
+                  <div className="text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors">
                     {item.description}
                   </div>
                 </div>
                 {isActive && (
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
+                  <div className="w-1.5 h-6 bg-gradient-to-b from-blue-400 to-purple-400 rounded-full"></div>
                 )}
               </Link>
             );
@@ -134,11 +152,22 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/20">
-          <div className="bg-white/10 rounded-lg p-3">
-            <div className="text-xs text-white/80 mb-1">🚀 Powered by AI</div>
-            <div className="text-xs text-white/60">
-              Judge analysis & market intelligence
+        <div className="p-4 border-t border-white/10 bg-gradient-to-r from-purple-600/5 to-blue-600/5">
+          <div className="bg-white/5 border border-white/10 rounded-lg p-3 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500 to-purple-500"></div>
+            <div className="text-xs font-mono text-blue-400 mb-1 uppercase tracking-wider">{`> SYSTEM STATUS`}</div>
+            <div className="text-[11px] text-slate-400 font-mono">
+              AI ENGINE: ACTIVE<br/>
+              JUDGE DB: 247 PROFILES<br/>
+              ACCURACY: 74.2%
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[10px] text-green-400 font-mono animate-pulse">⚡ OPERATIONAL</span>
+              <div className="flex space-x-1">
+                <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse"></div>
+                <div className="w-1 h-1 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                <div className="w-1 h-1 bg-purple-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+              </div>
             </div>
           </div>
         </div>
@@ -152,9 +181,9 @@ export function MobileMenuButton({ onClick, isOpen }: { onClick: () => void; isO
   return (
     <button
       onClick={onClick}
-      className="lg:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded-lg shadow-lg border border-slate-200"
+      className="lg:hidden fixed top-4 left-4 z-50 bg-[#0A0A0C]/90 backdrop-blur-md p-3 rounded-lg shadow-xl border border-white/10 hover:border-blue-500/30 transition-all duration-300"
     >
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-5 h-5 text-slate-300 hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         {isOpen ? (
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         ) : (

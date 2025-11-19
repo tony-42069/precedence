@@ -4,6 +4,19 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '../../hooks/useWallet';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
+import { 
+  Wallet, 
+  TrendingUp, 
+  History, 
+  PieChart, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  Download, 
+  Plus, 
+  Terminal,
+  Activity,
+  AlertCircle
+} from 'lucide-react';
 
 interface Trade {
   id: string;
@@ -96,7 +109,6 @@ export default function PortfolioPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -105,313 +117,276 @@ export default function PortfolioPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+    <div className="min-h-screen bg-[#030304] text-slate-200 font-sans selection:bg-blue-500/30 relative overflow-hidden">
+      
+      {/* --- BACKGROUND FX --- */}
+      <div className="cyber-grid-bg fixed inset-0 z-0" />
+      <div className="fixed top-0 left-0 w-full h-full z-0 pointer-events-none">
+          <div className="absolute top-[20%] left-[20%] w-[400px] h-[400px] bg-blue-600/10 blur-[100px] rounded-full" />
+      </div>
 
-      {/* Mobile Menu Button */}
-      <MobileMenuButton onClick={() => setSidebarOpen(!sidebarOpen)} isOpen={sidebarOpen} />
+      <div className="relative z-10 flex min-h-screen">
+        {/* Sidebar */}
+        <div className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+           <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        </div>
 
-      {/* Main Content */}
-      <div className="flex-1 lg:ml-64">
-        {/* Navigation Header */}
-        <nav className="bg-white border-b border-slate-200 sticky top-0 z-40">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <div></div>
-
-              {/* Status & Controls */}
-              <div className="flex items-center space-x-4">
-                {/* Backend Status */}
-                <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1 rounded-full">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm font-medium text-slate-700">Portfolio</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </nav>
+        <MobileMenuButton onClick={() => setSidebarOpen(!sidebarOpen)} isOpen={sidebarOpen} />
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-4">Portfolio</h1>
-            <p className="text-slate-600">Track your positions, performance, and trading history</p>
-          </div>
+        <div className="flex-1 w-full min-w-0 lg:ml-0">
+          
+          {/* Navigation Header */}
+          <nav className="sticky top-0 z-40 border-b border-white/5 bg-[#030304]/80 backdrop-blur-md">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center h-16">
+                <div className="hidden md:flex items-center gap-2 text-sm font-mono text-slate-500">
+                    <Terminal size={14} />
+                    <span>PRECEDENCE_TERMINAL</span>
+                    <span className="text-slate-700">/</span>
+                    <span className="text-blue-400 uppercase">PORTFOLIO_MGMT</span>
+                </div>
 
-          {/* Tab Navigation */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-1 mb-8">
-            <div className="flex">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                  activeTab === 'overview'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                Overview
-              </button>
-              <button
-                onClick={() => setActiveTab('positions')}
-                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                  activeTab === 'positions'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                Positions
-              </button>
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                  activeTab === 'history'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                History
-              </button>
+                {/* Status & Controls */}
+                <div className="flex items-center space-x-4 ml-auto">
+                  <div className="flex items-center space-x-2 bg-white/5 border border-white/5 px-3 py-1 rounded-full">
+                    <div className={`w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]`}></div>
+                    <span className="text-[10px] font-mono uppercase text-slate-400">
+                      P&L TRACKING: ACTIVE
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </nav>
 
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="space-y-8">
-              {/* Portfolio Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600 mb-2">
-                      ${totalPortfolioValue.toFixed(2)}
-                    </div>
-                    <div className="text-sm text-slate-600">Portfolio Value</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold mb-2 ${
-                      totalUnrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      ${Math.abs(totalUnrealizedPnL).toFixed(2)}
-                    </div>
-                    <div className="text-sm text-slate-600">Unrealized P&L</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold mb-2 ${
-                      totalPnL >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      ${Math.abs(totalPnL).toFixed(2)}
-                    </div>
-                    <div className="text-sm text-slate-600">Realized P&L</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600 mb-2">{winRate}%</div>
-                    <div className="text-sm text-slate-600">Win Rate</div>
-                  </div>
-                </div>
-              </div>
+          {/* Main Content */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-white mb-2">Portfolio</h1>
+              <p className="text-slate-400">Position tracking and performance analytics.</p>
+            </div>
 
-              {/* Performance Chart Placeholder */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                <h2 className="text-xl font-semibold text-slate-900 mb-6">Performance Chart</h2>
-                <div className="h-64 bg-slate-50 rounded-lg flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-4xl mb-4">📈</div>
-                    <p className="text-slate-600">Performance chart coming soon</p>
-                    <p className="text-sm text-slate-500 mt-2">Track your portfolio growth over time</p>
+            {/* Tab Navigation */}
+            <div className="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full max-w-md mb-8">
+              {[
+                 { id: 'overview', label: 'Overview', icon: PieChart },
+                 { id: 'positions', label: 'Positions', icon: TrendingUp },
+                 { id: 'history', label: 'History', icon: History }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-blue-600/20 text-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.2)] border border-blue-500/30'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <tab.icon size={16} /> {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Portfolio Value', value: totalPortfolioValue, prefix: '$', color: 'text-blue-400' },
+                    { label: 'Unrealized P&L', value: totalUnrealizedPnL, prefix: '$', color: totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400' },
+                    { label: 'Realized P&L', value: totalPnL, prefix: '$', color: totalPnL >= 0 ? 'text-green-400' : 'text-red-400' },
+                    { label: 'Win Rate', value: winRate, prefix: '', suffix: '%', color: 'text-purple-400' }
+                  ].map((stat, i) => (
+                     <div key={i} className="bg-[#0A0A0C]/60 backdrop-blur-md border border-white/10 rounded-xl p-6">
+                        <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">{stat.label}</div>
+                        <div className={`text-2xl font-mono font-bold ${stat.color}`}>
+                           {stat.prefix}{Math.abs(stat.value).toFixed(2)}{stat.suffix}
+                           {stat.value < 0 && stat.label.includes('P&L') && <span className="text-xs ml-1 text-red-400">(LOSS)</span>}
+                        </div>
+                     </div>
+                  ))}
+                </div>
+
+                {/* Chart Placeholder */}
+                <div className="bg-[#0A0A0C]/60 backdrop-blur-md border border-white/10 rounded-xl p-8 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-20">
+                     <Activity size={100} className="text-blue-500" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-white mb-6">Performance Analytics</h2>
+                  <div className="h-64 rounded-lg flex flex-col items-center justify-center border border-dashed border-white/10 bg-black/20">
+                    <div className="text-center">
+                      <div className="text-blue-500 mb-4 animate-pulse">
+                         <Activity size={48} className="mx-auto" />
+                      </div>
+                      <p className="text-slate-400 font-mono">CHART_MODULE_LOADING...</p>
+                      <p className="text-xs text-slate-600 mt-2">Not enough data points to generate curve.</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Quick Actions */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                <h2 className="text-xl font-semibold text-slate-900 mb-6">Quick Actions</h2>
+                {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                    View All Markets
+                  <button className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                    <TrendingUp size={18} className="group-hover:scale-110 transition-transform" /> View Markets
                   </button>
-                  <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                    Deposit Funds
+                  <button className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                    <ArrowDownRight size={18} className="group-hover:scale-110 transition-transform" /> Deposit Funds
                   </button>
-                  <button className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                    Export Report
+                  <button className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                    <Download size={18} className="group-hover:scale-110 transition-transform" /> Export CSV
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Positions Tab */}
-          {activeTab === 'positions' && (
-            <div className="space-y-8">
-              {/* Open Positions Summary */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-                <h2 className="text-xl font-semibold text-slate-900 mb-6">Open Positions</h2>
+            {/* Positions Tab */}
+            {activeTab === 'positions' && (
+              <div className="bg-[#0A0A0C]/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+                <div className="p-6 border-b border-white/10">
+                  <h2 className="text-lg font-semibold text-white">Active Positions</h2>
+                </div>
 
                 {openPositions.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="divide-y divide-white/5">
                     {openPositions.map((position) => (
-                      <div key={position.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-slate-900 mb-1">{position.market}</h4>
-                          <div className="flex items-center space-x-4 text-sm text-slate-600">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                              position.type === 'YES' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      <div key={position.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-white/5 transition-colors">
+                        <div className="flex-1 mb-4 md:mb-0">
+                          <h4 className="font-medium text-slate-200 mb-1">{position.market}</h4>
+                          <div className="flex items-center gap-4 text-sm font-mono">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] uppercase border ${
+                              position.type === 'YES' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
                             }`}>
                               {position.type}
                             </span>
-                            <span>Entry: ${(position.entryPrice * 100).toFixed(2)}¢</span>
-                            <span>Current: ${(position.currentPrice * 100).toFixed(2)}¢</span>
+                            <span className="text-slate-500">ENTRY: <span className="text-slate-300">${position.entryPrice.toFixed(2)}</span></span>
+                            <span className="text-slate-500">MARK: <span className="text-slate-300">${position.currentPrice.toFixed(2)}</span></span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-semibold text-slate-900">
-                            ${position.amount}
+                          <div className="text-lg font-bold font-mono text-white mb-1">
+                            ${position.amount.toFixed(2)}
                           </div>
-                          <div className={`text-sm font-medium ${
-                            position.unrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'
+                          <div className={`text-sm font-mono font-medium ${
+                            position.unrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'
                           }`}>
-                            {position.unrealizedPnL >= 0 ? '+' : ''}${position.unrealizedPnL}
+                            {position.unrealizedPnL >= 0 ? '+' : ''}{position.unrealizedPnL} P&L
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">📊</div>
-                    <h3 className="text-xl font-semibold text-slate-900 mb-2">No Open Positions</h3>
-                    <p className="text-slate-600">Your active trades will appear here.</p>
+                  <div className="text-center py-16">
+                    <AlertCircle className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-white mb-1">No Active Positions</h3>
+                    <p className="text-slate-500 text-sm">Execute trades on the terminal to populate this view.</p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* History Tab */}
-          {activeTab === 'history' && (
-            <div className="space-y-8">
-              {/* Summary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600 mb-2">{totalTrades}</div>
-                    <div className="text-sm text-slate-600">Total Trades</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600 mb-2">{winRate}%</div>
-                    <div className="text-sm text-slate-600">Win Rate</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold mb-2 ${
-                      totalPnL >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      ${Math.abs(totalPnL)}
-                    </div>
-                    <div className="text-sm text-slate-600">Total P&L</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600 mb-2">
-                      {tradingHistory.filter(t => t.status === 'pending').length}
-                    </div>
-                    <div className="text-sm text-slate-600">Pending</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Trading History Table */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-8 py-6 border-b border-slate-200">
-                  <h2 className="text-xl font-semibold text-slate-900">Trading History</h2>
+            {/* History Tab */}
+            {activeTab === 'history' && (
+              <div className="space-y-6">
+                {/* Summary Mini-Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <div className="bg-white/5 border border-white/5 p-4 rounded-xl">
+                      <div className="text-xs text-slate-500 uppercase">Total Trades</div>
+                      <div className="text-xl font-mono font-bold text-blue-400">{totalTrades}</div>
+                   </div>
+                   <div className="bg-white/5 border border-white/5 p-4 rounded-xl">
+                      <div className="text-xs text-slate-500 uppercase">Total P&L</div>
+                      <div className={`text-xl font-mono font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                         ${Math.abs(totalPnL)}
+                      </div>
+                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">Market</th>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">Type</th>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">Amount</th>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">Price</th>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">Date</th>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">Status</th>
-                        <th className="px-8 py-4 text-left text-sm font-medium text-slate-700">P&L</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {tradingHistory.map((trade) => (
-                        <tr key={trade.id} className="hover:bg-slate-50">
-                          <td className="px-8 py-4">
-                            <div className="max-w-xs truncate text-sm text-slate-900">
-                              {trade.market}
-                            </div>
-                          </td>
-                          <td className="px-8 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              trade.type === 'YES'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {trade.type}
-                            </span>
-                          </td>
-                          <td className="px-8 py-4 text-sm text-slate-900">
-                            ${trade.amount}
-                          </td>
-                          <td className="px-8 py-4 text-sm text-slate-900">
-                            ${(trade.price * 100).toFixed(2)}¢
-                          </td>
-                          <td className="px-8 py-4 text-sm text-slate-600">
-                            {formatDate(trade.timestamp)}
-                          </td>
-                          <td className="px-8 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              trade.status === 'won'
-                                ? 'bg-green-100 text-green-800'
-                                : trade.status === 'lost'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {trade.status.charAt(0).toUpperCase() + trade.status.slice(1)}
-                            </span>
-                          </td>
-                          <td className="px-8 py-4">
-                            {trade.pnl !== undefined && (
-                              <span className={`text-sm font-medium ${
-                                trade.pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {trade.pnl >= 0 ? '+' : ''}${trade.pnl}
-                              </span>
-                            )}
-                          </td>
+                {/* Table */}
+                <div className="bg-[#0A0A0C]/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden">
+                  <div className="p-6 border-b border-white/10">
+                    <h2 className="text-lg font-semibold text-white">Order History</h2>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-white/5">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">Market</th>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">Side</th>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">Size</th>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">Price</th>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">Time</th>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-mono uppercase text-slate-500">P&L</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {tradingHistory.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="text-6xl mb-4">📊</div>
-                    <h3 className="text-xl font-semibold text-slate-900 mb-2">No Trading History</h3>
-                    <p className="text-slate-600">Your completed trades will appear here.</p>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {tradingHistory.map((trade) => (
+                          <tr key={trade.id} className="hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="max-w-xs truncate text-sm text-slate-300 font-medium">
+                                {trade.market}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase border ${
+                                trade.type === 'YES'
+                                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
+                              }`}>
+                                {trade.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-mono text-slate-300">
+                              ${trade.amount}
+                            </td>
+                            <td className="px-6 py-4 text-sm font-mono text-slate-300">
+                              ${trade.price.toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 text-xs font-mono text-slate-500">
+                              {formatDate(trade.timestamp)}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase border ${
+                                trade.status === 'won'
+                                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                  : trade.status === 'lost'
+                                  ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                  : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                              }`}>
+                                {trade.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              {trade.pnl !== undefined && (
+                                <span className={`text-sm font-mono font-bold ${
+                                  trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {trade.pnl >= 0 ? '+' : ''}{trade.pnl}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                )}
+
+                  {tradingHistory.length === 0 && (
+                    <div className="text-center py-16">
+                      <History className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-white mb-1">No History</h3>
+                      <p className="text-slate-500 text-sm">Past transactions will be archived here.</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </main>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );
