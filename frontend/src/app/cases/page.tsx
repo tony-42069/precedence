@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
+import { TradingModal } from '../../components/TradingModal';
+import { apiService } from '../../services/api';
 import { 
   Search, 
   Gavel, 
@@ -58,7 +60,9 @@ export default function CasesPage() {
   // Modal State
   const [selectedCase, setSelectedCase] = useState<CourtCase | null>(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-  
+  const [selectedMarket, setSelectedMarket] = useState<any>(null);
+  const [showTradingModal, setShowTradingModal] = useState(false);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Search Handler
@@ -120,6 +124,26 @@ export default function CasesPage() {
   const openAnalysis = (caseItem: CourtCase) => {
     setSelectedCase(caseItem);
     setShowAnalysisModal(true);
+  };
+
+  // Open the Trading Modal - Resolve Market for Case
+  const openTrading = async (caseItem: CourtCase) => {
+    try {
+      // Resolve which Polymarket corresponds to this case
+      const resolution = await apiService.resolveMarketForCase(caseItem.caseName);
+
+      if (resolution.found) {
+        setSelectedMarket(resolution.market);
+        setShowTradingModal(true);
+        console.log('Resolved market for case:', resolution.market);
+      } else {
+        alert(`No active betting market found for "${caseItem.caseName}". You can request market creation.`);
+        console.log('No market found for case:', caseItem.caseName);
+      }
+    } catch (error) {
+      console.error('Failed to resolve market:', error);
+      alert('Failed to find betting market for this case. Please try again.');
+    }
   };
 
   return (
@@ -234,8 +258,8 @@ export default function CasesPage() {
                         </button>
 
                         {/* Primary: Trade */}
-                        <button 
-                           onClick={() => alert("Opens Market Creation Modal")}
+                        <button
+                           onClick={() => openTrading(caseItem)}
                            className="flex-1 md:flex-none px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]"
                         >
                            <TrendingUp size={16} />
@@ -324,6 +348,15 @@ export default function CasesPage() {
               </div>
            </div>
         </div>
+      )}
+
+      {/* --- TRADING MODAL --- */}
+      {showTradingModal && selectedMarket && (
+        <TradingModal
+          market={selectedMarket}
+          isOpen={showTradingModal}
+          onClose={() => setShowTradingModal(false)}
+        />
       )}
 
     </div>

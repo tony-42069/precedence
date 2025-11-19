@@ -151,6 +151,40 @@ async def get_market_orderbook(market_id: str):
         logger.error(f"Error getting market orderbook: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get market orderbook: {str(e)}")
 
+@router.get("/resolve")
+async def resolve_market_for_case(case_query: str = Query(..., description="Court case name or docket to find market for")):
+    """
+    Resolve a Polymarket for a specific court case.
+
+    Given a court case query, find the corresponding prediction market.
+    Used to link cases from CourtListener to active markets.
+    """
+    try:
+        logger.info(f"Resolving market for case: {case_query}")
+
+        # Search for markets matching the case query
+        search_results = polymarket.search_markets_by_query(case_query, limit=5)
+
+        if not search_results:
+            return {"found": False, "markets": []}
+
+        # Return the most relevant market (highest volume)
+        best_match = max(search_results, key=lambda m: m.get('volume', 0))
+
+        logger.info(f"Resolved market {best_match.get('id')} for case: {case_query}")
+
+        return {
+            "found": True,
+            "market": best_match,
+            "market_id": best_match.get('id'),
+            "question": best_match.get('question'),
+            "total_matches": len(search_results)
+        }
+
+    except Exception as e:
+        logger.error(f"Error resolving market for case: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to resolve market: {str(e)}")
+
 @router.post("/{market_id}/order")
 async def create_market_order(
     market_id: str,
