@@ -430,6 +430,19 @@
     transition: color 0.5s ease;
 }
 
+/* --- PROTOCOL GLASS CARD --- */
+.protocol-glass-card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+    padding: 48px;
+    position: relative;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    margin: 0 auto;
+    max-width: 900px;
+}
+
 /* --- FAQ v3.0 --- */
 .faq-grid { max-width: 800px; margin: 0 auto; }
 .faq-item {
@@ -722,6 +735,7 @@
                         <div><span style="color:var(--primary)">PREDICTION:</span> PLAINTIFF VICTORY (64%) <span class="cursor"></span></div>
                     </div>
                 </div>
+                </div>
             </div>
         </div>
     </section>
@@ -995,10 +1009,12 @@
     <!-- HOW IT WORKS (TIMELINE) -->
     <section id="how-it-works" class="section">
         <div class="container">
-            <div style="text-align: center; margin-bottom: 80px;">
-                <h2 style="font-size: 36px; font-weight: 700;">Protocol Execution</h2>
-                <p style="color: var(--text-gray);">From docket update to smart contract settlement.</p>
-            </div>
+            <!-- Glass Card Background -->
+            <div class="protocol-glass-card">
+                <div style="text-align: center; margin-bottom: 80px;">
+                    <h2 style="font-size: 36px; font-weight: 700;">Protocol Execution</h2>
+                    <p style="color: var(--text-gray);">From docket update to smart contract settlement.</p>
+                </div>
 
             <div class="timeline-container">
                 <div class="timeline-line"></div>
