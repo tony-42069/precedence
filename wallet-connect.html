@@ -3,324 +3,314 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connect Wallet - Precedence</title>
-    <meta name="description" content="Connect your wallet to start trading on legal prediction markets.">
+    <title>Initialize Terminal - Precedence</title>
     <link rel="icon" href="public/precedence-logo.png" type="image/png">
+    
+    <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --royal-blue: #0052FF;
-            --deep-purple: #6366F1;
-            --gold: #FBBF24;
-            --charcoal: #18181B;
-            --slate-gray: #64748B;
-            --light-gray: #F1F5F9;
-            --off-white: #FAFAFA;
-            --success-green: #10B981;
-            --error-red: #EF4444;
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-            --gradient-primary: linear-gradient(135deg, var(--royal-blue) 0%, var(--deep-purple) 100%);
-            --gradient-dark: linear-gradient(135deg, var(--charcoal) 0%, var(--navy-blue) 100%);
-            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.15);
-            --shadow-brand: 0 8px 24px rgba(0, 82, 255, 0.3);
-            --radius-lg: 12px;
-            --space-md: 1rem;
-            --space-lg: 1.5rem;
-            --space-xl: 2rem;
-            --space-2xl: 3rem;
+    <style>
+        /* --- PRECEDENCE DESIGN SYSTEM v3.0 (Shared) --- */
+        :root {
+            --primary: #0052FF;
+            --secondary: #6366F1;
+            --gold: #FBBF24;
+            --success: #10B981;
+            --error: #EF4444;
+            --bg-main: #030304;
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(255, 255, 255, 0.02);
+            --text-white: #ffffff;
+            --text-gray: #94A3B8;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #0A1F44 0%, #18181B 100%);
-            color: white;
-            min-height: 100vh;
+            background-color: var(--bg-main);
+            color: var(--text-white);
+            height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: var(--space-xl);
+            overflow: hidden;
+            position: relative;
         }
 
-        .container {
-            max-width: 480px;
-            width: 100%;
-            text-align: center;
+        /* --- BACKGROUND FX --- */
+        .cyber-grid {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+            transform: perspective(1000px) rotateX(20deg) scale(1.5);
+            opacity: 0.5; z-index: -1;
         }
 
-        .logo-section {
-            margin-bottom: var(--space-2xl);
+        .bg-orb {
+            position: absolute; border-radius: 50%; filter: blur(100px); z-index: -1; opacity: 0.4;
+        }
+        .orb-1 { width: 400px; height: 400px; background: var(--primary); top: -100px; left: -100px; }
+        .orb-2 { width: 300px; height: 300px; background: var(--secondary); bottom: -50px; right: -50px; }
+
+        /* --- AUTH CARD --- */
+        .auth-card {
+            width: 100%; max-width: 440px;
+            background: rgba(10, 10, 12, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+            transform: translateY(0);
+            animation: float 6s ease-in-out infinite;
         }
 
-        .logo {
-            width: 64px;
-            height: 64px;
-            display: block;
-            margin: 0 auto var(--space-lg) auto;
-            box-shadow: var(--shadow-brand);
-            border-radius: 8px;
-            background-image: url('public/precedence-logo.png');
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        /* Terminal Header (Dots) */
+        .card-header {
+            padding: 16px 24px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .red { background: #EF4444; } .yellow { background: #FBBF24; } .green { background: #10B981; }
+
+        /* Content Area */
+        .card-body { padding: 40px 32px; text-align: center; }
+
+        .logo-container {
+            width: 80px; height: 80px; margin: 0 auto 24px;
+            background: rgba(255,255,255,0.05); border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 0 30px rgba(0, 82, 255, 0.2);
         }
 
-        .logo-text {
-            font-size: 24px;
-            font-weight: 700;
-            background: var(--gradient-primary);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+        h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
+        .subtitle { color: var(--text-gray); font-size: 14px; margin-bottom: 32px; }
 
-        .subtitle {
-            color: var(--slate-gray);
-            font-size: 16px;
-            margin-bottom: var(--space-2xl);
-        }
-
-        .wallet-grid {
-            display: grid;
-            gap: var(--space-lg);
-            margin-bottom: var(--space-2xl);
-        }
+        /* Wallet Buttons */
+        .wallet-stack { display: flex; flex-direction: column; gap: 12px; }
 
         .wallet-btn {
-            background: rgba(255, 255, 255, 0.9);
-            border: 2px solid var(--light-gray);
-            border-radius: var(--radius-lg);
-            padding: var(--space-lg);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: var(--space-md);
-            font-size: 16px;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
-            color: var(--royal-blue);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            padding: 16px 20px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: space-between;
+            color: white; cursor: pointer; transition: all 0.2s;
+            text-align: left; font-family: 'Inter', sans-serif;
         }
 
-        .wallet-btn:hover {
-            border-color: var(--royal-blue);
-            background: rgba(255, 255, 255, 1);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 82, 255, 0.2);
+        .wallet-left { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 15px; }
+        .wallet-icon { width: 28px; height: 28px; }
+        
+        /* Phantom Hover */
+        .wallet-btn.phantom:hover:not(:disabled) {
+            background: rgba(171, 159, 242, 0.1); border-color: #AB9FF2;
+            box-shadow: 0 0 20px rgba(171, 159, 242, 0.2);
         }
-
-        .wallet-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* MetaMask Hover */
+        .wallet-btn.metamask:hover:not(:disabled) {
+            background: rgba(246, 133, 27, 0.1); border-color: #F6851B;
+            box-shadow: 0 0 20px rgba(246, 133, 27, 0.2);
         }
+        
+        .wallet-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
 
-        .wallet-icon {
-            width: 32px;
-            height: 32px;
+        .status-indicator {
+            width: 8px; height: 8px; border-radius: 50%; background: var(--glass-border);
+            transition: 0.3s;
         }
+        .wallet-btn:hover:not(:disabled) .status-indicator { background: var(--success); box-shadow: 0 0 10px var(--success); }
 
-        .error-message {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: var(--radius-lg);
-            padding: var(--space-lg);
-            margin-bottom: var(--space-lg);
-            color: #FCA5A5;
-        }
-
-        .error-message h3 {
-            color: var(--error-red);
-            margin-bottom: var(--space-sm);
-        }
-
+        /* Footer Links */
         .skip-link {
-            color: var(--slate-gray);
-            text-decoration: none;
-            font-size: 14px;
-            display: inline-block;
-            margin-top: var(--space-lg);
-            padding: var(--space-sm);
-            border-radius: 6px;
-            transition: color 0.2s;
+            display: block; margin-top: 24px; color: var(--text-gray);
+            font-size: 13px; text-decoration: none; transition: 0.2s;
+            font-family: 'JetBrains Mono', monospace;
         }
+        .skip-link:hover { color: var(--primary); }
 
-        .skip-link:hover {
-            color: var(--royal-blue);
-            background: rgba(0, 82, 255, 0.1);
+        /* Loading & Error States */
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(3, 3, 4, 0.9); backdrop-filter: blur(5px);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10;
         }
-
-        .loading {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: var(--space-md);
-            color: var(--slate-gray);
-        }
-
         .spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-top: 2px solid var(--royal-blue);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+            width: 30px; height: 30px; border: 2px solid var(--glass-border);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 16px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .error-msg {
+            margin-bottom: 20px; padding: 12px; border-radius: 8px;
+            background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #FCA5A5; font-size: 13px; display: none; text-align: left;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* Scan Line Effect */
+        .scan-line {
+            position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            animation: scan 3s linear infinite; opacity: 0.5;
         }
+        @keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
 
-        @media (max-width: 640px) {
-            .container {
-                padding: var(--space-lg);
-            }
-            .wallet-btn {
-                padding: var(--space-md);
-                font-size: 14px;
-            }
-        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo-section">
-            <div class="logo"></div>
-            <h1 class="logo-text">Precedence</h1>
-            <p class="subtitle">Connect your wallet to start trading on legal prediction markets</p>
+
+    <!-- Background FX -->
+    <div class="cyber-grid"></div>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+
+    <!-- Main Card -->
+    <div class="auth-card">
+        <div class="scan-line"></div>
+        
+        <div class="card-header">
+            <div class="dot red"></div>
+            <div class="dot yellow"></div>
+            <div class="dot green"></div>
+            <span style="font-family: 'JetBrains Mono'; font-size: 11px; color: var(--text-gray); margin-left: auto;">SECURE_CONNECTION</span>
         </div>
 
-        <div id="error-message" class="error-message" style="display: none;">
-            <h3>Wallet Not Detected</h3>
-            <p>Please install a Solana-compatible wallet to continue.</p>
+        <div class="card-body">
+            <div class="logo-container">
+                <img src="public/precedence-logo.png" alt="Precedence" style="width: 40px; height: 40px;">
+            </div>
+            
+            <h1>Initialize Terminal</h1>
+            <p class="subtitle">Connect a Solana or Ethereum wallet to authenticate.</p>
+
+            <div id="error-message" class="error-msg">
+                <strong>Connection Failed:</strong><br>Wallet not detected or request rejected.
+            </div>
+
+            <div class="wallet-stack">
+                <button id="phantom-btn" class="wallet-btn phantom" disabled>
+                    <div class="wallet-left">
+                        <img src="public/phantom-logo.png" alt="Phantom" class="wallet-icon" onerror="this.style.display='none'"> 
+                        <!-- Fallback Icon if image missing -->
+                        <i data-lucide="ghost" style="width:24px; height:24px;" class="fallback-icon"></i>
+                        <span>Phantom Wallet</span>
+                    </div>
+                    <div class="status-indicator"></div>
+                </button>
+
+                <button id="metamask-btn" class="wallet-btn metamask" disabled>
+                    <div class="wallet-left">
+                        <img src="public/matamask-logo.png" alt="MetaMask" class="wallet-icon" onerror="this.style.display='none'">
+                        <!-- Fallback Icon if image missing -->
+                        <i data-lucide="box" style="width:24px; height:24px;" class="fallback-icon"></i>
+                        <span>MetaMask</span>
+                    </div>
+                    <div class="status-indicator"></div>
+                </button>
+            </div>
+
+            <a href="http://localhost:3000" class="skip-link">
+                <span style="opacity: 0.5;">></span> ENTER_VIEW_ONLY_MODE
+            </a>
         </div>
 
-        <div class="wallet-grid">
-            <button id="phantom-btn" class="wallet-btn" disabled>
-                <img src="public/phantom-wallet-logo.svg" alt="Phantom" class="wallet-icon">
-                <span>Connect Phantom</span>
-            </button>
-            <button id="metamask-btn" class="wallet-btn" disabled>
-                <img src="public/MetaMask-icon-fox.svg" alt="MetaMask" class="wallet-icon">
-                <span>Connect MetaMask</span>
-            </button>
-        </div>
-
-        <div class="loading" id="loading">
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loading">
             <div class="spinner"></div>
-            <span>Connecting...</span>
+            <div style="font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text-gray);">ESTABLISHING UPLINK...</div>
         </div>
-
-        <a href="http://localhost:3000" class="skip-link">Continue without wallet (view only)</a>
     </div>
 
     <script>
-        // Wallet detection and connection logic
+        lucide.createIcons();
+
+        // --- WALLET LOGIC (Preserved from original) ---
+        const phantomBtn = document.getElementById('phantom-btn');
+        const metamaskBtn = document.getElementById('metamask-btn');
+        const loading = document.getElementById('loading');
+        const errorMsg = document.getElementById('error-message');
+
         let phantomAvailable = false;
         let metaMaskAvailable = false;
 
-        // Check for Phantom (Solana)
-        function checkPhantom() {
+        window.addEventListener('load', () => {
+            // 1. Check Phantom
             if (window.solana && window.solana.isPhantom) {
                 phantomAvailable = true;
-                document.getElementById('phantom-btn').disabled = false;
-                document.getElementById('phantom-btn').innerHTML = `
-                    <img src="public/phantom-wallet-logo.svg" alt="Phantom" class="wallet-icon">
-                    <span>Connect Phantom</span>
-                `;
+                phantomBtn.disabled = false;
             }
-        }
 
-        // Check for MetaMask (Ethereum)
-        function checkMetaMask() {
+            // 2. Check MetaMask
             if (window.ethereum && window.ethereum.isMetaMask) {
                 metaMaskAvailable = true;
-                document.getElementById('metamask-btn').disabled = false;
+                metamaskBtn.disabled = false;
             }
-        }
 
-        // Check wallets on load
-        window.addEventListener('load', () => {
-            checkPhantom();
-            checkMetaMask();
-
-            // Show error if no wallets detected
-            if (!phantomAvailable && !metaMaskAvailable) {
-                document.getElementById('error-message').style.display = 'block';
-                document.getElementById('error-message').innerHTML = `
-                    <h3>No Wallet Detected</h3>
-                    <p>Please install <a href="https://phantom.app" target="_blank" style="color: #F6851B;">Phantom</a> or <a href="https://metamask.io" target="_blank" style="color: #F6851B;">MetaMask</a> to continue trading.</p>
-                `;
+            // 3. If neither, show error immediately (Optional, but good UX)
+            if(!phantomAvailable && !metaMaskAvailable) {
+                errorMsg.style.display = 'block';
+                errorMsg.innerHTML = "<strong>No Wallets Detected:</strong><br>Please install Phantom or MetaMask extension.";
             }
         });
 
-        // Phantom connection
-        document.getElementById('phantom-btn').addEventListener('click', async () => {
+        // Phantom Handler
+        phantomBtn.addEventListener('click', async () => {
             if (!phantomAvailable) return;
+            
+            loading.style.display = 'flex';
+            errorMsg.style.display = 'none';
 
             try {
-                document.getElementById('loading').style.display = 'flex';
-                document.querySelector('.wallet-grid').style.display = 'none';
-
-                // Connect to Phantom
                 const response = await window.solana.connect();
                 const publicKey = response.publicKey.toString();
-
-                // Store wallet info in sessionStorage for the main app
+                
                 sessionStorage.setItem('wallet_connected', 'true');
                 sessionStorage.setItem('wallet_type', 'phantom');
                 sessionStorage.setItem('wallet_address', publicKey);
-
-                // Redirect to main app
+                
                 window.location.href = 'http://localhost:3000';
-
-            } catch (error) {
-                console.error('Phantom connection failed:', error);
-                document.getElementById('loading').style.display = 'none';
-                document.querySelector('.wallet-grid').style.display = 'grid';
-
-                document.getElementById('error-message').style.display = 'block';
-                document.getElementById('error-message').innerHTML = `
-                    <h3>Connection Failed</h3>
-                    <p>Please try again or check if Phantom is unlocked.</p>
-                `;
+            } catch (err) {
+                console.error(err);
+                loading.style.display = 'none';
+                errorMsg.style.display = 'block';
+                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request.";
             }
         });
 
-        // MetaMask connection
-        document.getElementById('metamask-btn').addEventListener('click', async () => {
+        // MetaMask Handler
+        metamaskBtn.addEventListener('click', async () => {
             if (!metaMaskAvailable) return;
 
-            try {
-                document.getElementById('loading').style.display = 'flex';
-                document.querySelector('.wallet-grid').style.display = 'none';
+            loading.style.display = 'flex';
+            errorMsg.style.display = 'none';
 
-                // Connect to MetaMask
+            try {
                 const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 const address = accounts[0];
 
-                // Store wallet info in sessionStorage for the main app
                 sessionStorage.setItem('wallet_connected', 'true');
                 sessionStorage.setItem('wallet_type', 'metamask');
                 sessionStorage.setItem('wallet_address', address);
 
-                // Redirect to main app
                 window.location.href = 'http://localhost:3000';
-
-            } catch (error) {
-                console.error('MetaMask connection failed:', error);
-                document.getElementById('loading').style.display = 'none';
-                document.querySelector('.wallet-grid').style.display = 'grid';
-
-                document.getElementById('error-message').style.display = 'block';
-                document.getElementById('error-message').innerHTML = `
-                    <h3>Connection Failed</h3>
-                    <p>Please try again or check if MetaMask is unlocked.</p>
-                `;
+            } catch (err) {
+                console.error(err);
+                loading.style.display = 'none';
+                errorMsg.style.display = 'block';
+                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request.";
             }
         });
     </script>
