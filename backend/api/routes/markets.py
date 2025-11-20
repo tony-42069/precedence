@@ -92,6 +92,189 @@ async def get_legal_prediction_markets(
         logger.error(f"Error getting legal markets: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get legal markets: {str(e)}")
 
+# IMPORTANT: /resolve and /stats/summary MUST come BEFORE /{market_id}
+# Otherwise FastAPI will treat "resolve" and "stats" as market_id values
+
+@router.get("/resolve")
+async def resolve_market_for_case(case_query: str = Query(..., description="Court case name or docket to find market for")):
+    """
+    Resolve a Polymarket for a specific court case.
+    
+    REAL IMPLEMENTATION: Searches Gamma API for matching markets.
+    """
+    try:
+        import httpx
+        
+        logger.info(f"🔍 Resolving market for case: {case_query}")
+        
+        # Strategy 1: Direct slug search (most accurate)
+        # Convert case name to potential slug format
+        slug_query = case_query.lower().replace(" ", "-").replace("v.", "v")
+        
+        # Strategy 2: Fetch ALL active markets and search comprehensively
+        gamma_url = "https://gamma-api.polymarket.com/markets"
+        
+        all_markets = []
+        offset = 0
+        
+        # Paginate to get more markets
+        while len(all_markets) < 500:
+            params = {
+                "active": True,
+                "closed": False,
+                "archived": False,
+                "limit": 100,
+                "offset": offset
+            }
+            
+            response = httpx.get(gamma_url, params=params, timeout=10.0)
+            if response.status_code != 200:
+                logger.error(f"Gamma API error: {response.status_code}")
+                break
+                
+            batch = response.json()
+            if not batch:
+                break
+                
+            all_markets.extend(batch)
+            offset += 100
+        
+        logger.info(f"📊 Fetched {len(all_markets)} total markets from Polymarket")
+        
+        # Search strategy: Score each market by relevance
+        query_terms = case_query.lower().split()
+        scored_markets = []
+        
+        for market in all_markets:
+            score = 0
+            
+            # Get searchable fields
+            question = market.get('question', '').lower()
+            description = market.get('description', '').lower()
+            slug = market.get('slug', '').lower()
+            tags = [t.lower() if isinstance(t, str) else t.get('label', '').lower() for t in market.get('tags', [])]
+            
+            # Score by different match types
+            for term in query_terms:
+                if len(term) < 3:
+                    continue
+                    
+                # Exact term in question (highest value)
+                if term in question:
+                    score += 10
+                    
+                # Term in slug
+                if term in slug:
+                    score += 8
+                    
+                # Term in description
+                if term in description:
+                    score += 3
+                    
+                # Term in tags
+                if any(term in tag for tag in tags):
+                    score += 5
+            
+            # Bonus for legal-specific keywords
+            legal_keywords = ['court', 'scotus', 'supreme', 'ruling', 'judge', 'lawsuit', 'sec', 'ftc', 'doj', 'legal', 'trial']
+            combined_text = f"{question} {description} {slug}"
+            for keyword in legal_keywords:
+                if keyword in combined_text:
+                    score += 2
+            
+            if score > 0:
+                # Parse prices
+                try:
+                    outcome_prices = market.get('outcomePrices', '["0.5", "0.5"]')
+                    if isinstance(outcome_prices, str):
+                        import json
+                        outcome_prices = json.loads(outcome_prices)
+                    
+                    market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                    market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+                except:
+                    market['current_yes_price'] = 0.5
+                    market['current_no_price'] = 0.5
+                
+                scored_markets.append((score, market))
+        
+        # Sort by score (highest first)
+        scored_markets.sort(key=lambda x: x[0], reverse=True)
+        
+        if scored_markets:
+            best_score, best_match = scored_markets[0]
+            
+            logger.info(f"✅ Found market: {best_match.get('question')} (score: {best_score})")
+            
+            return {
+                "found": True,
+                "market": best_match,
+                "market_id": best_match.get('id'),
+                "question": best_match.get('question'),
+                "status": "real",
+                "score": best_score,
+                "total_matches": len(scored_markets),
+                "alternatives": [m.get('question') for _, m in scored_markets[1:4]]  # Show top 3 alternatives
+            }
+        else:
+            logger.info(f"❌ No market found for: {case_query}")
+            
+            return {
+                "found": False,
+                "can_create": True,
+                "case_name": case_query,
+                "status": "not_found",
+                "total_searched": len(all_markets),
+                "note": "No matching market found on Polymarket. Market creation requires manual approval."
+            }
+            
+    except Exception as e:
+        logger.error(f"Error resolving market: {e}")
+        return {
+            "found": False,
+            "error": str(e),
+            "status": "error"
+        }
+
+@router.get("/stats/summary")
+async def get_market_stats():
+    """
+    Get summary statistics for Polymarket.
+
+    Returns overall market statistics and trending data.
+    """
+    try:
+        logger.info("Getting market statistics")
+
+        # Get some basic stats
+        markets = get_markets(limit=100)
+
+        total_markets = len(markets)
+        active_markets = len([m for m in markets if m.get('active', False)])
+        total_volume = sum(m.get('volume', 0) for m in markets)
+
+        # Get legal markets count
+        legal_markets = polymarket.get_legal_prediction_markets(limit=50)
+        legal_count = len(legal_markets)
+
+        stats = {
+            "total_markets": total_markets,
+            "active_markets": active_markets,
+            "total_volume": total_volume,
+            "legal_prediction_markets": legal_count,
+            "platform": "Polymarket"
+        }
+
+        logger.info(f"Market stats: {stats}")
+        return stats
+
+    except Exception as e:
+        logger.error(f"Error getting market stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get market stats: {str(e)}")
+
+# Dynamic routes with path parameters MUST come LAST
+# Otherwise they catch all requests including /resolve, /stats, etc.
+
 @router.get("/{market_id}")
 async def get_market_details(market_id: str):
     """
@@ -151,72 +334,6 @@ async def get_market_orderbook(market_id: str):
         logger.error(f"Error getting market orderbook: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get market orderbook: {str(e)}")
 
-@router.get("/resolve")
-async def resolve_market_for_case(case_query: str = Query(..., description="Court case name or docket to find market for")):
-    """
-    Resolve a Polymarket for a specific court case.
-
-    MVP: For demo purposes, all Supreme Court cases resolve to the available SCOTUS market.
-    In production, this would intelligently match case topics to prediction markets.
-    """
-    try:
-        logger.info(f"Resolving market for case: {case_query}")
-
-        # MVP APPROACH: For demonstration, resolve all SCOTUS cases to the Supreme Court vacancy market
-        # This shows the AI predictions + trading pipeline work end-to-end
-
-        # MVP APPROACH: Skip real market search for now to focus on demo
-        # This ensures the trading pipeline works end-to-end immediately
-
-        # FALLBACK: Create a demo market object with real data for testing
-        # This ensures the trading UI works even if search fails
-        demo_market = {
-            "id": "demo-supreme-court-vacancy",
-            "question": "Will there be a Supreme Court vacancy in 2025?",
-            "active": True,
-            "closed": False,
-            "volume": "30000",
-            "accepted": ["Yes", "No"],
-            "current_yes_price": 0.045,
-            "current_no_price": 0.955,
-            "condition_id": "demo-condition-id",
-            "tokens": [
-                {"token_id": "demo-yes-token"},
-                {"token_id": "demo-no-token"}
-            ]
-        }
-
-        logger.info(f"No real market found, using demo market for case: {case_query}")
-
-        return {
-            "found": True,
-            "market": demo_market,
-            "market_id": demo_market["id"],
-            "question": demo_market["question"],
-            "status": "demo",  # Explicit status for frontend detection
-            "total_matches": 1,
-            "note": "Demo market for MVP - Real Supreme Court vacancy market: https://polymarket.com/market/supreme-court-vacancy-2025"
-        }
-
-    except Exception as e:
-        logger.error(f"Error resolving market for case: {e}")
-        # Create minimal fallback market to prevent UI crashes
-        return {
-            "found": True,
-            "market": {
-                "id": "fallback-market",
-                "question": "Demo Supreme Court Market (Trading pipeline test)",
-                "active": True,
-                "closed": False,
-                "current_yes_price": 0.5,
-                "current_no_price": 0.5
-            },
-            "market_id": "fallback-market",
-            "question": "Demo Supreme Court Market (Trading pipeline test)",
-            "total_matches": 1,
-            "note": f"Error occurred: {str(e)}"
-        }
-
 @router.post("/{market_id}/order")
 async def create_market_order(
     market_id: str,
@@ -247,39 +364,3 @@ async def create_market_order(
     except Exception as e:
         logger.error(f"Error creating order: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
-
-@router.get("/stats/summary")
-async def get_market_stats():
-    """
-    Get summary statistics for Polymarket.
-
-    Returns overall market statistics and trending data.
-    """
-    try:
-        logger.info("Getting market statistics")
-
-        # Get some basic stats
-        markets = get_markets(limit=100)
-
-        total_markets = len(markets)
-        active_markets = len([m for m in markets if m.get('active', False)])
-        total_volume = sum(m.get('volume', 0) for m in markets)
-
-        # Get legal markets count
-        legal_markets = polymarket.get_legal_prediction_markets(limit=50)
-        legal_count = len(legal_markets)
-
-        stats = {
-            "total_markets": total_markets,
-            "active_markets": active_markets,
-            "total_volume": total_volume,
-            "legal_prediction_markets": legal_count,
-            "platform": "Polymarket"
-        }
-
-        logger.info(f"Market stats: {stats}")
-        return stats
-
-    except Exception as e:
-        logger.error(f"Error getting market stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get market stats: {str(e)}")
