@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { MarketsGrid } from '../../components/MarketsGrid';
 import { 
@@ -10,6 +11,9 @@ import {
 } from 'lucide-react';
 
 export default function MarketsPage() {
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get('highlight');
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [markets, setMarkets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +74,16 @@ export default function MarketsPage() {
                 Browse and trade on verified legal outcomes
               </p>
 
+              {/* Show highlight notification if present */}
+              {highlightId && (
+                <div className="mt-4 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg inline-flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+                  <span className="text-sm font-mono text-purple-300">
+                    FINDING_MARKET: {highlightId.slice(0, 10)}...
+                  </span>
+                </div>
+              )}
+
               {/* Quick Stats */}
               {!loading && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
@@ -108,7 +122,7 @@ export default function MarketsPage() {
 
           {/* Markets Content - Using MarketsGrid Component */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <MarketsGrid />
+            <MarketsGrid highlightId={highlightId} />
           </main>
         </div>
       </div>
