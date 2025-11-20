@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { TradingModal } from './TradingModal';
+import { WalletConnectModal } from './WalletConnectModal';
 import { AIConfidenceBadge } from './AIConfidenceIndicator';
 import { useWallet } from '../hooks/useWallet';
 import { usePredictions } from '../hooks/usePredictions';
@@ -30,6 +31,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [showMarketModal, setShowMarketModal] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   const [highlightedMarketId, setHighlightedMarketId] = useState<string | null>(highlightId || null);
   
   const { walletState } = useWallet();
@@ -115,6 +117,19 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       };
     }
   }, [highlightId, loading, markets]);
+
+  // Handler for trade button clicks
+  const handleTradeClick = (market: Market) => {
+    if (!walletState.connected) {
+      // No wallet connected → Show wallet connect modal
+      setSelectedMarket(market);
+      setShowWalletModal(true);
+    } else {
+      // Wallet connected → Open trading modal
+      setSelectedMarket(market);
+      setShowTradingModal(true);
+    }
+  };
 
   const filteredMarkets = markets.filter(market => {
     if (filter === 'all') return true;
@@ -227,7 +242,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     {market.question || 'Market Question'}
                   </h3>
 
-                  {/* Price Bars - FIXED: Show as $0.03 not $3.0 */}
+                  {/* Price Bars */}
                   {market.current_yes_price !== undefined && market.current_no_price !== undefined && (
                     <div className="flex items-center gap-2 mb-4 font-mono text-sm">
                       <div className="flex-1 bg-white/5 rounded p-2 border border-white/5 group-hover:border-green-500/30 transition-colors">
@@ -262,25 +277,17 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     </div>
                   )}
 
-                  {/* Trading Buttons */}
+                  {/* Trading Buttons - NOW ALWAYS ENABLED */}
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => {
-                        setSelectedMarket(market);
-                        setShowTradingModal(true);
-                      }}
-                      disabled={!walletState.connected}
-                      className="flex-1 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => handleTradeClick(market)}
+                      className="flex-1 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
                     >
                       BUY YES
                     </button>
                     <button
-                      onClick={() => {
-                        setSelectedMarket(market);
-                        setShowTradingModal(true);
-                      }}
-                      disabled={!walletState.connected}
-                      className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => handleTradeClick(market)}
+                      className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
                     >
                       BUY NO
                     </button>
@@ -310,6 +317,19 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
           </p>
         </div>
       )}
+
+      {/* Wallet Connect Modal */}
+      <WalletConnectModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+        onConnect={() => {
+          // After wallet connects, close wallet modal and open trading modal
+          setShowWalletModal(false);
+          if (selectedMarket) {
+            setShowTradingModal(true);
+          }
+        }}
+      />
 
       {/* Trading Modal */}
       <TradingModal
@@ -383,7 +403,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                 <button 
                   onClick={() => {
                     setShowMarketModal(false);
-                    setShowTradingModal(true);
+                    handleTradeClick(selectedMarket);
                   }}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
                 >
