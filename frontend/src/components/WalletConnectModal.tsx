@@ -6,9 +6,10 @@ import { useWallet } from '../hooks/useWallet';
 interface WalletConnectModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onConnect?: () => void; // ✅ ADDED: Optional callback after successful connection
 }
 
-export function WalletConnectModal({ isOpen, onClose }: WalletConnectModalProps) {
+export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnectModalProps) {
   const { connectPhantom, connectMetaMask, checkWalletAvailability, walletState } = useWallet();
 
   if (!isOpen) return null;
@@ -18,10 +19,13 @@ export function WalletConnectModal({ isOpen, onClose }: WalletConnectModalProps)
   const handleConnect = async (connectFn: () => Promise<void>) => {
     try {
       await connectFn();
-      // Close modal after successful connection
+      // Wait a moment for wallet state to update, then call callbacks
       setTimeout(() => {
         if (walletState.connected) {
-          onClose();
+          onClose(); // Close the wallet modal
+          if (onConnect) {
+            onConnect(); // Trigger parent's onConnect handler (opens trading modal)
+          }
         }
       }, 500);
     } catch (error) {

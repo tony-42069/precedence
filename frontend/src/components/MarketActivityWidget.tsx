@@ -1,56 +1,89 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface ActivityItem {
   id: string;
-  type: 'trade' | 'market_created' | 'prediction';
+  type: 'trade' | 'market_created' | 'prediction' | 'high_volume' | 'price_alert';
   description: string;
   amount?: string;
   time: string;
   icon: string;
+  marketQuestion?: string;
+  marketId?: string;
 }
 
 export function MarketActivityWidget() {
-  // Mock data - will be replaced with real API data
-  const activities: ActivityItem[] = [
-    {
-      id: '1',
-      type: 'trade',
-      description: 'Large YES position taken on Supreme Court case',
-      amount: '$12,450',
-      time: '2 min ago',
-      icon: '💰'
-    },
-    {
-      id: '2',
-      type: 'prediction',
-      description: 'AI updated confidence on Regulatory Ruling',
-      amount: '87% → 92%',
-      time: '5 min ago',
-      icon: '🤖'
-    },
-    {
-      id: '3',
-      type: 'market_created',
-      description: 'New market created: "EPA Climate Policy"',
-      time: '12 min ago',
-      icon: '📈'
-    },
-    {
-      id: '4',
-      type: 'trade',
-      description: 'NO position filled on Constitutional case',
-      amount: '$8,320',
-      time: '18 min ago',
-      icon: '⚖️'
-    },
-    {
-      id: '5',
-      type: 'prediction',
-      description: 'Judge analysis completed for SCOTUS case',
-      time: '25 min ago',
-      icon: '👨‍⚖️'
+  const router = useRouter();
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const getIconForType = (type: string) => {
+    switch (type) {
+      case 'high_volume': return '🐋';
+      case 'price_alert': return '🚨';
+      case 'trade': return '💰';
+      case 'market_created': return '📈';
+      case 'prediction': return '🤖';
+      default: return '📊';
     }
-  ];
+  };
+
+  const handleActivityClick = (activity: ActivityItem) => {
+    if (activity.marketId) {
+      router.push(`/markets?highlight=${activity.marketId}`);
+    }
+  };
+
+  useEffect(() => {
+    const fetchActivity = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/markets/activity?limit=5');
+        if (response.ok) {
+          const data = await response.json();
+          const activityData = data.activity || [];
+
+          const formattedActivities: ActivityItem[] = activityData.map((item: any, index: number) => ({
+            id: item.market_id + item.timestamp + index,
+            type: item.type || 'trade',
+            description: item.description || 'Market activity',
+            marketQuestion: item.market_question,
+            marketId: item.market_id,
+            amount: item.amount,
+            time: item.timestamp || 'Live',
+            icon: getIconForType(item.type || 'trade')
+          }));
+
+          setActivities(formattedActivities);
+        } else {
+          console.error('Failed to fetch market activity');
+          // Fallback to minimal activity
+          setActivities([{
+            id: 'fallback',
+            type: 'trade',
+            description: 'Connecting to live market data...',
+            time: 'Now',
+            icon: '🔄'
+          }]);
+        }
+      } catch (error) {
+        console.error('Error fetching market activity:', error);
+        setActivities([{
+          id: 'error',
+          type: 'trade',
+          description: 'Unable to load market activity',
+          time: 'Now',
+          icon: '❌'
+        }]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchActivity();
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchActivity, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="bg-[#0A0A0C]/60 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-blue-500/30 transition-all duration-300 group">
@@ -71,23 +104,42 @@ export function MarketActivityWidget() {
 
       <div className="space-y-3">
         {activities.map((activity) => (
-          <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-lg border border-white/5 bg-white/5 hover:border-white/10 hover:bg-white/10 transition-all duration-200 group/item">
+          <div
+            key={activity.id}
+            onClick={() => handleActivityClick(activity)}
+            className={`flex items-start space-x-3 p-3 rounded-lg border border-white/5 bg-white/5 hover:border-blue-500/30 hover:bg-blue-500/5 transition-all duration-200 group/item cursor-pointer relative ${
+              activity.marketId ? 'hover:shadow-[0_0_10px_rgba(37,99,235,0.2)]' : ''
+            }`}
+          >
             <div className="text-lg group-hover/item:scale-110 transition-transform duration-200">
               {activity.icon}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-slate-200 leading-tight font-medium">
+              {activity.marketQuestion && (
+                <p className="text-sm font-semibold text-blue-300 leading-tight mb-1 truncate group-hover/item:text-blue-200">
+                  {activity.marketQuestion}
+                </p>
+              )}
+              <p className="text-sm text-slate-200 leading-tight font-medium group-hover/item:text-white">
                 {activity.description}
               </p>
               <div className="flex items-center justify-between mt-1">
-                {activity.amount && (
-                  <span className="text-xs font-mono font-bold text-purple-400">
-                    {activity.amount}
+                <div className="flex items-center space-x-4">
+                  {activity.amount && (
+                    <span className="text-xs font-mono font-bold text-purple-400">
+                      {activity.amount}
+                    </span>
+                  )}
+                  <span className="text-xs font-mono text-slate-500 uppercase">
+                    {activity.time}
                   </span>
+                </div>
+                {/* Navigation arrow - only show if clickable */}
+                {activity.marketId && (
+                  <div className="opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
+                    <span className="text-blue-400 text-sm font-bold">→</span>
+                  </div>
                 )}
-                <span className="text-xs font-mono text-slate-500 uppercase">
-                  {activity.time}
-                </span>
               </div>
             </div>
           </div>
