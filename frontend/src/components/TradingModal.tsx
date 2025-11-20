@@ -32,23 +32,19 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   const { executeTrade, statusMessage, isLoading, isDeployingWallet, isApprovingToken, isExecutingTrade, isSuccess, isError, reset } = useTrading();
   const { walletState } = useWallet();
 
-  // ⭐ STAGE 1.1: MARKET TYPE DETECTION
+// ⭐ STAGE 1.1: MARKET TYPE DETECTION
   const marketType = useMemo(() => {
     if (!market?.id) return 'invalid';
 
     // Demo markets (returned by our resolution API)
-    if (market.id?.startsWith('demo') || market.id?.startsWith('fallback')) {
+    if (market.id?.toString().startsWith('demo') || market.id?.toString().startsWith('fallback')) {
       return 'demo';
     }
 
-    // Real Polymarket IDs (long alphanumeric strings)
-    if (market.id?.match(/^[a-zA-Z0-9]{8,}$/) && market.active) {
+    // Real Polymarket markets - check if we have real price data
+    // Market IDs can be numeric (like 517855) or alphanumeric
+    if (market.id && (market.current_yes_price || market.outcomePrices)) {
       return 'real';
-    }
-
-    // Uninitialized markets (no ID or inactive)
-    if (!market.question || !market.active) {
-      return 'uninitialized';
     }
 
     return 'unknown';
@@ -59,6 +55,18 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     if (isOpen && market) {
       const loadMarketData = async () => {
         try {
+          // First, try to use prices already in the market object (from /resolve)
+          if (market.current_yes_price && market.current_no_price) {
+            console.log('✅ Using prices from market object:', market.current_yes_price, market.current_no_price);
+            setMarketData({
+              current_yes_price: market.current_yes_price,
+              current_no_price: market.current_no_price,
+              best_bid: market.current_yes_price * 0.95,
+              best_ask: market.current_yes_price * 1.05,
+            });
+            return;
+          }
+
           switch (marketType) {
             case 'demo':
               // ✅ USE DEMO DATA DIRECTLY - NO API CALLS
@@ -73,7 +81,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               break;
 
             case 'real':
-              // 🔄 FETCH REAL DATA FROM POLYMARKET
+              // 🔄 FETCH REAL DATA FROM POLYMARKET (fallback if prices not in object)
               console.log('📈 Fetching live market data for:', market.id);
               const data = await apiService.fetchMarketPrice(market.id);
               if (data.current_yes_price && data.current_no_price) {
@@ -86,18 +94,8 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               }
               break;
 
-            case 'uninitialized':
-              console.warn('🚧 Market not yet initialized:', market.id);
-              setMarketData({
-                current_yes_price: 0.5,
-                current_no_price: 0.5,
-                best_bid: 0.0,
-                best_ask: 1.0,
-              });
-              break;
-
             default:
-              console.warn('❓ Unknown market type:', marketType);
+              console.warn('❓ Unknown market type, using fallback prices');
               setMarketData({
                 current_yes_price: 0.5,
                 current_no_price: 0.5,
@@ -107,7 +105,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
           }
         } catch (error) {
           console.error('❌ Failed to load market data:', error);
-          // Fallback to demo prices if everything fails
+          // Fallback to market object prices if API fails
           if (market?.current_yes_price) {
             setMarketData({
               current_yes_price: market.current_yes_price,
