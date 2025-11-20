@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface AIInsight {
   id: string;
@@ -9,9 +10,13 @@ interface AIInsight {
   impact: 'high' | 'medium' | 'low';
   time: string;
   icon: string;
+  caseName?: string;
+  judge?: string;
+  caseId?: string;
 }
 
 export function AIInsightsWidget() {
+  const router = useRouter();
   const [insights, setInsights] = useState<AIInsight[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +35,12 @@ export function AIInsightsWidget() {
     return 'low';
   };
 
+  const handleInsightClick = (insight: AIInsight) => {
+    if (insight.caseId) {
+      router.push(`/cases?highlight=${insight.caseId}`);
+    }
+  };
+
   useEffect(() => {
     const fetchInsights = async () => {
       try {
@@ -41,12 +52,15 @@ export function AIInsightsWidget() {
           const formattedInsights: AIInsight[] = insightsData.map((item: any, index: number) => ({
             id: item.case_id + item.timestamp + index,
             type: item.type || 'prediction',
-            title: item.title || item.description?.slice(0, 30) + '...' || 'AI Analysis',
-            description: item.description || 'AI-powered legal analysis completed',
+            title: `${item.case_name} - ${item.judge}` || item.description?.slice(0, 30) + '...' || 'AI Analysis',
+            description: item.detail || item.description || 'AI-powered legal analysis completed',
             confidence: item.confidence ? Math.round(item.confidence * 100) : 75,
             impact: getImpactFromConfidence(item.confidence || 0.75),
             time: item.timestamp || 'Recently',
-            icon: getIconForType(item.type || 'prediction')
+            icon: getIconForType(item.type || 'prediction'),
+            caseName: item.case_name,
+            judge: item.judge,
+            caseId: item.case_name // Using case_name as caseId for highlighting
           }));
 
           setInsights(formattedInsights);
@@ -119,7 +133,13 @@ export function AIInsightsWidget() {
 
       <div className="space-y-3">
         {insights.map((insight) => (
-          <div key={insight.id} className="p-4 rounded-lg border border-white/5 bg-white/5 hover:border-white/10 hover:bg-white/10 transition-all duration-200 group/insight relative overflow-hidden">
+          <div
+            key={insight.id}
+            onClick={() => handleInsightClick(insight)}
+            className={`p-4 rounded-lg border border-white/5 bg-white/5 hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all duration-200 group/insight cursor-pointer relative overflow-hidden ${
+              insight.caseId ? 'hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]' : ''
+            }`}
+          >
             {/* Neural network accent */}
             <div className="absolute left-3 top-4 opacity-30 group-hover/insight:opacity-50 transition-opacity duration-300">
               <div className="text-[8px] font-mono text-cyan-500/50">
@@ -133,7 +153,7 @@ export function AIInsightsWidget() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2 mb-2">
-                  <h4 className="text-sm font-semibold text-slate-200 font-mono group-hover/insight:text-white transition-colors duration-200">
+                  <h4 className="text-sm font-semibold text-slate-200 font-mono group-hover/insight:text-white transition-colors duration-200 truncate">
                     {insight.title}
                   </h4>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono uppercase border ${getImpactColor(insight.impact)}`}>
@@ -141,12 +161,12 @@ export function AIInsightsWidget() {
                   </span>
                 </div>
 
-                <p className="text-sm text-slate-400 mb-3 leading-relaxed font-light">
+                <p className="text-sm text-slate-400 mb-3 leading-relaxed font-light group-hover/insight:text-slate-300">
                   {insight.description}
                 </p>
 
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-1">
                       <span className="text-xs font-mono text-slate-500 uppercase">CONFIDENCE:</span>
                       <span className={`text-sm font-mono font-bold ${getConfidenceColor(insight.confidence)}`}>
@@ -160,10 +180,17 @@ export function AIInsightsWidget() {
                       ></div>
                     </div>
                   </div>
-
-                  <span className="text-xs font-mono text-slate-500 uppercase">
-                    {insight.time}
-                  </span>
+                  <div className="flex items-center space-x-4">
+                    <span className="text-xs font-mono text-slate-500 uppercase">
+                      {insight.time}
+                    </span>
+                    {/* Navigation arrow - only show if clickable */}
+                    {insight.caseId && (
+                      <div className="opacity-0 group-hover/insight:opacity-100 transition-opacity duration-200">
+                        <span className="text-cyan-400 text-sm font-bold">→</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
