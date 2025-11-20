@@ -121,7 +121,7 @@ class ApiService {
 
   // Market Resolution (link cases to markets)
   async resolveMarketForCase(caseQuery: string): Promise<any> {
-    return this.request(`/markets/resolve?case_query=${encodeURIComponent(caseQuery)}`);
+    return this.request(`/api/markets/resolve?case_query=${encodeURIComponent(caseQuery)}`);
   }
 }
 
