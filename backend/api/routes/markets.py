@@ -92,8 +92,8 @@ async def get_legal_prediction_markets(
         logger.error(f"Error getting legal markets: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get legal markets: {str(e)}")
 
-# IMPORTANT: /resolve and /stats/summary MUST come BEFORE /{market_id}
-# Otherwise FastAPI will treat "resolve" and "stats" as market_id values
+# IMPORTANT: /resolve, /trending, and /stats/summary MUST come BEFORE /{market_id}
+# Otherwise FastAPI will treat them as market_id values
 
 @router.get("/resolve")
 async def resolve_market_for_case(case_query: str = Query(..., description="Court case name or docket to find market for")):
@@ -235,6 +235,112 @@ async def resolve_market_for_case(case_query: str = Query(..., description="Cour
             "error": str(e),
             "status": "error"
         }
+
+@router.get("/trending")
+async def get_trending_markets(
+    limit: int = Query(10, description="Maximum number of trending markets to return", ge=1, le=50),
+    category: Optional[str] = Query(None, description="Filter by category (Legal, Politics, Crypto, Culture, Sports, Economics)")
+):
+    """
+    Get trending prediction markets from Polymarket.
+    
+    Returns the hottest markets right now - what's actually being traded.
+    Optionally filter by category to focus on specific topics.
+    
+    Example: /api/markets/trending?limit=5&category=Legal
+    """
+    try:
+        import httpx
+        
+        logger.info(f"🔥 Fetching trending markets: limit={limit}, category={category}")
+        
+        # Fetch from Polymarket Gamma API
+        gamma_url = "https://gamma-api.polymarket.com/markets"
+        
+        # Fetch more markets to have enough for filtering
+        params = {
+            "active": True,
+            "closed": False,
+            "archived": False,
+            "limit": limit * 5 if category else limit,  # Fetch more if filtering
+            "offset": 0
+        }
+        
+        response = httpx.get(gamma_url, params=params, timeout=10.0)
+        
+        if response.status_code != 200:
+            logger.error(f"Gamma API error: {response.status_code}")
+            raise HTTPException(status_code=502, detail="Failed to fetch from Polymarket")
+        
+        all_markets = response.json()
+        logger.info(f"📊 Fetched {len(all_markets)} markets from Polymarket")
+        
+        # Parse prices and enhance data
+        for market in all_markets:
+            try:
+                outcome_prices = market.get('outcomePrices', '["0.5", "0.5"]')
+                if isinstance(outcome_prices, str):
+                    import json
+                    outcome_prices = json.loads(outcome_prices)
+                
+                market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+            except:
+                market['current_yes_price'] = 0.5
+                market['current_no_price'] = 0.5
+        
+        # Filter by category if specified
+        if category:
+            category_lower = category.lower()
+            filtered_markets = []
+            
+            # Define category keywords
+            category_keywords = {
+                'legal': ['court', 'scotus', 'supreme', 'ruling', 'judge', 'lawsuit', 'sec', 'ftc', 'doj', 'legal', 'trial', 'case', 'indictment', 'prosecutor'],
+                'politics': ['election', 'president', 'congress', 'senate', 'democrat', 'republican', 'vote', 'political', 'campaign', 'poll'],
+                'crypto': ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'btc', 'eth', 'defi', 'nft', 'coinbase', 'binance'],
+                'culture': ['celebrity', 'music', 'movie', 'entertainment', 'award', 'grammy', 'oscar', 'emmy', 'netflix', 'spotify'],
+                'sports': ['super bowl', 'nba', 'nfl', 'mlb', 'nhl', 'world cup', 'championship', 'playoff', 'finals'],
+                'economics': ['fed', 'interest rate', 'inflation', 'gdp', 'unemployment', 'recession', 'powell', 'fomc', 'economy']
+            }
+            
+            keywords = category_keywords.get(category_lower, [])
+            
+            for market in all_markets:
+                # Check question, description, and tags for category match
+                question = market.get('question', '').lower()
+                description = market.get('description', '').lower()
+                tags = [t.lower() if isinstance(t, str) else t.get('label', '').lower() 
+                       for t in market.get('tags', [])]
+                
+                combined_text = f"{question} {description} {' '.join(tags)}"
+                
+                if any(keyword in combined_text for keyword in keywords):
+                    filtered_markets.append(market)
+            
+            markets_to_return = filtered_markets[:limit]
+            logger.info(f"✅ Filtered to {len(markets_to_return)} {category} markets")
+        else:
+            # No filter - just return top by volume
+            markets_to_return = all_markets[:limit]
+        
+        # Sort by volume to get "trending" (most traded)
+        markets_to_return.sort(key=lambda m: float(m.get('volume', 0)), reverse=True)
+        
+        logger.info(f"🔥 Returning {len(markets_to_return)} trending markets")
+        
+        return {
+            "trending": markets_to_return,
+            "count": len(markets_to_return),
+            "category": category or "all",
+            "timestamp": "now"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching trending markets: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch trending markets: {str(e)}")
 
 @router.get("/stats/summary")
 async def get_market_stats():

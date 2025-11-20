@@ -173,9 +173,9 @@ export default function Home() {
               loading={loading}
             />
 
-            {/* Dashboard Widgets */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Dashboard Widgets - WIDER LAYOUT */}
+            <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-4 pb-12">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-[1800px] mx-auto">
                 <div className="lg:col-span-1 bg-[#0A0A0C]/60 border border-white/10 rounded-xl p-4 backdrop-blur-md">
                   <MarketActivityWidget />
                 </div>
@@ -188,7 +188,7 @@ export default function Home() {
               </div>
 
               {/* Quick Link to Markets */}
-              <div className="mt-12 text-center">
+              <div className="mt-12 text-center max-w-[1800px] mx-auto">
                 <a 
                   href="/markets"
                   className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] hover:scale-105 transform duration-200"
