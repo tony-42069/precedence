@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useWallet } from '../hooks/useWallet';
 import { usePredictions } from '../hooks/usePredictions';
 import { Sidebar, MobileMenuButton } from '../components/Sidebar';
+import { HeroSection } from '../components/HeroSection';
 import { MarketActivityWidget } from '../components/MarketActivityWidget';
 import { TopMarketsWidget } from '../components/TopMarketsWidget';
 import { AIInsightsWidget } from '../components/AIInsightsWidget';
@@ -14,6 +15,8 @@ interface Market {
   id?: string;
   question?: string;
   volume?: number;
+  current_yes_price?: number;
+  current_no_price?: number;
 }
 
 export default function Home() {
@@ -26,7 +29,7 @@ export default function Home() {
   const { walletState, connectPhantom, connectMetaMask, disconnect, checkWalletAvailability } = useWallet();
   const { enhanceMarketsWithAI } = usePredictions();
 
-  // Fetch markets for stats only
+  // Fetch markets for stats and hero
   useEffect(() => {
     const checkBackend = async () => {
       try {
@@ -52,6 +55,12 @@ export default function Home() {
 
     checkBackend();
   }, [enhanceMarketsWithAI]);
+
+  // Calculate total volume from markets
+  const totalVolume = markets.reduce((sum, market) => {
+    const vol = Number(market.volume) || 0;
+    return sum + vol;
+  }, 0);
 
   const currentView = pathname === '/' ? 'dashboard' : 'dashboard';
 
@@ -156,43 +165,13 @@ export default function Home() {
 
           {/* Dashboard Content */}
           <>
-            {/* Hero Section */}
-            <div className="mx-4 mt-8 mb-8">
-              <div className="relative border border-white/10 rounded-2xl p-8 lg:p-16 overflow-hidden bg-[#0A0A0C]/60 backdrop-blur-sm group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 opacity-50"></div>
-                <div className="relative z-10 text-center">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono mb-6">
-                    <span className="animate-pulse">●</span> LIVE MARKET FEED
-                  </div>
-                  <h1 className="text-4xl lg:text-5xl font-bold text-white mb-6 tracking-tight">
-                    Predict Legal <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Outcomes</span>
-                  </h1>
-                  <p className="text-lg text-slate-400 max-w-3xl mx-auto mb-8 leading-relaxed">
-                    Trade on Supreme Court decisions, regulatory rulings, and high-profile legal cases with AI-powered market intelligence.
-                  </p>
-
-                  {/* Key Stats */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
-                    <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="text-2xl font-mono font-bold text-blue-400 mb-1">$2.4M</div>
-                      <div className="text-xs text-slate-500 uppercase tracking-widest">24h Volume</div>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="text-2xl font-mono font-bold text-green-400 mb-1">{markets.length}</div>
-                      <div className="text-xs text-slate-500 uppercase tracking-widest">Active Markets</div>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="text-2xl font-mono font-bold text-purple-400 mb-1">AI</div>
-                      <div className="text-xs text-slate-500 uppercase tracking-widest">Powered</div>
-                    </div>
-                    <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5 hover:border-white/10 transition-colors">
-                      <div className="text-2xl font-mono font-bold text-yellow-400 mb-1">24/7</div>
-                      <div className="text-xs text-slate-500 uppercase tracking-widest">Trading</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* New Command Center Hero */}
+            <HeroSection 
+              markets={markets}
+              marketsCount={markets.length}
+              totalVolume={totalVolume}
+              loading={loading}
+            />
 
             {/* Dashboard Widgets */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-12">
