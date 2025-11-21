@@ -244,27 +244,49 @@ async def analyze_case_with_llm(payload: Dict[str, Any]):
         # Extract relevant info
         case_name = case_details.get('caseName', 'Unknown Case')
         summary = case_details.get('summary', '')
+        opinions = case_details.get('opinions', [])
         judge = case_details.get('judge', 'Unknown Judge')
         court = case_details.get('court', 'Federal Court')
         docket_number = case_details.get('docketNumber', '')
         procedural_history = case_details.get('procedural_history', '')
         parties = case_details.get('parties', {})
-        
+
         # Determine case type from case name/summary
         case_type = "civil"
         text_lower = (case_name + " " + summary).lower()
         if any(term in text_lower for term in ['criminal', 'murder', 'assault']):
             case_type = "criminal"
-        elif any(term in text_lower for term in ['constitution', 'amendment', 'rights']):
+        elif any(term in text_lower for term in ['constitution', 'amendment', 'due process']):
             case_type = "constitutional"
         elif any(term in text_lower for term in ['patent', 'trademark', 'copyright']):
             case_type = "intellectual property"
-        
+
+        # Use full opinion text for analysis if available, fallback to summary
+        case_facts = summary  # Default to existing summary
+
+        if opinions and len(opinions) > 0 and opinions[0].get('plain_text'):
+            opinion_text = opinions[0]['plain_text'][:8000]  # Limit to first 8000 chars to fit in LLM context
+            logger.info(f"Using full opinion text for analysis ({len(opinion_text)} chars)")
+            case_facts = f"Court Opinion:\n{opinion_text}"
+
+            # If we have the opinion, also set case_type based on opinion content
+            if 'criminal' in opinion_text.lower() or 'felony' in opinion_text.lower():
+                case_type = "criminal"
+            elif 'constitution' in opinion_text.lower() or 'fourteenth amendment' in opinion_text.lower():
+                case_type = "constitutional"
+        else:
+            logger.info("Using summary for analysis (no full opinion available)")
+
+        # Add procedural history if available and we don't have full opinion
+        if procedural_history and not opinions:
+            case_facts += f"\n\nProcedural History:\n{procedural_history[:1000]}"
+            logger.info("Added procedural history to case facts")
+
         # Analyze with LLM
         analyzer = get_llm_analyzer()
         analysis = await analyzer.analyze_case(
             case_name=case_name,
-            case_facts=summary,
+            case_facts=case_facts,
             judge_name=judge,
             court=court,
             case_type=case_type,
