@@ -64,15 +64,17 @@ interface Prediction {
   probabilities: {
     PLAINTIFF_WIN: number;
     DEFENDANT_WIN: number;
-    [key: string]: number;
+    SETTLEMENT?: number;
   };
+  reasoning?: string;
+  key_factors?: string[];
   judge_analysis?: {
-    judge_bias?: string;
-    historical_win_rates?: {
-      plaintiff: number;
-      defendant: number;
-    };
+    ideology?: string;
+    likely_perspective?: string;
+    historical_pattern?: string;
   };
+  risk_assessment?: string;
+  analysis_method?: string;
 }
 
 export default function CasesPage() {
@@ -111,10 +113,7 @@ export default function CasesPage() {
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
-
-        // Auto-Analyze basic odds (keep it fast)
-        // Use Promise.all to handle async operations
-        await Promise.all(data.map((caseItem: CourtCase) => runAiAnalysis(caseItem)));
+        // DO NOT auto-analyze - let user click AI Analysis button
       }
     } catch (error) {
       console.error("Search failed", error);
@@ -123,27 +122,28 @@ export default function CasesPage() {
     }
   };
 
-  // AI Analysis Handler
+  // AI Analysis Handler - Now uses REAL LLM analysis
   const runAiAnalysis = async (caseItem: CourtCase) => {
     setAnalyzing(prev => ({ ...prev, [caseItem.id]: true }));
     try {
-      const res = await fetch('http://localhost:8000/api/predictions/case-outcome', {
+      // Call NEW LLM endpoint that fetches case details and uses GPT-4
+      const res = await fetch('http://localhost:8000/api/predictions/analyze-case-llm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          case_facts: caseItem.snippet || caseItem.caseName,
-          case_type: caseItem.inferred_type || "civil",  // REAL case type from extraction
-          judge_id: caseItem.extracted_judge || "roberts"  // REAL judge from extraction
+          case_id: caseItem.id  // Just send case ID - backend does the rest
         })
       });
 
       if (res.ok) {
-        // FIX: Await the JSON first, THEN update state
         const predictionData = await res.json();
+        console.log('✅ Real LLM Analysis:', predictionData);
         setPredictions(prev => ({ ...prev, [caseItem.id]: predictionData }));
+      } else {
+        console.error('❌ LLM Analysis failed:', await res.text());
       }
     } catch (err) {
-      console.error(err);
+      console.error('❌ Error calling LLM analysis:', err);
     } finally {
       setAnalyzing(prev => ({ ...prev, [caseItem.id]: false }));
     }
@@ -368,20 +368,23 @@ export default function CasesPage() {
                            </p>
                          )}
 
-                         {/* Quick Odds Bar (Sportsbook Style) */}
-                         {prediction && (
+                         {/* Quick Odds Bar - Only show if prediction exists */}
+                         {prediction ? (
                            <div className="w-full max-w-md mt-2">
                               <div className="flex justify-between text-[10px] text-slate-400 uppercase mb-1 font-bold">
-                                 <span>Plaintiff ({pWin.toFixed(0)}%)</span>
-                                 <span>Defendant ({dWin.toFixed(0)}%)</span>
+                                 <span>Plaintiff ({(prediction.probabilities.PLAINTIFF_WIN * 100).toFixed(0)}%)</span>
+                                 <span>Defendant ({(prediction.probabilities.DEFENDANT_WIN * 100).toFixed(0)}%)</span>
                               </div>
                               <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden flex">
-                                 <div className="h-full bg-green-500" style={{ width: `${pWin}%` }}></div>
-                                 <div className="h-full bg-red-500" style={{ width: `${dWin}%` }}></div>
+                                 <div className="h-full bg-green-500" style={{ width: `${prediction.probabilities.PLAINTIFF_WIN * 100}%` }}></div>
+                                 <div className="h-full bg-red-500" style={{ width: `${prediction.probabilities.DEFENDANT_WIN * 100}%` }}></div>
                               </div>
                            </div>
+                         ) : isAnalyzing ? (
+                           <span className="text-xs text-blue-500 font-mono animate-pulse">CALCULATING ODDS...</span>
+                         ) : (
+                           <span className="text-xs text-slate-500 font-mono">Click AI Analysis for predictions</span>
                          )}
-                         {isAnalyzing && <span className="text-xs text-blue-500 font-mono animate-pulse">CALCULATING ODDS...</span>}
                       </div>
 
                       {/* Right: Actions */}
@@ -391,6 +394,10 @@ export default function CasesPage() {
                         <button
                            onClick={(e) => {
                              e.stopPropagation();
+                             // Run analysis if not already done
+                             if (!predictions[caseItem.id] && !analyzing[caseItem.id]) {
+                               runAiAnalysis(caseItem);
+                             }
                              openAnalysis(caseItem);
                            }}
                            className="flex-1 md:flex-none px-4 py-3 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300 font-medium text-sm flex items-center justify-center gap-2 transition-colors"
@@ -399,28 +406,16 @@ export default function CasesPage() {
                            <span className="hidden md:inline">AI Analysis</span>
                         </button>
 
-                        {/* Request Market */}
+                        {/* Primary CTA: Request Market */}
                         <button
                            onClick={(e) => {
                              e.stopPropagation();
                              requestMarket(caseItem);
                            }}
-                           className="flex-1 md:flex-none px-4 py-3 rounded-lg border border-orange-500/20 hover:bg-orange-500/5 text-orange-300 font-medium text-sm flex items-center justify-center gap-2 transition-colors"
-                        >
-                           <span className="text-lg font-bold">+</span>
-                           <span className="hidden sm:inline">Request Market</span>
-                        </button>
-
-                        {/* Primary: Trade */}
-                        <button
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             openTrading(caseItem);
-                           }}
                            className="flex-1 md:flex-none px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]"
                         >
-                           <TrendingUp size={16} />
-                           Trade
+                           <span className="text-lg font-bold">+</span>
+                           <span>Request Market</span>
                         </button>
                       </div>
                     </div>
@@ -627,9 +622,9 @@ export default function CasesPage() {
       {showAnalysisModal && selectedCase && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowAnalysisModal(false)}></div>
-           <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+           <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col">
 
-              <div className="p-6 border-b border-white/10 flex justify-between items-start bg-[#151518]">
+              <div className="p-6 border-b border-white/10 flex justify-between items-start bg-[#151518] flex-shrink-0">
                  <div>
                     <h2 className="text-xl font-bold text-white">{selectedCase.caseName}</h2>
                     <div className="flex items-center gap-2 mt-1 text-sm text-slate-400 font-mono">
@@ -641,56 +636,104 @@ export default function CasesPage() {
                  <button onClick={() => setShowAnalysisModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={20} /></button>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                 {analyzing[selectedCase.id] ? (
+                   <div className="flex items-center justify-center py-12">
+                     <Loader2 className="animate-spin text-blue-500" size={32} />
+                     <span className="ml-3 text-slate-400 font-mono">ANALYZING_WITH_AI...</span>
+                   </div>
+                 ) : predictions[selectedCase.id] ? (
+                   <>
+                     {/* Judge Stats Card - REAL DATA */}
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                           <div className="text-xs text-slate-500 uppercase mb-1">Judge Ideology</div>
+                           <div className="text-lg font-bold text-white">
+                             {predictions[selectedCase.id].judge_analysis?.ideology?.toUpperCase() || "UNKNOWN"}
+                           </div>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                           <div className="text-xs text-slate-500 uppercase mb-1">Model Confidence</div>
+                           <div className="text-lg font-bold text-blue-400">
+                             {(predictions[selectedCase.id].confidence * 100).toFixed(0)}%
+                           </div>
+                        </div>
+                     </div>
 
-                 {/* Judge Stats Card */}
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                       <div className="text-xs text-slate-500 uppercase mb-1">Historical Bias</div>
-                       <div className="text-lg font-bold text-white">NEUTRAL / TEXTUALIST</div>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                       <div className="text-xs text-slate-500 uppercase mb-1">Reversal Rate</div>
-                       <div className="text-lg font-bold text-red-400">12.4%</div>
-                    </div>
-                 </div>
+                     {/* The Prediction Detail - REAL REASONING */}
+                     <div className="bg-blue-900/10 border border-blue-500/20 p-5 rounded-xl">
+                        <h3 className="text-sm font-bold text-blue-400 uppercase mb-3 flex items-center gap-2">
+                           <BrainCircuit size={16} /> AI Analysis
+                        </h3>
+                        <p className="text-slate-300 text-sm leading-relaxed">
+                           {predictions[selectedCase.id].reasoning || "Analysis in progress..."}
+                        </p>
+                     </div>
 
-                 {/* The Prediction Detail */}
-                 <div className="bg-blue-900/10 border border-blue-500/20 p-5 rounded-xl">
-                    <h3 className="text-sm font-bold text-blue-400 uppercase mb-3 flex items-center gap-2">
-                       <BrainCircuit size={16} /> Model Recommendation
-                    </h3>
-                    <p className="text-slate-300 text-sm leading-relaxed">
-                       Based on semantic analysis of the docket text and historical rulings by this court,
-                       the model predicts a higher probability of a <strong className="text-white">Defendant Victory</strong>.
-                       Key factors include recent precedent in similar regulatory cases.
-                    </p>
-                 </div>
-
-                 {/* Full Odds */}
-                 <div>
-                    <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Implied Probability</h3>
-                    {predictions[selectedCase.id] ? (
-                       <div className="space-y-3">
-                          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
-                             <span className="text-sm font-medium text-slate-200">Plaintiff Win</span>
-                             <span className="font-mono font-bold text-green-400">{(predictions[selectedCase.id].probabilities.PLAINTIFF_WIN * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
-                             <span className="text-sm font-medium text-slate-200">Defendant Win</span>
-                             <span className="font-mono font-bold text-red-400">{(predictions[selectedCase.id].probabilities.DEFENDANT_WIN * 100).toFixed(1)}%</span>
-                          </div>
+                     {/* Key Factors */}
+                     {predictions[selectedCase.id].key_factors && predictions[selectedCase.id].key_factors!.length > 0 && (
+                       <div className="bg-white/5 p-5 rounded-xl border border-white/5">
+                          <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Key Factors</h3>
+                          <ul className="space-y-2">
+                            {predictions[selectedCase.id].key_factors!.map((factor, idx) => (
+                              <li key={idx} className="text-sm text-slate-300 flex items-start gap-2">
+                                <span className="text-blue-400 mt-1">•</span>
+                                <span>{factor}</span>
+                              </li>
+                            ))}
+                          </ul>
                        </div>
-                    ) : (
-                       <div className="text-center py-4 text-slate-500 font-mono text-xs">DATA_UNAVAILABLE</div>
-                    )}
-                 </div>
+                     )}
+                   </>
+                 ) : (
+                   <div className="text-center py-12">
+                     <p className="text-slate-400 mb-4">Click "Run Analysis" to generate AI prediction</p>
+                     <button
+                       onClick={() => runAiAnalysis(selectedCase)}
+                       className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-6 rounded-xl transition-all"
+                     >
+                       Run Analysis
+                     </button>
+                   </div>
+                 )}
+
+                 {/* Full Odds - Only show if prediction exists */}
+                 {predictions[selectedCase.id] && (
+                   <div>
+                      <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Predicted Probabilities</h3>
+                      <div className="space-y-3">
+                         <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
+                            <span className="text-sm font-medium text-slate-200">Plaintiff Win</span>
+                            <span className="font-mono font-bold text-green-400">{(predictions[selectedCase.id].probabilities.PLAINTIFF_WIN * 100).toFixed(1)}%</span>
+                         </div>
+                         <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
+                            <span className="text-sm font-medium text-slate-200">Defendant Win</span>
+                            <span className="font-mono font-bold text-red-400">{(predictions[selectedCase.id].probabilities.DEFENDANT_WIN * 100).toFixed(1)}%</span>
+                         </div>
+                         {predictions[selectedCase.id].probabilities.SETTLEMENT && predictions[selectedCase.id].probabilities.SETTLEMENT! > 0.05 && (
+                           <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
+                              <span className="text-sm font-medium text-slate-200">Settlement</span>
+                              <span className="font-mono font-bold text-yellow-400">{(predictions[selectedCase.id].probabilities.SETTLEMENT! * 100).toFixed(1)}%</span>
+                           </div>
+                         )}
+                      </div>
+                   </div>
+                 )}
 
               </div>
 
-              <div className="p-6 border-t border-white/10 bg-[#151518]">
-                 <button onClick={() => alert("Initialize Trade")} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">
-                    PLACE BET NOW
+              <div className="p-6 border-t border-white/10 bg-[#151518] flex-shrink-0">
+                 <button 
+                   onClick={() => {
+                     setShowAnalysisModal(false);
+                     if (selectedCase) {
+                       requestMarket(selectedCase);
+                     }
+                   }} 
+                   className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                 >
+                    <span className="text-lg font-bold">+</span>
+                    REQUEST MARKET
                  </button>
               </div>
            </div>
