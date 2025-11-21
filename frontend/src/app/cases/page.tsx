@@ -29,6 +29,33 @@ interface CourtCase {
   // ENHANCED: Real data from CourtListener extraction
   extracted_judge?: string;
   inferred_type?: string;
+  plaintiff?: string;
+  defendant?: string;
+  summary?: string;
+}
+
+interface CaseDetails {
+  id: number;
+  caseName: string;
+  docketNumber: string;
+  court: string;
+  dateFiled: string;
+  judge: string;
+  citations: string[];
+  summary: string;
+  procedural_history: string;
+  disposition: string;
+  timeline: Array<{
+    date: string;
+    description: string;
+    entry_number: number;
+    page_count?: number;
+  }>;
+  parties: {
+    plaintiffs: string[];
+    defendants: string[];
+    attorneys: string[];
+  };
 }
 
 interface Prediction {
@@ -59,6 +86,9 @@ export default function CasesPage() {
   
   // Modal State
   const [selectedCase, setSelectedCase] = useState<CourtCase | null>(null);
+  const [caseDetails, setCaseDetails] = useState<CaseDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<any>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
@@ -118,6 +148,33 @@ export default function CasesPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Fetch Full Case Details
+  const fetchCaseDetails = async (caseId: number) => {
+    setLoadingDetails(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/cases/${caseId}/details`);
+      if (response.ok) {
+        const details = await response.json();
+        setCaseDetails(details);
+      } else {
+        console.error('Failed to fetch case details');
+        alert('Could not load full case details. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error fetching case details:', error);
+      alert('Error loading case details.');
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  // Open Case Details Modal
+  const openCaseDetails = async (caseItem: CourtCase) => {
+    setSelectedCase(caseItem);
+    setShowDetailsModal(true);
+    await fetchCaseDetails(caseItem.id);
   };
 
   // Open the Deep Dive Modal
@@ -213,7 +270,11 @@ export default function CasesPage() {
                 const dWin = prediction ? (prediction.probabilities.DEFENDANT_WIN * 100) : 50;
 
                 return (
-                  <div key={caseItem.id} className="bg-[#0A0A0C]/80 backdrop-blur-md rounded-xl border border-white/10 hover:border-blue-500/30 transition-all group relative overflow-hidden">
+                  <div 
+                    key={caseItem.id} 
+                    onClick={() => openCaseDetails(caseItem)}
+                    className="bg-[#0A0A0C]/80 backdrop-blur-md rounded-xl border border-white/10 hover:border-blue-500/30 transition-all group relative overflow-hidden cursor-pointer"
+                  >
                     <div className="p-5 flex flex-col md:flex-row items-center gap-6">
                       
                       {/* Left: Case Details */}
@@ -222,12 +283,37 @@ export default function CasesPage() {
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-white/5 border border-white/10 text-slate-400">
                                 {caseItem.court || "US FEDERAL"}
                             </span>
+                            {caseItem.inferred_type && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                                {caseItem.inferred_type}
+                              </span>
+                            )}
                             <span className="text-xs text-slate-500 font-mono">{formatDate(caseItem.dateFiled)}</span>
                          </div>
                          <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-400 transition-colors">
                             {caseItem.caseName}
                          </h3>
-                         <p className="text-xs text-slate-500 font-mono mb-3">DOCKET: {caseItem.docketNumber}</p>
+                         <div className="flex items-center gap-3 text-xs text-slate-500 font-mono mb-2">
+                           <span>DOCKET: {caseItem.docketNumber}</span>
+                           {caseItem.extracted_judge && (
+                             <>
+                               <span>•</span>
+                               <span>JUDGE: {caseItem.extracted_judge}</span>
+                             </>
+                           )}
+                         </div>
+                         {caseItem.plaintiff && caseItem.defendant && (
+                           <div className="flex items-center gap-2 text-sm text-slate-400 mb-3">
+                             <span className="font-semibold text-green-400">{caseItem.plaintiff}</span>
+                             <Scale size={14} className="text-slate-600" />
+                             <span className="font-semibold text-red-400">{caseItem.defendant}</span>
+                           </div>
+                         )}
+                         {caseItem.summary && caseItem.summary !== 'No summary available.' && (
+                           <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 mb-3">
+                             {caseItem.summary}
+                           </p>
+                         )}
                          
                          {/* Quick Odds Bar (Sportsbook Style) */}
                          {prediction && (
@@ -250,7 +336,10 @@ export default function CasesPage() {
                         
                         {/* Secondary: AI Analysis */}
                         <button 
-                           onClick={() => openAnalysis(caseItem)}
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             openAnalysis(caseItem);
+                           }}
                            className="flex-1 md:flex-none px-4 py-3 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300 font-medium text-sm flex items-center justify-center gap-2 transition-colors"
                         >
                            <BrainCircuit size={16} />
@@ -259,7 +348,10 @@ export default function CasesPage() {
 
                         {/* Primary: Trade */}
                         <button
-                           onClick={() => openTrading(caseItem)}
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             openTrading(caseItem);
+                           }}
                            className="flex-1 md:flex-none px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]"
                         >
                            <TrendingUp size={16} />
@@ -275,6 +367,196 @@ export default function CasesPage() {
           </main>
         </div>
       </div>
+
+      {/* --- CASE DETAILS MODAL --- */}
+      {showDetailsModal && selectedCase && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowDetailsModal(false)}></div>
+          <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col">
+            
+            {/* Header */}
+            <div className="p-6 border-b border-white/10 bg-[#151518] flex-shrink-0">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">{selectedCase.caseName}</h2>
+                  <div className="flex items-center gap-3 text-sm text-slate-400 font-mono">
+                    <span>DOCKET: {selectedCase.docketNumber}</span>
+                    {selectedCase.extracted_judge && (
+                      <>
+                        <span>•</span>
+                        <span>JUDGE: {selectedCase.extracted_judge}</span>
+                      </>
+                    )}
+                    {selectedCase.inferred_type && (
+                      <>
+                        <span>•</span>
+                        <span className="text-blue-400">{selectedCase.inferred_type.toUpperCase()}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => setShowDetailsModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              {loadingDetails ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="animate-spin text-blue-500" size={32} />
+                  <span className="ml-3 text-slate-400 font-mono">LOADING_CASE_DETAILS...</span>
+                </div>
+              ) : caseDetails ? (
+                <>
+                  {/* Parties */}
+                  {(caseDetails.parties.plaintiffs.length > 0 || caseDetails.parties.defendants.length > 0) && (
+                    <div className="bg-white/5 p-5 rounded-xl border border-white/5">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                        <Scale size={16} /> Parties
+                      </h3>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {caseDetails.parties.plaintiffs.length > 0 && (
+                          <div>
+                            <div className="text-xs text-green-400 font-bold uppercase mb-2">Plaintiffs/Petitioners</div>
+                            <ul className="space-y-1">
+                              {caseDetails.parties.plaintiffs.map((plaintiff, idx) => (
+                                <li key={idx} className="text-sm text-slate-300">{plaintiff}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {caseDetails.parties.defendants.length > 0 && (
+                          <div>
+                            <div className="text-xs text-red-400 font-bold uppercase mb-2">Defendants/Respondents</div>
+                            <ul className="space-y-1">
+                              {caseDetails.parties.defendants.map((defendant, idx) => (
+                                <li key={idx} className="text-sm text-slate-300">{defendant}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                      {caseDetails.parties.attorneys.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                          <div className="text-xs text-blue-400 font-bold uppercase mb-2">Attorneys</div>
+                          <div className="text-sm text-slate-400">{caseDetails.parties.attorneys.join(', ')}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Case Summary */}
+                  {caseDetails.summary && caseDetails.summary !== 'No summary available.' && (
+                    <div className="bg-blue-900/10 border border-blue-500/20 p-5 rounded-xl">
+                      <h3 className="text-sm font-bold text-blue-400 uppercase mb-3">Case Summary</h3>
+                      <p className="text-slate-300 text-sm leading-relaxed">{caseDetails.summary}</p>
+                    </div>
+                  )}
+
+                  {/* Procedural History */}
+                  {caseDetails.procedural_history && (
+                    <div className="bg-white/5 p-5 rounded-xl border border-white/5">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Procedural History</h3>
+                      <p className="text-slate-300 text-sm leading-relaxed">{caseDetails.procedural_history}</p>
+                    </div>
+                  )}
+
+                  {/* Timeline of Events */}
+                  {caseDetails.timeline && caseDetails.timeline.length > 0 && (
+                    <div className="bg-white/5 p-5 rounded-xl border border-white/5">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                        <Calendar size={16} /> Case Timeline ({caseDetails.timeline.length} entries)
+                      </h3>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {caseDetails.timeline.map((entry, idx) => (
+                          <div key={idx} className="flex gap-4 border-l-2 border-blue-500/30 pl-4 py-2">
+                            <div className="flex-shrink-0">
+                              <div className="text-xs text-slate-500 font-mono">{entry.date || 'N/A'}</div>
+                              {entry.entry_number && (
+                                <div className="text-[10px] text-slate-600 font-mono">#{entry.entry_number}</div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-slate-300">{entry.description}</p>
+                              {entry.page_count && (
+                                <span className="text-xs text-slate-500 font-mono">{entry.page_count} pages</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Disposition */}
+                  {caseDetails.disposition && (
+                    <div className="bg-green-900/10 border border-green-500/20 p-5 rounded-xl">
+                      <h3 className="text-sm font-bold text-green-400 uppercase mb-3">Disposition</h3>
+                      <p className="text-slate-300 text-sm leading-relaxed">{caseDetails.disposition}</p>
+                    </div>
+                  )}
+
+                  {/* Citations */}
+                  {caseDetails.citations && caseDetails.citations.length > 0 && (
+                    <div className="bg-white/5 p-5 rounded-xl border border-white/5">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Citations</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {caseDetails.citations.map((citation: any, idx: number) => {
+                          // Handle both string citations and object citations
+                          const citationText = typeof citation === 'string' 
+                            ? citation 
+                            : `${citation.volume || ''} ${citation.reporter || ''} ${citation.page || ''}`.trim() || 'Citation';
+                          
+                          return (
+                            <span key={idx} className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-xs font-mono text-blue-400">
+                              {citationText}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12 text-slate-500 font-mono">
+                  NO_DETAILS_AVAILABLE
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-6 border-t border-white/10 bg-[#151518] flex-shrink-0">
+              <div className="flex gap-3">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDetailsModal(false);
+                    openAnalysis(selectedCase);
+                  }}
+                  className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <BrainCircuit size={16} />
+                  AI ANALYSIS
+                </button>
+                <button 
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setShowDetailsModal(false);
+                    await openTrading(selectedCase);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <TrendingUp size={16} />
+                  TRADE ON THIS CASE
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- AI DEEP DIVE MODAL --- */}
       {showAnalysisModal && selectedCase && (

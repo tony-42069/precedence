@@ -130,6 +130,10 @@ def enrich_case_data(case: Dict[str, Any]) -> Dict[str, Any]:
     # Inject new fields into the dict
     case['extracted_judge'] = judge_name
     case['inferred_type'] = case_type
+    
+    # CRITICAL: Map cluster_id to id for frontend compatibility
+    if 'cluster_id' in case and 'id' not in case:
+        case['id'] = case['cluster_id']
 
     return case
 
@@ -138,19 +142,86 @@ def enrich_case_data(case: Dict[str, Any]) -> Dict[str, Any]:
 async def get_cases(
     query: Optional[str] = Query(None, description="Search query for cases"),
     court: str = Query("scotus", description="Court identifier (scotus, ca1, etc.)"),
+    active_only: bool = Query(True, description="Filter to active/pending cases only"),
     limit: int = Query(20, description="Maximum number of results", ge=1, le=100)
 ):
-    """Search for legal cases using CourtListener API."""
+    """
+    Search for legal cases using CourtListener API.
+    
+    Enhanced with:
+    - Active case filtering
+    - Rich case details (plaintiff, defendant, judge, timeline)
+    - Case summaries
+    """
     try:
-        logger.info(f"Searching cases: query='{query}', court='{court}', limit={limit}")
+        logger.info(f"Searching cases: query='{query}', court='{court}', active_only={active_only}, limit={limit}")
 
-        results = search_cases(query=query, court=court, limit=limit)
+        # Fetch cases from CourtListener
+        results = search_cases(query=query, court=court, limit=limit * 2)  # Fetch more to filter
         raw_cases = results.get('results', [])
         
-        # ENRICH DATA
-        enriched_cases = [enrich_case_data(c) for c in raw_cases]
+        # ENRICH DATA with detailed information
+        enriched_cases = []
+        for case in raw_cases:
+            enriched = enrich_case_data(case)
+            
+            # Add plaintiff/defendant extraction
+            case_name = enriched.get('caseName', '')
+            if ' v. ' in case_name or ' v ' in case_name:
+                parts = re.split(r'\sv\.?\s', case_name, maxsplit=1)
+                enriched['plaintiff'] = parts[0].strip() if len(parts) > 0 else ''
+                enriched['defendant'] = parts[1].strip() if len(parts) > 1 else ''
+            else:
+                enriched['plaintiff'] = ''
+                enriched['defendant'] = ''
+            
+            # Add case summary - try multiple sources
+            summary = case.get('snippet', '')
+            
+            # If snippet is empty, try to extract from opinion text
+            if not summary or summary.strip() == '':
+                opinions = case.get('opinions', [])
+                if opinions and len(opinions) > 0:
+                    opinion_snippet = opinions[0].get('snippet', '')
+                    if opinion_snippet:
+                        # Clean up the opinion snippet (remove headers, formatting)
+                        cleaned = re.sub(r'\(Slip Opinion\).*?Per Curiam', '', opinion_snippet, flags=re.DOTALL)
+                        cleaned = re.sub(r'NOTICE:.*?errors\.', '', cleaned, flags=re.DOTALL)
+                        cleaned = re.sub(r'SUPREME COURT.*?_+', '', cleaned, flags=re.DOTALL)
+                        cleaned = cleaned.strip()
+                        summary = cleaned[:500] if cleaned else 'Opinion available - click for details'
+            
+            # Fallback to syllabus or procedural history
+            if not summary or summary.strip() == '':
+                summary = case.get('syllabus', '') or case.get('procedural_history', '') or 'No summary available.'
+            
+            enriched['summary'] = summary[:500]
+            
+            # Filter for active cases if requested
+            if active_only:
+                # More permissive filter - only EXCLUDE clearly terminated cases
+                status = str(case.get('status', '')).lower()
+                date_terminated = case.get('date_terminated')
+                
+                # EXCLUDE only if:
+                # - Has termination date AND status indicates closure
+                # - Status explicitly says "closed" or "terminated"
+                is_clearly_terminated = (
+                    (date_terminated and status in ['closed', 'terminated', 'disposed', 'dismissed']) or
+                    (status in ['closed', 'terminated', 'disposed', 'dismissed', 'denied', 'withdrawn'])
+                )
+                
+                # Include everything EXCEPT clearly terminated cases
+                if not is_clearly_terminated:
+                    enriched_cases.append(enriched)
+            else:
+                enriched_cases.append(enriched)
+            
+            # Stop when we have enough
+            if len(enriched_cases) >= limit:
+                break
         
-        logger.info(f"Found {len(enriched_cases)} cases")
+        logger.info(f"Found {len(enriched_cases)} {'active ' if active_only else ''}cases")
         return enriched_cases
 
     except Exception as e:
@@ -200,23 +271,37 @@ async def get_cases_for_prediction_markets(
         logger.error(f"Error getting high-profile cases: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get high-profile cases: {str(e)}")
 
-@router.get("/{case_id}")
-async def get_case(case_id: int):
-    """Get detailed information about a specific case."""
+@router.get("/{case_id}/details")
+async def get_case_details(case_id: int):
+    """
+    Get comprehensive case details including timeline and parties.
+    
+    Returns rich case information:
+    - Case metadata (name, docket, court, judge)
+    - Timeline of events (filings, motions, hearings)
+    - Parties involved (plaintiffs, defendants, attorneys)
+    - Case summary and disposition
+    """
     try:
-        logger.info(f"Getting case details: case_id={case_id}")
-        case_details = get_cluster_details(case_id)
-
-        if not case_details:
-            raise HTTPException(status_code=404, detail="Case not found")
-
-        # Enrich single case
-        return enrich_case_data(case_details)
-
+        logger.info(f"Getting enriched case details: case_id={case_id}")
+        
+        from backend.court_listener_api import CourtListenerAPI
+        
+        # Create async client instance
+        cl_client = CourtListenerAPI()
+        
+        # Call the async method properly
+        enriched_details = await cl_client.get_enriched_case_details(str(case_id))
+        
+        if not enriched_details or 'error' in enriched_details:
+            raise HTTPException(status_code=404, detail="Case not found or details unavailable")
+        
+        return enriched_details
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting case details: {e}")
+        logger.error(f"Error getting enriched case details: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get case details: {str(e)}")
 
 @router.post("/semantic-search")

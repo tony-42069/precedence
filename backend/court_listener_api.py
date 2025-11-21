@@ -42,9 +42,9 @@ class CourtListenerAPI:
         Args:
             api_token: API token for Court Listener. If None, will attempt to load from environment.
         """
-        self.api_token = api_token or os.getenv("COURT_LISTENER_API_TOKEN")
+        self.api_token = api_token or os.getenv("COURT_LISTENER_API_KEY")
         if not self.api_token:
-            raise ValueError("API token is required. Set COURT_LISTENER_API_TOKEN environment variable or pass as parameter.")
+            raise ValueError("API token is required. Set COURT_LISTENER_API_KEY environment variable or pass as parameter.")
         
         self.client = httpx.AsyncClient(
             headers={
@@ -457,6 +457,161 @@ class CourtListenerAPI:
                 
             return output_path
 
+    async def get_docket_entries(self, docket_id: str, limit: int = 20) -> List[Dict]:
+        """
+        Get docket entries (timeline of events) for a case.
+        
+        Returns filings, motions, hearings, orders, etc.
+        
+        Args:
+            docket_id: CourtListener docket ID
+            limit: Maximum entries to return
+            
+        Returns:
+            List of docket entry dictionaries with timeline events
+        """
+        try:
+            logger.info(f"Getting docket entries for docket {docket_id}")
+            
+            # Fetch docket details
+            docket = await self._make_request("GET", f"/dockets/{docket_id}/")
+            
+            # Extract docket entries
+            entries = docket.get('docket_entries', [])
+            
+            # Sort by date (most recent first)
+            sorted_entries = sorted(
+                entries, 
+                key=lambda x: x.get('date_filed', ''), 
+                reverse=True
+            )
+            
+            # Format and limit
+            timeline = []
+            for entry in sorted_entries[:limit]:
+                timeline.append({
+                    'date': entry.get('date_filed'),
+                    'description': entry.get('description', 'Entry'),
+                    'entry_number': entry.get('entry_number'),
+                    'page_count': entry.get('page_count')
+                })
+            
+            logger.info(f"Retrieved {len(timeline)} docket entries for docket {docket_id}")
+            return timeline
+            
+        except Exception as e:
+            logger.error(f"Failed to get docket entries: {e}")
+            return []
+    
+    async def get_case_parties(self, docket_id: str) -> Dict[str, List[str]]:
+        """
+        Get parties involved in a case (plaintiffs, defendants, attorneys).
+        
+        Args:
+            docket_id: CourtListener docket ID
+            
+        Returns:
+            Dict with 'plaintiffs', 'defendants', 'attorneys' lists
+        """
+        try:
+            logger.info(f"Getting parties for docket {docket_id}")
+            
+            docket = await self._make_request("GET", f"/dockets/{docket_id}/")
+            
+            parties = {
+                'plaintiffs': [],
+                'defendants': [],
+                'attorneys': []
+            }
+            
+            # Extract party information
+            for party in docket.get('parties', []):
+                party_type = party.get('party_type', {})
+                if isinstance(party_type, dict):
+                    party_type_name = party_type.get('name', '').lower()
+                else:
+                    party_type_name = str(party_type).lower()
+                    
+                party_name = party.get('name', '')
+                
+                if 'plaintiff' in party_type_name or 'petitioner' in party_type_name:
+                    parties['plaintiffs'].append(party_name)
+                elif 'defendant' in party_type_name or 'respondent' in party_type_name:
+                    parties['defendants'].append(party_name)
+                
+                # Extract attorneys
+                for attorney in party.get('attorneys', []):
+                    attorney_name = attorney.get('name', '')
+                    if attorney_name and attorney_name not in parties['attorneys']:
+                        parties['attorneys'].append(attorney_name)
+            
+            logger.info(f"Retrieved parties: {len(parties['plaintiffs'])} plaintiffs, {len(parties['defendants'])} defendants")
+            return parties
+            
+        except Exception as e:
+            logger.error(f"Failed to get case parties: {e}")
+            return {'plaintiffs': [], 'defendants': [], 'attorneys': []}
+    
+    async def get_enriched_case_details(self, cluster_id: str) -> Dict:
+        """
+        Get comprehensive case details including timeline, parties, and metadata.
+        
+        This is the MAIN method to use for rich case information.
+        
+        Args:
+            cluster_id: CourtListener cluster ID
+            
+        Returns:
+            Dict with comprehensive case information
+        """
+        try:
+            logger.info(f"Getting enriched details for cluster {cluster_id}")
+            
+            # Get base cluster/case data
+            cluster = await self._make_request("GET", f"/clusters/{cluster_id}/")
+            
+            # Get docket ID from cluster
+            docket_id = cluster.get('docket')
+            
+            enriched = {
+                'id': cluster_id,
+                'caseName': cluster.get('case_name', ''),
+                'docketNumber': cluster.get('docket_number', ''),
+                'court': cluster.get('court', ''),
+                'dateFiled': cluster.get('date_filed', ''),
+                'judge': cluster.get('judges', ''),
+                'citations': cluster.get('citations', []),
+                'summary': cluster.get('syllabus', '') or cluster.get('headnotes', ''),
+                'procedural_history': cluster.get('procedural_history', ''),
+                'disposition': cluster.get('disposition', ''),
+                'timeline': [],
+                'parties': {'plaintiffs': [], 'defendants': [], 'attorneys': []}
+            }
+            
+            # Fetch additional details if docket ID available
+            if docket_id:
+                # Extract just the numeric ID if it's a URL
+                if isinstance(docket_id, str) and '/' in docket_id:
+                    docket_id = docket_id.rstrip('/').split('/')[-1]
+                
+                # Get timeline
+                enriched['timeline'] = await self.get_docket_entries(str(docket_id), limit=10)
+                
+                # Get parties
+                enriched['parties'] = await self.get_case_parties(str(docket_id))
+            
+            logger.info(f"Successfully enriched case {cluster_id}")
+            return enriched
+            
+        except Exception as e:
+            logger.error(f"Failed to enrich case details: {e}")
+            # Return basic structure even on failure
+            return {
+                'id': cluster_id,
+                'error': str(e),
+                'timeline': [],
+                'parties': {'plaintiffs': [], 'defendants': [], 'attorneys': []}
+            }
 
 # Example usage
 async def main():
