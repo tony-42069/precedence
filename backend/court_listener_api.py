@@ -10,6 +10,7 @@ Litigation Simulator project.
 import os
 import json
 import time
+import asyncio
 import httpx
 import logging
 import hashlib

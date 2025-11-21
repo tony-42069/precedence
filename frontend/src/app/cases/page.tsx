@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { TradingModal } from '../../components/TradingModal';
 import { apiService } from '../../services/api';
-import { 
-  Search, 
-  Gavel, 
-  Loader2, 
+import {
+  Search,
+  Gavel,
+  Loader2,
   Terminal,
   Calendar,
   BrainCircuit,
@@ -77,13 +77,14 @@ interface Prediction {
 
 export default function CasesPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCourt, setSelectedCourt] = useState('scotus');
   const [searchResults, setSearchResults] = useState<CourtCase[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
   // Prediction State
   const [predictions, setPredictions] = useState<Record<number, Prediction>>({});
   const [analyzing, setAnalyzing] = useState<Record<number, boolean>>({});
-  
+
   // Modal State
   const [selectedCase, setSelectedCase] = useState<CourtCase | null>(null);
   const [caseDetails, setCaseDetails] = useState<CaseDetails | null>(null);
@@ -92,6 +93,8 @@ export default function CasesPage() {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<any>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestedCase, setRequestedCase] = useState<CourtCase | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -102,9 +105,9 @@ export default function CasesPage() {
 
     setLoading(true);
     setPredictions({});
-    
+
     try {
-      const response = await fetch(`http://localhost:8000/api/cases/?query=${encodeURIComponent(searchQuery)}&court=scotus&limit=10`);
+      const response = await fetch(`http://localhost:8000/api/cases/?query=${encodeURIComponent(searchQuery)}&court=${selectedCourt}&limit=10`);
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
@@ -203,11 +206,31 @@ export default function CasesPage() {
     }
   };
 
+  // Request Market Handler
+  const requestMarket = (caseItem: CourtCase) => {
+    setRequestedCase(caseItem);
+    setShowRequestModal(true);
+  };
+
+  // Submit Market Request
+  const submitMarketRequest = () => {
+    if (!requestedCase) return;
+
+    // Log the request for now
+    console.log('Market request submitted for case:', requestedCase.caseName, requestedCase.docketNumber);
+
+    // Send to Polymarket Discord or log (placeholder)
+    alert(`Market request logged for "${requestedCase.caseName}". This would be sent to Polymarket Discord for review.`);
+
+    setShowRequestModal(false);
+    setRequestedCase(null);
+  };
+
   return (
     <div className="min-h-screen bg-[#030304] text-slate-200 font-sans selection:bg-blue-500/30 relative overflow-hidden">
-      
+
       <div className="cyber-grid-bg fixed inset-0 z-0" />
-      
+
       <div className="relative z-10 flex min-h-screen">
         <div className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
            <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
@@ -216,7 +239,7 @@ export default function CasesPage() {
         <MobileMenuButton onClick={() => setSidebarOpen(!sidebarOpen)} isOpen={sidebarOpen} />
 
         <div className="flex-1 w-full min-w-0 lg:ml-0">
-          
+
           {/* Header */}
           <nav className="sticky top-0 z-40 border-b border-white/5 bg-[#030304]/80 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
@@ -230,32 +253,59 @@ export default function CasesPage() {
           </nav>
 
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            
+
             <div className="mb-8 text-center">
               <h1 className="text-3xl font-bold text-white mb-2">Find Your Edge</h1>
               <p className="text-slate-400">Search active cases. Trade on the outcome.</p>
             </div>
 
             {/* Search Bar */}
-            <div className="bg-[#0A0A0C]/60 backdrop-blur-md rounded-xl border border-white/10 p-4 mb-10 shadow-2xl max-w-3xl mx-auto">
-              <form onSubmit={handleSearch} className="flex gap-3">
-                <div className="relative flex-1 group">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search keywords (e.g. 'crypto', 'immunity', 'tiktok')..."
-                        className="w-full px-4 py-3 bg-[#030304] border border-white/10 rounded-lg text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
-                        disabled={loading}
-                    />
+            <div className="bg-[#0A0A0C]/60 backdrop-blur-md rounded-xl border border-white/10 p-4 mb-10 shadow-2xl max-w-4xl mx-auto">
+              <form onSubmit={handleSearch} className="space-y-4">
+                {/* Court Selector */}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Select Court:</span>
+                  <select
+                    value={selectedCourt}
+                    onChange={(e) => setSelectedCourt(e.target.value)}
+                    className="bg-[#030304] border border-white/10 rounded-lg px-3 py-1 text-white font-mono text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                    <option value="scotus">Supreme Court</option>
+                    <option value="ca1">1st Circuit (MA)</option>
+                    <option value="ca2">2nd Circuit (NY)</option>
+                    <option value="ca3">3rd Circuit (PA)</option>
+                    <option value="ca4">4th Circuit (VA)</option>
+                    <option value="ca5">5th Circuit (TX)</option>
+                    <option value="ca6">6th Circuit (OH)</option>
+                    <option value="ca7">7th Circuit (IL)</option>
+                    <option value="ca8">8th Circuit (MO)</option>
+                    <option value="ca9">9th Circuit (CA)</option>
+                    <option value="ca10">10th Circuit (CO)</option>
+                    <option value="ca11">11th Circuit (FL)</option>
+                    <option value="cadc">DC Circuit</option>
+                    <option value="cafc">Federal Circuit</option>
+                  </select>
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading || !searchQuery.trim()}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-all"
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : 'Search'}
-                </button>
+
+                <div className="flex gap-3">
+                  <div className="relative flex-1 group">
+                      <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search keywords (e.g. 'crypto', 'immunity', 'tiktok')..."
+                          className="w-full px-4 py-3 bg-[#030304] border border-white/10 rounded-lg text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
+                          disabled={loading}
+                      />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading || !searchQuery.trim()}
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-all"
+                  >
+                    {loading ? <Loader2 className="animate-spin" /> : 'Search'}
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -264,19 +314,19 @@ export default function CasesPage() {
               {searchResults.map((caseItem) => {
                 const prediction = predictions[caseItem.id];
                 const isAnalyzing = analyzing[caseItem.id];
-                
+
                 // Default 50/50 if loading
                 const pWin = prediction ? (prediction.probabilities.PLAINTIFF_WIN * 100) : 50;
                 const dWin = prediction ? (prediction.probabilities.DEFENDANT_WIN * 100) : 50;
 
                 return (
-                  <div 
-                    key={caseItem.id} 
+                  <div
+                    key={caseItem.id}
                     onClick={() => openCaseDetails(caseItem)}
                     className="bg-[#0A0A0C]/80 backdrop-blur-md rounded-xl border border-white/10 hover:border-blue-500/30 transition-all group relative overflow-hidden cursor-pointer"
                   >
                     <div className="p-5 flex flex-col md:flex-row items-center gap-6">
-                      
+
                       {/* Left: Case Details */}
                       <div className="flex-1 w-full">
                          <div className="flex items-center gap-3 mb-2">
@@ -302,7 +352,9 @@ export default function CasesPage() {
                              </>
                            )}
                          </div>
-                         {caseItem.plaintiff && caseItem.defendant && (
+                         {/* Only show plaintiff/defendant if the caseName doesn't already show them clearly */}
+                         {caseItem.plaintiff && caseItem.defendant &&
+                          !caseItem.caseName?.includes(' v. ') && !caseItem.caseName?.includes(' v ') && (
                            <div className="flex items-center gap-2 text-sm text-slate-400 mb-3">
                              <span className="font-semibold text-green-400">{caseItem.plaintiff}</span>
                              <Scale size={14} className="text-slate-600" />
@@ -314,7 +366,7 @@ export default function CasesPage() {
                              {caseItem.summary}
                            </p>
                          )}
-                         
+
                          {/* Quick Odds Bar (Sportsbook Style) */}
                          {prediction && (
                            <div className="w-full max-w-md mt-2">
@@ -333,9 +385,9 @@ export default function CasesPage() {
 
                       {/* Right: Actions */}
                       <div className="flex flex-row gap-3 w-full md:w-auto">
-                        
+
                         {/* Secondary: AI Analysis */}
-                        <button 
+                        <button
                            onClick={(e) => {
                              e.stopPropagation();
                              openAnalysis(caseItem);
@@ -344,6 +396,18 @@ export default function CasesPage() {
                         >
                            <BrainCircuit size={16} />
                            <span className="hidden md:inline">AI Analysis</span>
+                        </button>
+
+                        {/* Request Market */}
+                        <button
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             requestMarket(caseItem);
+                           }}
+                           className="flex-1 md:flex-none px-4 py-3 rounded-lg border border-orange-500/20 hover:bg-orange-500/5 text-orange-300 font-medium text-sm flex items-center justify-center gap-2 transition-colors"
+                        >
+                           <span className="text-lg font-bold">+</span>
+                           <span className="hidden sm:inline">Request Market</span>
                         </button>
 
                         {/* Primary: Trade */}
@@ -373,7 +437,7 @@ export default function CasesPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowDetailsModal(false)}></div>
           <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden flex flex-col">
-            
+
             {/* Header */}
             <div className="p-6 border-b border-white/10 bg-[#151518] flex-shrink-0">
               <div className="flex justify-between items-start">
@@ -403,7 +467,7 @@ export default function CasesPage() {
 
             {/* Content - Scrollable */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
+
               {loadingDetails ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="animate-spin text-blue-500" size={32} />
@@ -506,10 +570,10 @@ export default function CasesPage() {
                       <div className="flex flex-wrap gap-2">
                         {caseDetails.citations.map((citation: any, idx: number) => {
                           // Handle both string citations and object citations
-                          const citationText = typeof citation === 'string' 
-                            ? citation 
+                          const citationText = typeof citation === 'string'
+                            ? citation
                             : `${citation.volume || ''} ${citation.reporter || ''} ${citation.page || ''}`.trim() || 'Citation';
-                          
+
                           return (
                             <span key={idx} className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-xs font-mono text-blue-400">
                               {citationText}
@@ -530,7 +594,7 @@ export default function CasesPage() {
             {/* Footer Actions */}
             <div className="p-6 border-t border-white/10 bg-[#151518] flex-shrink-0">
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowDetailsModal(false);
@@ -541,7 +605,7 @@ export default function CasesPage() {
                   <BrainCircuit size={16} />
                   AI ANALYSIS
                 </button>
-                <button 
+                <button
                   onClick={async (e) => {
                     e.stopPropagation();
                     setShowDetailsModal(false);
@@ -563,7 +627,7 @@ export default function CasesPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowAnalysisModal(false)}></div>
            <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
-              
+
               <div className="p-6 border-b border-white/10 flex justify-between items-start bg-[#151518]">
                  <div>
                     <h2 className="text-xl font-bold text-white">{selectedCase.caseName}</h2>
@@ -577,7 +641,7 @@ export default function CasesPage() {
               </div>
 
               <div className="p-6 space-y-6">
-                 
+
                  {/* Judge Stats Card */}
                  <div className="grid grid-cols-2 gap-4">
                     <div className="bg-white/5 p-4 rounded-xl border border-white/5">
@@ -596,7 +660,7 @@ export default function CasesPage() {
                        <BrainCircuit size={16} /> Model Recommendation
                     </h3>
                     <p className="text-slate-300 text-sm leading-relaxed">
-                       Based on semantic analysis of the docket text and historical rulings by this court, 
+                       Based on semantic analysis of the docket text and historical rulings by this court,
                        the model predicts a higher probability of a <strong className="text-white">Defendant Victory</strong>.
                        Key factors include recent precedent in similar regulatory cases.
                     </p>
@@ -622,7 +686,7 @@ export default function CasesPage() {
                  </div>
 
               </div>
-              
+
               <div className="p-6 border-t border-white/10 bg-[#151518]">
                  <button onClick={() => alert("Initialize Trade")} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all">
                     PLACE BET NOW
@@ -641,6 +705,71 @@ export default function CasesPage() {
         />
       )}
 
+            {/* --- REQUEST MARKET MODAL --- */}
+      {showRequestModal && requestedCase && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowRequestModal(false)}></div>
+          <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+
+            {/* Header */}
+            <div className="p-6 border-b border-white/10 bg-[#151518]">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold text-white">Request Market Creation</h2>
+                <button onClick={() => setShowRequestModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-xl">
+                <p className="text-sm text-orange-300 mb-3">
+                  Request a new prediction market for this case. Our team will review and create the market if it meets trading criteria.
+                </p>
+                <div className="text-xs text-slate-400 space-y-1">
+                  <p>📝 Will be sent to Polymarket Discord for review</p>
+                  <p>⏱️ Usually 1-3 business days for approval</p>
+                  <p>📊 Requires sufficient trading volume potential</p>
+                </div>
+              </div>
+
+              <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                <h3 className="text-sm font-semibold text-slate-300 mb-2">Case Details</h3>
+                <p className="text-sm text-slate-400 mb-1">{requestedCase.caseName}</p>
+                <p className="text-xs text-slate-500">Docket: {requestedCase.docketNumber}</p>
+                <p className="text-xs text-slate-500">Court: {requestedCase.court}</p>
+              </div>
+
+              <div className="bg-blue-500/5 border border-blue-500/20 p-3 rounded-lg">
+                <p className="text-xs text-blue-300">
+                  💡 Market requests help expand our coverage. Thank you for contributing to the platform!
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-white/10 bg-[#151518]">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowRequestModal(false)}
+                  className="flex-1 bg-white/10 hover:bg-white/20 text-slate-300 font-medium py-3 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitMarketRequest}
+                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(251,146,60,0.3)]"
+                >
+                  Submit Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
