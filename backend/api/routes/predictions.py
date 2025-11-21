@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
 
 from ...ml.enhanced_predictor import get_enhanced_predictor
+from ..services.llm_analyzer import get_llm_analyzer
 
 # Configure logging
 logger = logging.getLogger("api.predictions")
@@ -211,3 +212,73 @@ async def get_ai_insights(limit: int = 5):
             "count": 0,
             "error": str(e)
         }
+
+@router.post("/analyze-case-llm")
+async def analyze_case_with_llm(payload: Dict[str, Any]):
+    """
+    Analyze a case using OpenAI GPT-4 for real predictions.
+    
+    Requires:
+    - case_id: CourtListener case ID to fetch details
+    
+    Returns:
+    - Real AI analysis with reasoning and probabilities
+    """
+    try:
+        case_id = payload.get("case_id")
+        if not case_id:
+            raise HTTPException(status_code=400, detail="case_id is required")
+        
+        logger.info(f"🤖 Starting LLM analysis for case {case_id}")
+        
+        # Import CourtListener API
+        from ...court_listener_api import CourtListenerAPI
+        
+        # Fetch case details from CourtListener
+        async with CourtListenerAPI() as cl_client:
+            case_details = await cl_client.get_enriched_case_details(str(case_id))
+        
+        if not case_details or 'error' in case_details:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        # Extract relevant info
+        case_name = case_details.get('caseName', 'Unknown Case')
+        summary = case_details.get('summary', '')
+        judge = case_details.get('judge', 'Unknown Judge')
+        court = case_details.get('court', 'Federal Court')
+        docket_number = case_details.get('docketNumber', '')
+        procedural_history = case_details.get('procedural_history', '')
+        parties = case_details.get('parties', {})
+        
+        # Determine case type from case name/summary
+        case_type = "civil"
+        text_lower = (case_name + " " + summary).lower()
+        if any(term in text_lower for term in ['criminal', 'murder', 'assault']):
+            case_type = "criminal"
+        elif any(term in text_lower for term in ['constitution', 'amendment', 'rights']):
+            case_type = "constitutional"
+        elif any(term in text_lower for term in ['patent', 'trademark', 'copyright']):
+            case_type = "intellectual property"
+        
+        # Analyze with LLM
+        analyzer = get_llm_analyzer()
+        analysis = await analyzer.analyze_case(
+            case_name=case_name,
+            case_facts=summary,
+            judge_name=judge,
+            court=court,
+            case_type=case_type,
+            docket_number=docket_number,
+            procedural_history=procedural_history,
+            parties=parties
+        )
+        
+        logger.info(f"✅ LLM analysis complete for {case_name}: {analysis['predicted_outcome']}")
+        
+        return analysis
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ LLM analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
