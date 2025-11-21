@@ -270,6 +270,7 @@ export default function CasesPage() {
                     onChange={(e) => setSelectedCourt(e.target.value)}
                     className="bg-[#030304] border border-white/10 rounded-lg px-3 py-1 text-white font-mono text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   >
+                    <option value="all">All Courts</option>
                     <option value="scotus">Supreme Court</option>
                     <option value="ca1">1st Circuit (MA)</option>
                     <option value="ca2">2nd Circuit (NY)</option>

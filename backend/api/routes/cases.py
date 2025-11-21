@@ -186,23 +186,38 @@ def enrich_case_data(case: Dict[str, Any]) -> Dict[str, Any]:
 @router.get("/", response_model=List[Dict[str, Any]])
 async def get_cases(
     query: Optional[str] = Query(None, description="Search query for cases"),
-    court: str = Query("scotus", description="Court identifier"),
+    court: str = Query("scotus", description="Court identifier - 'all' searches all federal courts"),
     limit: int = Query(20, description="Maximum number of results", ge=1, le=100)
 ):
     """
     Search for legal cases using CourtListener API.
-
-    PERMANENT FIX: Uses sync client (working) with deduplication.
+    
+    When court='all', searches across all federal courts (SCOTUS + circuits).
     """
     try:
         logger.info(f"Searching cases: query='{query}', court='{court}', limit={limit}")
 
         # Import the WORKING sync client
         from backend.integrations.court_listener import search_cases
-
-        # Use the sync client
-        results = search_cases(query=query, court=court, limit=limit * 2)
-        raw_cases = results.get('results', [])
+        
+        # Define federal courts
+        federal_courts = ['scotus', 'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8', 'ca9', 'ca10', 'ca11', 'cadc', 'cafc']
+        
+        raw_cases = []
+        
+        if court == "all":
+            # Search multiple federal courts and combine results
+            for fed_court in federal_courts:
+                try:
+                    results = search_cases(query=query, court=fed_court, limit=10)
+                    raw_cases.extend(results.get('results', []))
+                except Exception as e:
+                    logger.warning(f"Failed to search {fed_court}: {e}")
+                    continue
+        else:
+            # Search specific court
+            results = search_cases(query=query, court=court, limit=limit * 2)
+            raw_cases = results.get('results', [])
 
         logger.info(f"Raw API returned {len(raw_cases)} cases")
 
@@ -243,12 +258,15 @@ async def get_cases(
             enriched['summary'] = case.get('snippet', 'No summary available.')[:500]
 
             unique_cases.append(enriched)
-
+            
             # Stop when we have enough
             if len(unique_cases) >= limit:
                 break
-
-        logger.info(f"Returning {len(unique_cases)} unique cases")
+        
+        # SORT BY DATE - Most recent first (after collecting all cases)
+        unique_cases.sort(key=lambda x: x.get('dateFiled', ''), reverse=True)
+        
+        logger.info(f"Returning {len(unique_cases)} unique cases (sorted by date)")
         return unique_cases
 
     except Exception as e:
