@@ -555,7 +555,7 @@ class CourtListenerAPI:
     
     async def get_enriched_case_details(self, cluster_id: str) -> Dict:
         """
-        Get comprehensive case details including timeline, parties, and metadata.
+        Get comprehensive case details including timeline, parties, opinions, and metadata.
         
         This is the MAIN method to use for rich case information.
         
@@ -563,7 +563,7 @@ class CourtListenerAPI:
             cluster_id: CourtListener cluster ID
             
         Returns:
-            Dict with comprehensive case information
+            Dict with comprehensive case information including full opinion text
         """
         try:
             logger.info(f"Getting enriched details for cluster {cluster_id}")
@@ -586,8 +586,37 @@ class CourtListenerAPI:
                 'procedural_history': cluster.get('procedural_history', ''),
                 'disposition': cluster.get('disposition', ''),
                 'timeline': [],
-                'parties': {'plaintiffs': [], 'defendants': [], 'attorneys': []}
+                'parties': {'plaintiffs': [], 'defendants': [], 'attorneys': []},
+                'opinions': []  # NEW: Store full opinion texts
             }
+            
+            # NEW: Fetch opinion text from sub_opinions
+            sub_opinions = cluster.get('sub_opinions', [])
+            if sub_opinions:
+                logger.info(f"Found {len(sub_opinions)} opinions for cluster {cluster_id}")
+                for opinion_url in sub_opinions[:3]:  # Limit to first 3 opinions
+                    try:
+                        # Extract opinion ID from URL
+                        if isinstance(opinion_url, str) and '/' in opinion_url:
+                            opinion_id = opinion_url.rstrip('/').split('/')[-1]
+                        else:
+                            opinion_id = str(opinion_url)
+                        
+                        # Fetch the opinion details
+                        opinion = await self._make_request("GET", f"/opinions/{opinion_id}/")
+                        
+                        # Add opinion text and metadata
+                        enriched['opinions'].append({
+                            'author': opinion.get('author_str', 'Unknown'),
+                            'type': opinion.get('type', 'Combined Opinion'),
+                            'plain_text': opinion.get('plain_text', ''),
+                            'html': opinion.get('html', ''),
+                            'download_url': opinion.get('download_url', '')
+                        })
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch opinion {opinion_url}: {e}")
+                        continue
             
             # Fetch additional details if docket ID available
             if docket_id:
@@ -601,7 +630,7 @@ class CourtListenerAPI:
                 # Get parties
                 enriched['parties'] = await self.get_case_parties(str(docket_id))
             
-            logger.info(f"Successfully enriched case {cluster_id}")
+            logger.info(f"Successfully enriched case {cluster_id} with {len(enriched['opinions'])} opinions")
             return enriched
             
         except Exception as e:
@@ -611,7 +640,8 @@ class CourtListenerAPI:
                 'id': cluster_id,
                 'error': str(e),
                 'timeline': [],
-                'parties': {'plaintiffs': [], 'defendants': [], 'attorneys': []}
+                'parties': {'plaintiffs': [], 'defendants': [], 'attorneys': []},
+                'opinions': []
             }
 
 # Example usage

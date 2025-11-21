@@ -56,6 +56,13 @@ interface CaseDetails {
     defendants: string[];
     attorneys: string[];
   };
+  opinions: Array<{
+    author: string;
+    type: string;
+    plain_text: string;
+    html: string;
+    download_url: string;
+  }>;
 }
 
 interface Prediction {
@@ -577,6 +584,34 @@ export default function CasesPage() {
                           );
                         })}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Full Court Opinion Text - NEW! */}
+                  {caseDetails.opinions && caseDetails.opinions.length > 0 && (
+                    <div className="bg-white/5 p-5 rounded-xl border border-white/5">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                        <Gavel size={16} /> Court Opinion ({caseDetails.opinions.length})
+                      </h3>
+                      {caseDetails.opinions.map((opinion, idx) => (
+                        <div key={idx} className="mb-4 last:mb-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs text-blue-400 font-bold uppercase">Author:</span>
+                            <span className="text-xs text-slate-300">{opinion.author}</span>
+                            <span className="text-xs text-slate-600">•</span>
+                            <span className="text-xs text-slate-500">{opinion.type}</span>
+                          </div>
+                          {opinion.plain_text ? (
+                            <div className="bg-black/30 p-4 rounded-lg max-h-96 overflow-y-auto">
+                              <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+                                {opinion.plain_text.slice(0, 5000)}{opinion.plain_text.length > 5000 ? '...' : ''}
+                              </pre>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic">Opinion text not available</p>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </>
