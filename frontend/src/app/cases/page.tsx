@@ -397,7 +397,19 @@ export default function CasesPage() {
                       {/* Right: Actions */}
                       <div className="flex flex-row gap-3 w-full md:w-auto">
 
-                        {/* Secondary: AI Analysis */}
+                        {/* View Details */}
+                        <button
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             openCaseDetails(caseItem);
+                           }}
+                           className="flex-1 md:flex-none px-4 py-3 rounded-lg border border-white/10 hover:bg-white/5 text-slate-300 font-medium text-sm flex items-center justify-center gap-2 transition-colors"
+                        >
+                           <ChevronRight size={16} />
+                           <span className="hidden md:inline">View Details</span>
+                        </button>
+
+                        {/* AI Analysis */}
                         <button
                            onClick={(e) => {
                              e.stopPropagation();
@@ -637,15 +649,15 @@ export default function CasesPage() {
                   AI ANALYSIS
                 </button>
                 <button
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
                     setShowDetailsModal(false);
-                    await openTrading(selectedCase);
+                    requestMarket(selectedCase);
                   }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.3)]"
                 >
-                  <TrendingUp size={16} />
-                  TRADE ON THIS CASE
+                  <span className="text-lg font-bold">+</span>
+                  REQUEST MARKET
                 </button>
               </div>
             </div>
