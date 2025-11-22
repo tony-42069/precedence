@@ -137,10 +137,12 @@ let relayClient = null;
 function initializeClients() {
   if (!clobClient) {
     try {
-      // Builder config with remote signing server
+      // Builder config with LOCAL credentials (no remote signing server needed)
       const builderConfig = new BuilderConfig({
-        remoteBuilderConfig: {
-          url: SIGNING_SERVER_URL
+        localBuilderCreds: {
+          apiKey: POLYMARKET_API_KEY,
+          secret: POLYMARKET_SECRET,
+          passphrase: POLYMARKET_PASSPHRASE
         }
       });
 
@@ -199,6 +201,19 @@ function initializeClients() {
 }
 
 /**
+ * Helper function to create a viem WalletClient from a private key
+ * Use this instead of creating ethers Wallets for RelayClient!
+ */
+function createViemWallet(privateKey) {
+  const account = privateKeyToAccount(privateKey);
+  return createWalletClient({
+    account,
+    chain: polygon,
+    transport: http('https://polygon-rpc.com')
+  });
+}
+
+/**
  * Deploy a Safe wallet for a user
  */
 async function deploySafeWallet(userWalletAddress) {
@@ -207,7 +222,7 @@ async function deploySafeWallet(userWalletAddress) {
 
     console.log(`Deploying Safe wallet for user: ${userWalletAddress}`);
 
-    const response = await relayClient.deploySafe();
+    const response = await relayClient.deploy();
     const result = await response.wait();
 
     if (result && result.proxyAddress) {
@@ -412,18 +427,15 @@ async function placeAMMOrder(safeAddress, marketId, side, size, price, outcome) 
     // Calculate collateral amount needed (price * size in USDC)
     const collateralAmount = Math.floor(price * size * 1e6); // USDC has 6 decimals
 
-    // Create temporary RelayClient for this Safe
-    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
-    const ownerPrivateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
-      ? POLYMARKET_PRIVATE_KEY.slice(2)
-      : POLYMARKET_PRIVATE_KEY;
-    const ownerWallet = new ethers.Wallet(ownerPrivateKey, provider);
-
-    const safeRelayClient = new RelayClient(
+    // Create viem wallet for RelayClient 
+    const ownerWalletClient = createViemWallet(POLYMARKET_PRIVATE_KEY);
+    const builderConfig = new BuilderConfig({
+      remoteBuilderConfig: { url: SIGNING_SERVER_URL }
+    });  
+    const safeRelayClient = new RelayClient('https://relayer-v2.polymarket.com/', 
       'https://relayer-v2.polymarket.com/',
-      137, // Polygon chain ID
-      ownerWallet
-    );
+      137, ownerWalletClient, builderConfig);// Polygon chain ID
+   
 
     // CTF contract address on Polygon
     const ctfAddress = '0x4d97dcd97ec945f40cf65f87097ace5ea0476045';
@@ -560,17 +572,21 @@ async function redeemPositions(safeAddress, tokenIds, amounts) {
   try {
     console.log(`Redeeming positions for Safe: ${safeAddress}`);
 
-    // Create temporary RelayClient for this Safe
-    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
-    const ownerPrivateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
-      ? POLYMARKET_PRIVATE_KEY.slice(2)
-      : POLYMARKET_PRIVATE_KEY;
-    const ownerWallet = new ethers.Wallet(ownerPrivateKey, provider);
+    // Create viem wallet for RelayClient
+    const ownerWalletClient = createViemWallet(POLYMARKET_PRIVATE_KEY);
+
+    // Builder config
+    const builderConfig = new BuilderConfig({
+      remoteBuilderConfig: {
+        url: SIGNING_SERVER_URL
+      }
+    });
 
     const safeRelayClient = new RelayClient(
       'https://relayer-v2.polymarket.com/',
       137, // Polygon chain ID
-      ownerWallet
+      ownerWalletClient,
+      builderConfig
     );
 
     // CTF contract address on Polygon
@@ -659,20 +675,34 @@ app.post('/deploy-safe', async (req, res) => {
       });
     }
 
-    // Create a temporary RelayClient for this user
-    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
-    const privateKey = userPrivateKey.startsWith('0x') ? userPrivateKey.slice(2) : userPrivateKey;
-    const wallet = new ethers.Wallet(privateKey, provider);
+    // Create viem account from user's private key
+    const account = privateKeyToAccount(userPrivateKey);
+    
+    // Create viem wallet client with transport
+    const walletClient = createWalletClient({
+      account,
+      chain: polygon,
+      transport: http('https://polygon-rpc.com')
+    });
 
+    // Builder config with remote signing server
+    const builderConfig = new BuilderConfig({
+      remoteBuilderConfig: {
+        url: SIGNING_SERVER_URL
+      }
+    });
+
+    // Create RelayClient for this user with viem wallet
     const userRelayClient = new RelayClient(
       'https://relayer-v2.polymarket.com/',
       137, // Polygon chain ID
-      wallet
+      walletClient, // viem WalletClient
+      builderConfig
     );
 
     console.log(`Deploying Safe wallet for user...`);
 
-    const response = await userRelayClient.deploySafe();
+    const response = await userRelayClient.deploy();
     const result = await response.wait();
 
     if (result && result.proxyAddress) {
@@ -714,20 +744,21 @@ app.post('/approve-usdc', async (req, res) => {
 
     console.log(`Approving ${amount || 'unlimited'} USDC for Safe: ${safeAddress}`);
 
-    // Create a temporary RelayClient for this Safe
-    const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+    // Create viem wallet for RelayClient
+    const ownerWalletClient = createViemWallet(POLYMARKET_PRIVATE_KEY);
 
-    // For Safe operations, we need the owner's private key
-    // In production, this would be securely managed
-    const ownerPrivateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
-      ? POLYMARKET_PRIVATE_KEY.slice(2)
-      : POLYMARKET_PRIVATE_KEY;
-    const ownerWallet = new ethers.Wallet(ownerPrivateKey, provider);
-
+    // Builder config
+    const builderConfig = new BuilderConfig({
+      remoteBuilderConfig: {
+        url: SIGNING_SERVER_URL
+     } 
+  });
+    
     const safeRelayClient = new RelayClient(
       'https://relayer-v2.polymarket.com/',
       137, // Polygon chain ID
-      ownerWallet
+      ownerWalletClient,
+      builderConfig
     );
 
     // USDC contract address on Polygon
