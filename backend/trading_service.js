@@ -137,12 +137,10 @@ let relayClient = null;
 function initializeClients() {
   if (!clobClient) {
     try {
-      // Builder config with LOCAL credentials (no remote signing server needed)
+      // Builder config with remote signing server
       const builderConfig = new BuilderConfig({
-        localBuilderCreds: {
-          apiKey: POLYMARKET_API_KEY,
-          secret: POLYMARKET_SECRET,
-          passphrase: POLYMARKET_PASSPHRASE
+        remoteBuilderConfig: {
+          url: SIGNING_SERVER_URL
         }
       });
 
@@ -701,6 +699,11 @@ app.post('/deploy-safe', async (req, res) => {
     );
 
     console.log(`Deploying Safe wallet for user...`);
+    console.log(`🔍 BuilderConfig:`, JSON.stringify(builderConfig, null, 2));
+    console.log(`🔍 Making request to relayer...`);
+    
+    // Add request interception to see what's being sent
+    console.log(`🔍 WalletClient address:`, walletClient.account.address);
 
     const response = await userRelayClient.deploy();
     const result = await response.wait();

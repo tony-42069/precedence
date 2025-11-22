@@ -150,3 +150,6 @@ polymarket-transition-plan.md
 
 # Implementation plans (tracked in git)
 # implementation-plan.md
+
+# Polymarket Builder Signing Server (cloned dependency)
+backend/builder-signing-server/
