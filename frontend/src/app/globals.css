@@ -70,3 +70,15 @@ body {
 ::-webkit-scrollbar-track { background: #0A0A0C; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+/* --- GAVEL STRIKE ANIMATION --- */
+@keyframes gavel-strike {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  25% { transform: rotate(-15deg) translateY(-10px); }
+  50% { transform: rotate(5deg) translateY(0); }
+  75% { transform: rotate(-2deg) translateY(-2px); }
+}
+
+.animate-gavel-strike {
+  animation: gavel-strike 3s ease-in-out infinite;
+}

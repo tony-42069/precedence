@@ -261,8 +261,48 @@ export default function CasesPage() {
 
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
+            {/* COMPACT HERO - Animated Gavel */}
+            <div className="relative mb-12 text-center">
+              {/* Animated Background Glow */}
+              <div className="absolute inset-0 -z-10">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse"></div>
+              </div>
+
+              {/* Animated Gavel Icon */}
+              <div className="mb-6 flex justify-center">
+                <div className="relative animate-gavel-strike">
+                  <div className="absolute inset-0 bg-blue-500/30 blur-xl rounded-full animate-pulse"></div>
+                  <Gavel className="relative text-blue-400 drop-shadow-[0_0_20px_rgba(59,130,246,0.6)]" size={96} />
+                </div>
+              </div>
+
+              {/* Title with Logo */}
+              <div className="flex items-center justify-center gap-4 mb-3">
+                <img 
+                  src="/precedence-logo-transparent.png" 
+                  alt="Precedence Logo" 
+                  className="w-24 h-24 drop-shadow-[0_0_20px_rgba(59,130,246,0.6)]" 
+                />
+                <h1 className="text-5xl font-bold text-white">
+                  Find Your Edge
+                </h1>
+              </div>
+              
+              {/* Subtitle with Stats */}
+              <div className="flex items-center justify-center gap-3 text-sm text-slate-400 mb-4">
+                <span className="font-mono">1,247 Cases Analyzed</span>
+                <span className="text-slate-600">•</span>
+                <span className="font-mono text-green-400 font-bold">89% Accuracy</span>
+                <span className="text-slate-600">•</span>
+                <span className="font-mono">$2.3M Volume</span>
+              </div>
+
+              {/* Tagline */}
+              <p className="text-lg text-slate-300 font-light tracking-wide">Predict. Analyze. Profit.</p>
+            </div>
+
+            {/* Search Section */}
             <div className="mb-8 text-center">
-              <h1 className="text-3xl font-bold text-white mb-2">Find Your Edge</h1>
               <p className="text-slate-400">Search active cases. Trade on the outcome.</p>
             </div>
 
