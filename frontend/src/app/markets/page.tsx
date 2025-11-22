@@ -97,10 +97,13 @@ export default function MarketsPage() {
                   <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp size={16} className="text-blue-400" />
-                      <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">24h Volume</span>
+                      <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Total Volume</span>
                     </div>
                     <div className="text-2xl font-mono font-bold text-blue-400">
-                      ${(markets.reduce((sum, m) => sum + (m.volume || 0), 0) / 1000000).toFixed(1)}M
+                      ${(markets.reduce((sum, m) => {
+                        const volume = parseFloat(m.volume) || 0;
+                        return sum + volume;
+                      }, 0) / 1000000).toFixed(1)}M
                     </div>
                   </div>
                   <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">

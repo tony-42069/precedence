@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TradingModal } from './TradingModal';
 import { WalletConnectModal } from './WalletConnectModal';
-import { AIConfidenceBadge } from './AIConfidenceIndicator';
 import { useWallet } from '../hooks/useWallet';
 import { usePredictions } from '../hooks/usePredictions';
 
@@ -35,7 +34,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   const [highlightedMarketId, setHighlightedMarketId] = useState<string | null>(highlightId || null);
   
   const { walletState } = useWallet();
-  const { enhanceMarketsWithAI, getCachedPrediction } = usePredictions();
+  const { enhanceMarketsWithAI } = usePredictions();
   
   // Ref for scrolling to highlighted market
   const marketRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -219,12 +218,6 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                         <span className={`w-1.5 h-1.5 rounded-full ${market.closed ? 'bg-red-500' : 'bg-green-500'}`}></span>
                         {market.closed ? 'Closed' : 'Active'}
                       </span>
-                      {getCachedPrediction(market.id || '') && (
-                        <AIConfidenceBadge
-                          prediction={getCachedPrediction(market.id || '')!}
-                          size="sm"
-                        />
-                      )}
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold font-mono text-slate-200">

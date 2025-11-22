@@ -148,20 +148,15 @@ class PolymarketClient:
             all_markets = self.get_markets(limit=100)  # Get more to filter
 
             # Filter markets by query (case-insensitive)
-            matching_markets = []
             query_lower = query.lower()
+            matching_markets = [
+                m for m in all_markets
+                if query_lower in m.get('question', '').lower() or
+                   query_lower in m.get('description', '').lower()
+            ]
 
-            for market in all_markets:
-                market_name = market.get('market', '').lower()
-                description = market.get('description', '').lower()
-
-                if query_lower in market_name or query_lower in description:
-                    matching_markets.append(market)
-
-            # Limit results
-            results = matching_markets[:limit]
-            logger.info(f"Found {len(results)} markets matching query: {query}")
-            return results
+            logger.info(f"Found {len(matching_markets)} markets matching query '{query}'")
+            return matching_markets[:limit]
 
         except Exception as e:
             logger.error(f"Failed to search markets: {e}")
@@ -196,11 +191,43 @@ class PolymarketClient:
                 all_markets.extend(batch)
                 offset += 100
 
-            # Now filter for legal markets using better metadata
+            # EXPANDED: Filter for legal/political/regulatory/economic markets
             legal_keywords = [
-                "supreme court", "scotus", "court case",
-                "lawsuit", "litigation", "sec", "fcc", "ftc"
+                # COURTS & JUDICIAL (existing)
+                "supreme court", "scotus", "court", "justice", "vacancy", "appointment",
+                "judge", "judicial", "ruling", "opinion", "decision", "precedent",
+                
+                # POLITICAL LEGAL (expanded)
+                "president", "trump", "biden", "election", "impeach", "impeachment",
+                "25th amendment", "political", "senate", "congress", "nomination",
+                "administration", "cabinet", "ambassador", "indictment", "scandal",
+                "investigation", "prosecutor", "doj", "department of justice",
+                
+                # CONSTITUTIONAL LEGAL  
+                "constitution", "amendment", "fourteenth", "first amendment", 
+                "civil rights", "privacy", "speech", "religion", "due process",
+                
+                # REGULATORY LEGAL (SEC, FTC, FCC)
+                "sec", "fcc", "ftc", "regulation", "regulatory", "agency", "oversight",
+                "antitrust", "fair housing", "consumer protection", "environment",
+                
+                # LEGAL ACTIONS
+                "lawsuit", "litigation", "trial", "verdict", "settlement", "appeal",
+                "plaintiff", "defendant", "evidence", "testimony", "witness",
+                
+                # ECONOMY MARKETS (Fed/monetary policy)
+                "fed", "federal reserve", "powell", "interest rate", "fomc",
+                "inflation", "unemployment", "gdp", "recession",
+                
+                # CRYPTO/ETF MARKETS (regulatory aspect)
+                "bitcoin etf", "btc etf", "ethereum etf", "eth etf", "crypto etf",
+                "sec crypto", "sec bitcoin", "sec ethereum",
+                
+                # EXECUTIVE/ADMIN ACTIONS
+                "ceasefire", "treaty", "diplomacy", "foreign policy",
+                "national security", "adviser"
             ]
+
 
             legal_markets = []
             for market in all_markets:
@@ -249,8 +276,15 @@ class PolymarketClient:
 
                     legal_markets.append(market)
 
-            # Sort by volume
-            legal_markets.sort(key=lambda x: x.get('volume', 0), reverse=True)
+            # Sort by volume (handle string/int volume values safely)
+            def get_volume(market):
+                volume = market.get('volume', 0)
+                try:
+                    return float(volume) if volume else 0
+                except (ValueError, TypeError):
+                    return 0
+            
+            legal_markets.sort(key=get_volume, reverse=True)
 
             results = legal_markets[:limit]
             logger.info(f"Found {len(results)} legal markets with prices from {len(all_markets)} total (Gamma API)")
@@ -278,65 +312,82 @@ class PolymarketClient:
             bids = orderbook.get('bids', [])
             asks = orderbook.get('asks', [])
 
-            if bids and asks:
-                best_bid = max(float(bid['price']) for bid in bids)
-                best_ask = min(float(ask['price']) for ask in asks)
-                mid_price = (best_bid + best_ask) / 2
+            if not bids or not asks:
+                return {
+                    'yes_price': 0.5,
+                    'no_price': 0.5
+                }
 
-                return {
-                    'market_id': market_id,
-                    'best_bid': best_bid,
-                    'best_ask': best_ask,
-                    'mid_price': mid_price,
-                    'spread': best_ask - best_bid
-                }
-            else:
-                # No liquidity
-                return {
-                    'market_id': market_id,
-                    'best_bid': None,
-                    'best_ask': None,
-                    'mid_price': None,
-                    'spread': None
-                }
+            best_bid = float(bids[0]['price']) if bids else 0
+            best_ask = float(asks[0]['price']) if asks else 1
+
+            yes_price = (best_bid + best_ask) / 2
+            no_price = 1 - yes_price
+
+            return {
+                'yes_price': yes_price,
+                'no_price': no_price,
+                'best_bid': best_bid,
+                'best_ask': best_ask
+            }
 
         except Exception as e:
-            logger.error(f"Failed to get market price for {market_id}: {e}")
-            raise
+            logger.error(f"Failed to get market price: {e}")
+            # Return default 50/50
+            return {
+                'yes_price': 0.5,
+                'no_price': 0.5
+            }
 
-    def create_market_order(self,
-                           market_id: str,
-                           side: str,
-                           size: float,
-                           price: float,
-                           test: bool = False) -> Dict:
+    def create_market_order(
+        self,
+        market_id: str,
+        side: str,
+        size: float,
+        price: float,
+        test: bool = False
+    ) -> Dict:
         """
-        Create a market order using Polymarket Builder SDKs.
+        Create a market order via the Node.js trading service.
 
         Args:
             market_id: Polymarket market ID
             side: 'buy' or 'sell'
-            size: Order size
-            price: Limit price
-            test: If True, validate without executing (not implemented yet)
+            size: Order size in shares
+            price: Limit price (0-1)
+            test: If True, validate but don't submit
 
         Returns:
-            Dict containing order result
+            Order result dict
         """
         try:
-            logger.info(f"Placing {side} order: {size} @ {price} on market {market_id}")
+            if test:
+                # Just validate the parameters
+                if side not in ['buy', 'sell']:
+                    return {'success': False, 'error': 'Invalid side (must be buy or sell)'}
+                if not 0 < price < 1:
+                    return {'success': False, 'error': 'Invalid price (must be 0-1)'}
+                if size <= 0:
+                    return {'success': False, 'error': 'Invalid size (must be > 0)'}
 
-            # Call Node.js trading service
-            result = self._call_trading_service('placeOrder', [
-                market_id, side, str(size), str(price)
-            ])
+                return {
+                    'success': True,
+                    'message': 'Order validated (test mode)',
+                    'market_id': market_id,
+                    'side': side,
+                    'size': size,
+                    'price': price
+                }
+
+            # Call trading service to place order
+            result = self._call_trading_service('placeOrder', [market_id, side, size, price])
 
             if result.get('success'):
-                logger.info(f"✅ Order placed successfully: {result}")
-                return result
+                logger.info(f"Order placed successfully: {result.get('orderId')}")
             else:
-                logger.error(f"❌ Order placement failed: {result.get('error')}")
-                return result
+                logger.error(f"Order failed: {result.get('error')}")
+
+            return result
 
         except Exception as e:
             logger.error(f"Failed to create order: {e}")
@@ -345,27 +396,25 @@ class PolymarketClient:
                 'error': str(e)
             }
 
-    def deploy_safe_wallet(self, user_wallet: str) -> Dict:
+    def deploy_safe_wallet(self, user_wallet_address: str) -> Dict:
         """
-        Deploy a Safe wallet for a user.
+        Deploy a Gnosis Safe wallet for a user via the trading service.
 
         Args:
-            user_wallet: User's wallet address
+            user_wallet_address: User's EOA address
 
         Returns:
-            Dict containing deployment result
+            Dict with Safe address and deployment status
         """
         try:
-            logger.info(f"Deploying Safe wallet for user: {user_wallet}")
-
-            result = self._call_trading_service('deploySafeWallet', [user_wallet])
+            result = self._call_trading_service('deploySafeWallet', [user_wallet_address])
 
             if result.get('success'):
-                logger.info(f"✅ Safe wallet deployed: {result.get('safeAddress')}")
-                return result
+                logger.info(f"Safe wallet deployed: {result.get('safeAddress')}")
             else:
-                logger.error(f"❌ Safe deployment failed: {result.get('error')}")
-                return result
+                logger.error(f"Safe deployment failed: {result.get('error')}")
+
+            return result
 
         except Exception as e:
             logger.error(f"Failed to deploy Safe wallet: {e}")
@@ -376,25 +425,23 @@ class PolymarketClient:
 
     def approve_usdc(self, safe_address: str) -> Dict:
         """
-        Approve USDC spending for Conditional Tokens Framework.
+        Approve USDC spending for a Safe wallet via trading service.
 
         Args:
-            safe_address: Safe wallet address
+            safe_address: Gnosis Safe address
 
         Returns:
-            Dict containing approval result
+            Dict with approval transaction status
         """
         try:
-            logger.info(f"Approving USDC for Safe: {safe_address}")
-
             result = self._call_trading_service('approveUSDC', [safe_address])
 
             if result.get('success'):
-                logger.info(f"✅ USDC approved: {result.get('transactionHash')}")
-                return result
+                logger.info(f"USDC approved for Safe: {safe_address}")
             else:
-                logger.error(f"❌ USDC approval failed: {result.get('error')}")
-                return result
+                logger.error(f"USDC approval failed: {result.get('error')}")
+
+            return result
 
         except Exception as e:
             logger.error(f"Failed to approve USDC: {e}")
@@ -403,16 +450,43 @@ class PolymarketClient:
                 'error': str(e)
             }
 
-    def _call_trading_service(self, method: str, args: list) -> Dict:
+    def get_user_positions(self, user_address: str) -> Dict:
+        """
+        Get current market positions for a user via trading service.
+
+        Args:
+            user_address: User's wallet address
+
+        Returns:
+            Dict with positions data
+        """
+        try:
+            result = self._call_trading_service('getPositions', [user_address])
+
+            if result.get('success'):
+                logger.info(f"Retrieved positions for user: {user_address}")
+            else:
+                logger.error(f"Failed to get positions: {result.get('error')}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to get user positions: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _call_trading_service(self, method: str, args: List[Any]) -> Dict:
         """
         Call the Node.js trading service via HTTP.
 
         Args:
             method: Method name to call
-            args: Arguments to pass
+            args: List of arguments
 
         Returns:
-            Dict containing result
+            Result dictionary from the service
         """
         try:
             import requests
