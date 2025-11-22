@@ -1006,49 +1006,105 @@
         </div>
     </section>
 
-    <!-- HOW IT WORKS (TIMELINE) -->
+    <!-- HOW IT WORKS (5-STEP FLOW) -->
     <section id="how-it-works" class="section">
         <div class="container">
             <!-- Glass Card Background -->
             <div class="protocol-glass-card">
                 <div style="text-align: center; margin-bottom: 80px;">
-                    <h2 style="font-size: 36px; font-weight: 700;">Protocol Execution</h2>
-                    <p style="color: var(--text-gray);">From docket update to smart contract settlement.</p>
+                    <div style="display: inline-block; padding: 8px 20px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3); border-radius: 100px; margin-bottom: 24px;">
+                        <span style="font-size: 12px; color: var(--secondary); font-weight: 700; letter-spacing: 2px;">PROTOCOL FLOW</span>
+                    </div>
+                    <h2 style="font-size: 48px; font-weight: 800; margin-bottom: 16px; letter-spacing: -1px;">From Discovery to Profit</h2>
+                    <p style="font-size: 20px; color: var(--text-gray); max-width: 700px; margin: 0 auto;">How markets get created and how you win.</p>
                 </div>
 
             <div class="timeline-container">
                 <div class="timeline-line"></div>
 
-                <!-- Step 1 -->
+                <!-- Step 1: DISCOVER -->
                 <div class="timeline-step">
                     <div class="timeline-node"></div>
-                    <span class="step-badge">STEP 01 // DISCOVERY</span>
-                    <h3 style="font-size: 24px; margin-bottom: 12px;">Semantic Signal Detection</h3>
-                    <p style="color: var(--text-gray);">
-                        Our engine scans the CourtListener API in real-time. When a high-impact motion is filed in a tracked case, the system alerts the market before mainstream news outlets can write a headline.
+                    <span class="step-badge">STEP 01 // DISCOVER</span>
+                    <h3 style="font-size: 24px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+                        <i data-lucide="search" style="color: var(--primary); width: 28px; height: 28px;"></i>
+                        Search Live Legal Events
+                    </h3>
+                    <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7;">
+                        Browse thousands of active Supreme Court and Federal cases. Use our AI-powered search to find high-impact motions, rulings, and appeals worth trading on.
                     </p>
                 </div>
 
-                <!-- Step 2 -->
+                <!-- Step 2: ANALYZE -->
                 <div class="timeline-step">
                     <div class="timeline-node"></div>
-                    <span class="step-badge">STEP 02 // ANALYSIS</span>
-                    <h3 style="font-size: 24px; margin-bottom: 12px;">AI Probability Forecast</h3>
-                    <p style="color: var(--text-gray);">
-                        Proprietary ML models compare the filing against 10,000+ historical outcomes for similar motions and specific judge behaviors, assigning a live probability score (e.g., "Motion to Dismiss: 64% Likely").
+                    <span class="step-badge">STEP 02 // ANALYZE</span>
+                    <h3 style="font-size: 24px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+                        <i data-lucide="brain-circuit" style="color: var(--secondary); width: 28px; height: 28px;"></i>
+                        AI Probability Engine
+                    </h3>
+                    <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7;">
+                        Our AI models analyze judicial history, case precedents, and legal patterns to generate probability forecasts. Know the odds before you trade.
                     </p>
                 </div>
 
-                <!-- Step 3 -->
+                <!-- Step 3: REQUEST (HERO STEP) -->
                 <div class="timeline-step">
-                    <div class="timeline-node" style="border-color: var(--success); box-shadow: 0 0 15px var(--success);"></div>
-                    <span class="step-badge" style="color: var(--success);">STEP 03 // EXECUTION</span>
-                    <h3 style="font-size: 24px; margin-bottom: 12px;">Trade the Outcome</h3>
-                    <p style="color: var(--text-gray);">
-                        Execute positions instantly on the order book. If the motion is granted, the Oracle resolves the market to "YES" and smart contracts automatically distribute USDC to winning positions.
+                    <div class="timeline-node" style="border-color: var(--gold); box-shadow: 0 0 20px rgba(251,191,36,0.6); background: rgba(251,191,36,0.1);"></div>
+                    <span class="step-badge" style="color: var(--gold);">STEP 03 // REQUEST ⭐</span>
+                    <h3 style="font-size: 24px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+                        <i data-lucide="plus-circle" style="color: var(--gold); width: 28px; height: 28px;"></i>
+                        Submit Market Proposals
+                    </h3>
+                    <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7; margin-bottom: 16px;">
+                        Found a case with trading potential? Request a new prediction market. If approved by Polymarket, you earn a percentage of trading volume as the market creator. <span style="color: var(--gold); font-weight: 600;">Turn legal insight into passive income.</span>
+                    </p>
+                    
+                    <!-- Creator Rewards Badge -->
+                    <div style="display: inline-flex; align-items: center; gap: 12px; padding: 12px 20px; background: rgba(251,191,36,0.1); border: 2px solid rgba(251,191,36,0.3); border-radius: 12px; margin-top: 8px;">
+                        <i data-lucide="trophy" style="color: var(--gold); width: 20px; height: 20px;"></i>
+                        <div>
+                            <div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--gold); font-weight: 700;">Market Creators Earn 0.5%</div>
+                            <div style="font-size: 11px; color: var(--text-gray);">Lifetime earnings on trading volume</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: TRADE -->
+                <div class="timeline-step">
+                    <div class="timeline-node"></div>
+                    <span class="step-badge">STEP 04 // TRADE</span>
+                    <h3 style="font-size: 24px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+                        <i data-lucide="trending-up" style="color: var(--success); width: 28px; height: 28px;"></i>
+                        Execute Positions Instantly
+                    </h3>
+                    <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7;">
+                        Once markets go live, trade on Polymarket's Central Limit Order Book. <span style="color: var(--success); font-weight: 600;">Zero gas fees. Millisecond execution.</span> Your funds stay in your self-custodial wallet.
+                    </p>
+                </div>
+
+                <!-- Step 5: SETTLE -->
+                <div class="timeline-step">
+                    <div class="timeline-node" style="border-color: var(--primary); box-shadow: 0 0 15px var(--primary);"></div>
+                    <span class="step-badge" style="color: var(--primary);">STEP 05 // SETTLE</span>
+                    <h3 style="font-size: 24px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px;">
+                        <i data-lucide="check-circle" style="color: var(--primary); width: 28px; height: 28px;"></i>
+                        Automated Smart Contract Payouts
+                    </h3>
+                    <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7;">
+                        When cases resolve, UMA Oracle verifies outcomes and smart contracts automatically distribute USDC to winning positions. <span style="color: var(--primary); font-weight: 600;">No disputes. No delays.</span>
                     </p>
                 </div>
             </div>
+
+            <!-- CTA BUTTON -->
+            <div style="margin-top: 60px; text-align: center;">
+                <a href="wallet-connect.html" class="btn btn-primary" style="background: linear-gradient(135deg, var(--gold) 0%, #FFD700 100%); box-shadow: 0 0 30px rgba(251,191,36,0.4); font-size: 16px; padding: 16px 40px;">
+                    <i data-lucide="rocket"></i>
+                    Start Discovering Cases
+                </a>
+            </div>
+        </div>
         </div>
     </section>
 
