@@ -880,7 +880,7 @@
                     <h3 style="font-size:24px; margin-bottom:12px;">Semantic Search</h3>
                     <p style="color:var(--text-gray); font-size:14px;">Find the needle in 2TB of legal docs.</p>
                     <div class="search-demo">
-                        <i data-lucide="search" style="width:14px;"></i> "tariff authority"
+                        <i data-lucide="search" style="width:14px;"></i> <span id="typewriter-text"></span><span class="cursor" style="margin-left: 2px;"></span>
                     </div>
                 </div>
                 
@@ -1099,8 +1099,8 @@
 
             <!-- CTA BUTTON -->
             <div style="margin-top: 60px; text-align: center;">
-                <a href="wallet-connect.html" class="btn btn-primary" style="background: linear-gradient(135deg, var(--gold) 0%, #FFD700 100%); box-shadow: 0 0 30px rgba(251,191,36,0.4); font-size: 16px; padding: 16px 40px;">
-                    <i data-lucide="rocket"></i>
+                <a href="wallet-connect.html" class="btn btn-primary" style="background: linear-gradient(135deg, var(--gold) 0%, #FFD700 100%); box-shadow: 0 0 30px rgba(251,191,36,0.4); font-size: 16px; padding: 16px 40px; color: var(--primary); font-weight: 700;">
+                    <i data-lucide="rocket" style="color: var(--primary);"></i>
                     Start Discovering Cases
                 </a>
             </div>
@@ -1483,6 +1483,69 @@
         if (timelineContainer) {
             timelineObserver.observe(timelineContainer);
         }
+
+        // --- TYPEWRITER EFFECT FOR SEMANTIC SEARCH ---
+        const searchQueries = [
+            '"tariff authority"',
+            '"trump immunity"',
+            '"tiktok ban"',
+            '"google antitrust"',
+            '"student loan forgiveness"',
+            '"abortion rights"',
+            '"gun control"',
+            '"crypto regulation"'
+        ];
+
+        let currentQueryIndex = 0;
+        let currentCharIndex = 0;
+        let isDeleting = false;
+        let isPaused = false;
+
+        const typewriterElement = document.getElementById('typewriter-text');
+        
+        function typeWriter() {
+            if (!typewriterElement) return;
+
+            const currentQuery = searchQueries[currentQueryIndex];
+            
+            if (isPaused) {
+                // Pause for 2 seconds after typing is complete
+                setTimeout(() => {
+                    isPaused = false;
+                    isDeleting = true;
+                    typeWriter();
+                }, 2000);
+                return;
+            }
+
+            if (isDeleting) {
+                // Delete characters
+                typewriterElement.textContent = currentQuery.substring(0, currentCharIndex - 1);
+                currentCharIndex--;
+
+                if (currentCharIndex === 0) {
+                    isDeleting = false;
+                    currentQueryIndex = (currentQueryIndex + 1) % searchQueries.length;
+                    setTimeout(typeWriter, 500); // Pause before typing next query
+                    return;
+                }
+                setTimeout(typeWriter, 50); // Faster deletion
+            } else {
+                // Type characters
+                typewriterElement.textContent = currentQuery.substring(0, currentCharIndex + 1);
+                currentCharIndex++;
+
+                if (currentCharIndex === currentQuery.length) {
+                    isPaused = true;
+                    typeWriter();
+                    return;
+                }
+                setTimeout(typeWriter, 100); // Typing speed
+            }
+        }
+
+        // Start typewriter effect
+        typeWriter();
 
     </script>
 </body>
