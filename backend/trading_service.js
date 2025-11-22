@@ -18,6 +18,9 @@ const { ClobClient } = require('@polymarket/clob-client');
 const { RelayClient } = require('@polymarket/builder-relayer-client');
 const { BuilderConfig } = require('@polymarket/builder-signing-sdk');
 const { ethers } = require('ethers');
+const { createWalletClient, http } = require('viem');
+const { privateKeyToAccount } = require('viem/accounts');
+const { polygon } = require('viem/chains');
 
 // Initialize cache for market data (5 minute TTL)
 const marketCache = new NodeCache({ stdTTL: 300 });
@@ -158,26 +161,37 @@ function initializeClients() {
 
   if (!relayClient) {
     try {
-      // Initialize provider for Polygon
-      const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+      // RelayClient requires a VIEM WalletClient, not ethers!
+      // Create viem account from private key
+      const account = privateKeyToAccount(POLYMARKET_PRIVATE_KEY);
+      
+      // Create viem wallet client with transport
+      const walletClient = createWalletClient({
+        account,
+        chain: polygon,
+        transport: http('https://polygon-rpc.com')
+      });
 
-      // Create wallet from private key (remove 0x prefix if present)
-      const privateKey = POLYMARKET_PRIVATE_KEY.startsWith('0x')
-        ? POLYMARKET_PRIVATE_KEY.slice(2)
-        : POLYMARKET_PRIVATE_KEY;
-      const wallet = new ethers.Wallet(privateKey, provider);
+      // Builder config with remote signing server
+      const builderConfig = new BuilderConfig({
+        remoteBuilderConfig: {
+          url: SIGNING_SERVER_URL
+        }
+      });
 
       // Initialize relay client for gasless transactions
-      // Note: RelayClient doesn't need builder config, but we can pass it if needed
+      // RelayClient expects: (url, chainId, walletClient, builderConfig)
       relayClient = new RelayClient(
         'https://relayer-v2.polymarket.com/',
         137, // Polygon chain ID
-        wallet
+        walletClient, // Pass viem WalletClient with transport!
+        builderConfig // Builder config for signing
       );
 
       console.log('✅ Initialized Polymarket Relay client for gasless trading');
     } catch (error) {
       console.error('❌ Failed to initialize RelayClient:', error.message);
+      console.error('Full error:', error);
       console.log('⏭️ Continuing without RelayClient (Safe wallet features disabled)');
       relayClient = null;
     }
