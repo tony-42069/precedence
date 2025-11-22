@@ -1052,35 +1052,141 @@
         </div>
     </section>
 
-<!-- WHY TRADE WITH PRECEDENCE -->
-<section class="section" style="background: rgba(0,0,0,0.5);">
-    <div class="container">
-        <div style="text-align: center; margin-bottom: 60px;">
-            <h2 style="font-size: 36px; font-weight: 700;">Why Trade With Precedence</h2>
-            <p style="color: var(--text-gray);">Institutional-grade prediction markets for everyone.</p>
+<!-- WHY TRADE WITH PRECEDENCE - REDESIGNED -->
+<section class="section" style="background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%); position: relative; overflow: hidden;">
+    <!-- Animated Background Particles -->
+    <div style="position: absolute; inset: 0; pointer-events: none; overflow: hidden;">
+        <div style="position: absolute; top: 10%; left: 10%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(251,191,36,0.15) 0%, transparent 70%); border-radius: 50%; filter: blur(60px); animation: float 8s ease-in-out infinite;"></div>
+        <div style="position: absolute; bottom: 10%; right: 10%; width: 500px; height: 500px; background: radial-gradient(circle, rgba(0,82,255,0.15) 0%, transparent 70%); border-radius: 50%; filter: blur(60px); animation: float 10s ease-in-out infinite reverse;"></div>
+    </div>
+
+    <div class="container" style="position: relative; z-index: 2;">
+        <div style="text-align: center; margin-bottom: 80px;">
+            <div style="display: inline-block; padding: 8px 20px; background: rgba(0,82,255,0.1); border: 1px solid rgba(0,82,255,0.3); border-radius: 100px; margin-bottom: 24px;">
+                <span style="font-size: 12px; color: var(--primary); font-weight: 700; letter-spacing: 2px;">TRUST PROTOCOL</span>
+            </div>
+            <h2 style="font-size: 48px; font-weight: 800; margin-bottom: 16px; letter-spacing: -1px;">Built Different</h2>
+            <p style="font-size: 20px; color: var(--text-gray); max-width: 600px; margin: 0 auto;">Zero fees. Your keys. Instant execution. This isn't just another prediction market.</p>
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; max-width: 1000px; margin: 0 auto;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; max-width: 1200px; margin: 0 auto;">
             
-            <div class="protocol-glass-card" style="text-align: center;">
-                <div style="font-size: 40px; margin-bottom: 16px;">💸</div>
-                <h3 style="font-size: 18px; margin-bottom: 12px;">GASLESS TRADING</h3>
-                <p style="color: var(--text-gray); font-size: 14px;">No transaction fees. Ever. Trade predictions without paying gas costs.</p>
+            <!-- Card 1: GASLESS (Gold Theme) -->
+            <div class="trust-card" style="background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%); border: 1px solid rgba(251,191,36,0.2); border-radius: 24px; padding: 40px; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1); cursor: default;">
+                <!-- Glow Effect -->
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0; transition: opacity 0.4s;"></div>
+                
+                <!-- Icon Container -->
+                <div style="width: 80px; height: 80px; background: rgba(251,191,36,0.1); border: 2px solid rgba(251,191,36,0.3); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; transition: all 0.4s;">
+                    <div style="font-size: 48px; transform: scale(1); transition: transform 0.4s;">💸</div>
+                    <!-- Particle Ring -->
+                    <div style="position: absolute; inset: -4px; border: 2px solid rgba(251,191,36,0.2); border-radius: 24px; opacity: 0; transition: all 0.4s;"></div>
+                </div>
+                
+                <h3 style="font-size: 24px; font-weight: 700; margin-bottom: 16px; color: white;">Zero Gas Fees</h3>
+                <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7; margin-bottom: 24px;">Trade without worrying about Ethereum gas costs. We sponsor all transactions through Polymarket's gasless relay. <span style="color: var(--gold); font-weight: 600;">Every. Single. Trade. Free.</span></p>
+                
+                <!-- Stats Badge -->
+                <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.2); border-radius: 100px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--gold); font-weight: 600;">$0.00 fees</span>
+                    <span style="color: var(--gold);">•</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-gray);">Always</span>
+                </div>
             </div>
             
-            <div class="protocol-glass-card" style="text-align: center;">
-                <div style="font-size: 40px; margin-bottom: 16px;">🔒</div>
-                <h3 style="font-size: 18px; margin-bottom: 12px;">YOUR KEYS, YOUR CRYPTO</h3>
-                <p style="color: var(--text-gray); font-size: 14px;">Self-custodial Smart Contract wallet. You maintain full control. We never touch your funds.</p>
+            <!-- Card 2: SELF-CUSTODY (Blue Theme) -->
+            <div class="trust-card" style="background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%); border: 1px solid rgba(0,82,255,0.2); border-radius: 24px; padding: 40px; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1); cursor: default;">
+                <!-- Glow Effect -->
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--primary), transparent); opacity: 0; transition: opacity 0.4s;"></div>
+                
+                <!-- Icon Container -->
+                <div style="width: 80px; height: 80px; background: rgba(0,82,255,0.1); border: 2px solid rgba(0,82,255,0.3); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; transition: all 0.4s;">
+                    <div style="font-size: 48px; transform: scale(1); transition: transform 0.4s;">🔒</div>
+                    <!-- Particle Ring -->
+                    <div style="position: absolute; inset: -4px; border: 2px solid rgba(0,82,255,0.2); border-radius: 24px; opacity: 0; transition: all 0.4s;"></div>
+                </div>
+                
+                <h3 style="font-size: 24px; font-weight: 700; margin-bottom: 16px; color: white;">Your Keys, Your Funds</h3>
+                <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7; margin-bottom: 24px;">Non-custodial smart contract wallet powered by Safe (formerly Gnosis Safe). <span style="color: var(--primary); font-weight: 600;">We can't access your assets.</span> Period. Your private keys never leave your device.</p>
+                
+                <!-- Stats Badge -->
+                <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(0,82,255,0.1); border: 1px solid rgba(0,82,255,0.2); border-radius: 100px;">
+                    <i data-lucide="shield-check" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-gray);">Safe Protocol</span>
+                </div>
             </div>
             
-            <div class="protocol-glass-card" style="text-align: center;">
-                <div style="font-size: 40px; margin-bottom: 16px;">⚡</div>
-                <h3 style="font-size: 18px; margin-bottom: 12px;">INSTANT EXECUTION</h3>
-                <p style="color: var(--text-gray); font-size: 14px;">Powered by Polymarket's CLOB infrastructure. Millisecond order matching.</p>
-            </div>                    
+            <!-- Card 3: INSTANT EXECUTION (Green Theme) -->
+            <div class="trust-card" style="background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%); border: 1px solid rgba(16,185,129,0.2); border-radius: 24px; padding: 40px; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1); cursor: default;">
+                <!-- Glow Effect -->
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--success), transparent); opacity: 0; transition: opacity 0.4s;"></div>
+                
+                <!-- Icon Container -->
+                <div style="width: 80px; height: 80px; background: rgba(16,185,129,0.1); border: 2px solid rgba(16,185,129,0.3); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; transition: all 0.4s;">
+                    <div style="font-size: 48px; transform: scale(1); transition: transform 0.4s;">⚡</div>
+                    <!-- Particle Ring -->
+                    <div style="position: absolute; inset: -4px; border: 2px solid rgba(16,185,129,0.2); border-radius: 24px; opacity: 0; transition: all 0.4s;"></div>
+                </div>
+                
+                <h3 style="font-size: 24px; font-weight: 700; margin-bottom: 16px; color: white;">Millisecond Execution</h3>
+                <p style="color: var(--text-gray); font-size: 16px; line-height: 1.7; margin-bottom: 24px;">Built on Polymarket's Central Limit Order Book (CLOB). <span style="color: var(--success); font-weight: 600;">Sub-100ms latency.</span> Professional-grade infrastructure meets retail accessibility.</p>
+                
+                <!-- Stats Badge -->
+                <div style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); border-radius: 100px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--success); font-weight: 600;">&lt;100ms</span>
+                    <span style="color: var(--success);">•</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-gray);">CLOB</span>
+                </div>
+            </div>
+                    
         </div>
     </div>
+    
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) scale(1); }
+            50% { transform: translateY(-20px) scale(1.1); }
+        }
+        
+        /* Hover Effects */
+        .trust-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        
+        .trust-card:hover > div:first-child {
+            opacity: 1;
+        }
+        
+        .trust-card:hover > div:nth-child(2) {
+            transform: scale(1.1) rotate(5deg);
+        }
+        
+        .trust-card:hover > div:nth-child(2) > div:first-child {
+            transform: scale(1.2);
+        }
+        
+        .trust-card:hover > div:nth-child(2) > div:last-child {
+            opacity: 1;
+            transform: scale(1.15);
+        }
+        
+        /* Glow on specific cards */
+        .trust-card:nth-child(1):hover {
+            border-color: rgba(251,191,36,0.5);
+            box-shadow: 0 20px 60px rgba(251,191,36,0.2), 0 0 40px rgba(251,191,36,0.1);
+        }
+        
+        .trust-card:nth-child(2):hover {
+            border-color: rgba(0,82,255,0.5);
+            box-shadow: 0 20px 60px rgba(0,82,255,0.2), 0 0 40px rgba(0,82,255,0.1);
+        }
+        
+        .trust-card:nth-child(3):hover {
+            border-color: rgba(16,185,129,0.5);
+            box-shadow: 0 20px 60px rgba(16,185,129,0.2), 0 0 40px rgba(16,185,129,0.1);
+        }
+    </style>
 </section>
 
 
