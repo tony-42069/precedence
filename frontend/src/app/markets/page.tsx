@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { MarketsGrid } from '../../components/MarketsGrid';
@@ -10,7 +10,7 @@ import {
   Activity
 } from 'lucide-react';
 
-export default function MarketsPage() {
+function MarketsContent() {
   const searchParams = useSearchParams();
   const highlightId = searchParams.get('highlight');
   
@@ -48,87 +48,63 @@ export default function MarketsPage() {
       </div>
 
       <div className="relative z-10 flex min-h-screen">
-        {/* Sidebar */}
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <MobileMenuButton onClick={() => setSidebarOpen(!sidebarOpen)} isOpen={sidebarOpen} />
 
-        {/* Main Content */}
         <div className="flex-1 w-full min-w-0 lg:ml-64">
-          
-          {/* Page Header */}
-          <div className="border-b border-white/5 bg-[#030304]/80 backdrop-blur-md">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              {/* Breadcrumb */}
-              <div className="flex items-center gap-2 text-sm font-mono text-slate-500 mb-4">
-                <Terminal size={14} />
-                <span>PRECEDENCE_TERMINAL</span>
-                <span className="text-slate-700">/</span>
-                <span className="text-blue-400 uppercase">MARKETS</span>
+          {/* Header */}
+          <nav className="sticky top-0 z-40 border-b border-white/5 bg-[#030304]/80 backdrop-blur-md">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center h-16">
+                <div className="flex items-center gap-2 text-sm font-mono text-slate-500">
+                  <Terminal size={14} />
+                  <span>PRECEDENCE_TERMINAL</span>
+                  <span className="text-slate-700">/</span>
+                  <span className="text-blue-400 uppercase">MARKETS</span>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2 bg-white/5 border border-white/5 px-3 py-1 rounded-full">
+                    <Activity size={12} className="text-green-500" />
+                    <span className="text-[10px] font-mono uppercase text-slate-400">
+                      {loading ? 'LOADING...' : `${markets.length} MARKETS`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </nav>
+
+          {/* Markets Grid */}
+          <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-8">
+            <div className="max-w-[1800px] mx-auto">
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp className="text-blue-400" size={32} />
+                  <h1 className="text-3xl font-bold text-white">Legal Prediction Markets</h1>
+                </div>
+                <p className="text-slate-400 text-sm font-mono">
+                  Trade on the outcomes of legal cases, regulatory decisions, and policy changes
+                </p>
               </div>
 
-              {/* Title */}
-              <h1 className="text-4xl font-bold text-white mb-3 tracking-tight">
-                Active Markets
-              </h1>
-              <p className="text-lg text-slate-400 max-w-2xl">
-                Browse and trade on verified legal outcomes
-              </p>
-
-              {/* Show highlight notification if present */}
-              {highlightId && (
-                <div className="mt-4 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg inline-flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
-                  <span className="text-sm font-mono text-purple-300">
-                    FINDING_MARKET: {highlightId.slice(0, 10)}...
-                  </span>
-                </div>
-              )}
-
-              {/* Quick Stats */}
-              {!loading && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                  <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Activity size={16} className="text-green-400" />
-                      <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Live Markets</span>
-                    </div>
-                    <div className="text-2xl font-mono font-bold text-green-400">{markets.length}</div>
-                  </div>
-                  <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp size={16} className="text-blue-400" />
-                      <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Total Volume</span>
-                    </div>
-                    <div className="text-2xl font-mono font-bold text-blue-400">
-                      ${(markets.reduce((sum, m) => {
-                        const volume = parseFloat(m.volume) || 0;
-                        return sum + volume;
-                      }, 0) / 1000000).toFixed(1)}M
-                    </div>
-                  </div>
-                  <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider font-mono mb-2">Active</div>
-                    <div className="text-2xl font-mono font-bold text-purple-400">
-                      {markets.filter(m => m.active).length}
-                    </div>
-                  </div>
-                  <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider font-mono mb-2">Categories</div>
-                    <div className="text-2xl font-mono font-bold text-yellow-400">
-                      3
-                    </div>
-                  </div>
-                </div>
-              )}
+              <MarketsGrid highlightId={highlightId} />
             </div>
           </div>
-
-          {/* Markets Content - Using MarketsGrid Component */}
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <MarketsGrid highlightId={highlightId} />
-          </main>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MarketsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#030304] flex items-center justify-center">
+        <div className="text-slate-400 font-mono">LOADING_MARKETS...</div>
+      </div>
+    }>
+      <MarketsContent />
+    </Suspense>
   );
 }
