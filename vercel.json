@@ -1,11 +1,9 @@
 {
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/.next",
-  "installCommand": "cd frontend && npm install",
+  "installCommand": "npm install --prefix frontend",
   "rewrites": [
-    {
-      "source": "/app/:path*",
-      "destination": "/frontend/:path*"
-    }
+    { "source": "/app", "destination": "/frontend" },
+    { "source": "/app/:path*", "destination": "/frontend/:path*" }
   ]
 }
