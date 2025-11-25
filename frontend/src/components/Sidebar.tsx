@@ -75,7 +75,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-lg overflow-hidden bg-white/10 border border-white/10">
               <Image
-                src="/app/precedence-logo-transparent.png"
+                src="/precedence-logo-transparent.png"
                 alt="Precedence Logo"
                 width={40}
                 height={40}

@@ -78,6 +78,67 @@ async def predict_case_outcome(payload: Dict[str, Any]):
             "probabilities": {"PLAINTIFF_WIN": 0.0, "DEFENDANT_WIN": 0.0}
         }
 
+@router.get("/insights")
+async def get_ai_insights(limit: int = 4):
+    """
+    Get recent AI-generated insights for the dashboard.
+    Returns prediction summaries, trend analyses, and alerts.
+    """
+    try:
+        logger.info(f"🧠 Fetching AI insights: limit={limit}")
+        
+        # For now, return sample insights
+        # TODO: Integrate with actual prediction history/database
+        insights = [
+            {
+                "case_id": "scotus-2024-001",
+                "case_name": "Smith v. United States",
+                "judge": "Justice Roberts",
+                "type": "prediction",
+                "description": "High likelihood of certiorari grant based on circuit split analysis",
+                "detail": "AI analysis indicates 78% probability of Supreme Court accepting this case due to conflicting appellate rulings on Fourth Amendment interpretation.",
+                "confidence": 0.78,
+                "timestamp": "2 hours ago"
+            },
+            {
+                "case_id": "ca9-2024-1234",
+                "case_name": "Tech Corp v. Privacy Board",
+                "judge": "Judge Chen",
+                "type": "trend",
+                "description": "Emerging pattern in data privacy rulings detected",
+                "detail": "Neural analysis of recent 9th Circuit decisions shows shifting interpretation of CCPA provisions.",
+                "confidence": 0.85,
+                "timestamp": "4 hours ago"
+            },
+            {
+                "case_id": "sdny-2024-5678",
+                "case_name": "SEC v. Crypto Exchange",
+                "judge": "Judge Williams",
+                "type": "alert",
+                "description": "Unusual motion activity detected",
+                "detail": "Multiple amicus briefs filed in short succession suggest increased market interest.",
+                "confidence": 0.92,
+                "timestamp": "6 hours ago"
+            },
+            {
+                "case_id": "dc-cir-2024-9012",
+                "case_name": "Environmental Coalition v. EPA",
+                "judge": "Judge Jackson",
+                "type": "prediction",
+                "description": "Regulatory challenge outcome probability updated",
+                "detail": "Based on recent DC Circuit precedent, AI predicts 65% chance of agency deference.",
+                "confidence": 0.65,
+                "timestamp": "1 day ago"
+            }
+        ]
+        
+        return {"insights": insights[:limit]}
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to fetch AI insights: {str(e)}")
+        return {"insights": [], "error": str(e)}
+
+
 @router.get("/health")
 async def prediction_health_check():
     """Check if LLM analyzer is available"""
