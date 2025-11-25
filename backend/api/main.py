@@ -82,6 +82,7 @@ if not os.getenv("DEBUG", False):
             "precedence.fun",
             "*.precedence.fun",
             "*.up.railway.app",
+            "*.railway.app",
             "localhost",
             "127.0.0.1"                      
             ]
