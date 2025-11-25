@@ -1,3 +1,5 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -37,7 +39,7 @@ export function MarketActivityWidget() {
   useEffect(() => {
     const fetchActivity = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/markets/activity?limit=5');
+        const response = await fetch('http://${API_URL}/api/markets/activity?limit=5');
         if (response.ok) {
           const data = await response.json();
           const activityData = data.activity || [];

@@ -1,3 +1,5 @@
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -44,7 +46,7 @@ export function AIInsightsWidget() {
   useEffect(() => {
     const fetchInsights = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/predictions/insights?limit=4');
+        const response = await fetch('http://${API_URL}/api/predictions/insights?limit=4');
         if (response.ok) {
           const data = await response.json();
           const insightsData = data.insights || [];

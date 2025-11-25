@@ -1,5 +1,7 @@
 'use client';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '../hooks/useWallet';
@@ -33,10 +35,10 @@ export default function Home() {
   useEffect(() => {
     const checkBackend = async () => {
       try {
-        const response = await fetch('http://localhost:8000/health');
+        const response = await fetch('${API_URL}/health');
         if (response.ok) {
           setBackendStatus('online');
-          const marketsResponse = await fetch('http://localhost:8000/api/markets/legal');
+          const marketsResponse = await fetch('${API_URL}/api/markets/legal');
           if (marketsResponse.ok) {
             const data = await marketsResponse.json();
             const rawMarkets = Array.isArray(data) ? data : (data.markets || []);

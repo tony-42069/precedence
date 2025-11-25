@@ -1,5 +1,7 @@
 'use client';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 import { useState } from 'react';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { TradingModal } from '../../components/TradingModal';
@@ -116,7 +118,7 @@ export default function CasesPage() {
     setPredictions({});
 
     try {
-      const response = await fetch(`http://localhost:8000/api/cases/?query=${encodeURIComponent(searchQuery)}&court=${selectedCourt}&limit=10`);
+      const response = await fetch(`http://${API_URL}/api/cases/?query=${encodeURIComponent(searchQuery)}&court=${selectedCourt}&limit=10`);
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
@@ -134,7 +136,7 @@ export default function CasesPage() {
     setAnalyzing(prev => ({ ...prev, [caseItem.id]: true }));
     try {
       // Call NEW LLM endpoint that fetches case details and uses GPT-4
-      const res = await fetch('http://localhost:8000/api/predictions/analyze-case-llm', {
+      const res = await fetch('http://${API_URL}/api/predictions/analyze-case-llm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -164,7 +166,7 @@ export default function CasesPage() {
   const fetchCaseDetails = async (caseId: number) => {
     setLoadingDetails(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/cases/${caseId}/details`);
+      const response = await fetch(`http://${API_URL}/api/cases/${caseId}/details`);
       if (response.ok) {
         const details = await response.json();
         setCaseDetails(details);

@@ -1,5 +1,7 @@
 'use client';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
@@ -22,7 +24,7 @@ function MarketsContent() {
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/markets/legal');
+        const response = await fetch('http://${API_URL}/api/markets/legal');
         if (response.ok) {
           const data = await response.json();
           const rawMarkets = Array.isArray(data) ? data : (data.markets || []);
