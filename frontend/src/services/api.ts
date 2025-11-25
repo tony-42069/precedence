@@ -18,8 +18,7 @@ export interface TradePayload {
 
 export interface TradeResult {
   success: boolean;
-  order_id?: string;  success: boolean;
-  order_id?: string;
+  order_id?: string; 
   transaction_hash?: string;
   error?: string;
 }
