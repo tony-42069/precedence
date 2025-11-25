@@ -9,8 +9,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project
 COPY . .
 
-# Expose port (Railway will assign actual port via $PORT env var)
-EXPOSE 8000
+# Railway assigns port dynamically via $PORT env var
+# Default to 8000 for local development
+ENV PORT=8000
+EXPOSE $PORT
 
-# Start command
-CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start command - uses $PORT from environment
+CMD uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
