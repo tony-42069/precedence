@@ -35,10 +35,10 @@ export default function Home() {
   useEffect(() => {
     const checkBackend = async () => {
       try {
-        const response = await fetch('${API_URL}/health');
+        const response = await fetch(`${API_URL}/health`);
         if (response.ok) {
           setBackendStatus('online');
-          const marketsResponse = await fetch('${API_URL}/api/markets/legal');
+          const marketsResponse = await fetch(`${API_URL}/api/markets/legal`);
           if (marketsResponse.ok) {
             const data = await marketsResponse.json();
             const rawMarkets = Array.isArray(data) ? data : (data.markets || []);
