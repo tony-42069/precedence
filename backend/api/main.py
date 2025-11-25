@@ -79,13 +79,11 @@ if not os.getenv("DEBUG", False):
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=[
-            "precedence.market", 
-            "*.precedence.market"
             "precedence.fun",
             "*.precedence.fun",
             "*.up.railway.app",
             "localhost",
-            "127.0.0.1"                      
+            "127.0.0.1",                      
             ]
     )
 
