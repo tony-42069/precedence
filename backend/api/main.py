@@ -128,10 +128,10 @@ app.include_router(
     tags=["predictions"]
 )
 
-app.include_router(
-    trading.router,
-    tags=["trading"]
-)
+# app.include_router(
+#     trading.router,
+#     tags=["trading"]
+# )
 
 # Health check endpoint
 @app.get("/health")
