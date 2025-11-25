@@ -24,7 +24,7 @@ function MarketsContent() {
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
-        const response = await fetch('http://${API_URL}/api/markets/legal');
+        const response = await fetch('${API_URL}/api/markets/legal');
         if (response.ok) {
           const data = await response.json();
           const rawMarkets = Array.isArray(data) ? data : (data.markets || []);

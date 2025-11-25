@@ -22,7 +22,7 @@ export function TopMarketsWidget() {
     const fetchTrendingMarkets = async () => {
       try {
         // Fetch trending markets from backend (all categories, top 5)
-        const response = await fetch('http://${API_URL}/api/markets/trending?limit=5');
+        const response = await fetch(`${API_URL}/api/markets/trending?limit=5`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch trending markets');

@@ -39,7 +39,7 @@ export function MarketActivityWidget() {
   useEffect(() => {
     const fetchActivity = async () => {
       try {
-        const response = await fetch('http://${API_URL}/api/markets/activity?limit=5');
+        const response = await fetch(`${API_URL}/api/markets/activity?limit=5`);
         if (response.ok) {
           const data = await response.json();
           const activityData = data.activity || [];
