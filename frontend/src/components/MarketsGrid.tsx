@@ -45,7 +45,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
     const fetchMarkets = async () => {
       try {
         // First fetch legal markets
-        const response = await fetch('http://${API_URL}/api/markets/legal');
+        const response = await fetch(`${API_URL}/api/markets/legal`);
         if (response.ok) {
           const data = await response.json();
           let rawMarkets = Array.isArray(data) ? data : (data.markets || []);
@@ -54,7 +54,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
           if (highlightId && !rawMarkets.find((m: Market) => m.id === highlightId)) {
             console.log('Highlighted market not in legal markets, fetching from trending...');
             try {
-              const trendingResponse = await fetch('http://${API_URL}/api/markets/trending?limit=50');
+              const trendingResponse = await fetch(`${API_URL}/api/markets/trending?limit=50`);
               if (trendingResponse.ok) {
                 const trendingData = await trendingResponse.json();
                 const trendingMarkets = trendingData.trending || [];

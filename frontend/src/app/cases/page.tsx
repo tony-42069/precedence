@@ -281,7 +281,7 @@ export default function CasesPage() {
               {/* Title with Logo */}
               <div className="flex items-center justify-center gap-4 mb-3">
                 <img 
-                  src="/app/precedence-logo-transparent.png" 
+                  src="/precedence-logo-transparent.png" 
                   alt="Precedence Logo" 
                   className="w-24 h-24 drop-shadow-[0_0_20px_rgba(59,130,246,0.6)]" 
                 />

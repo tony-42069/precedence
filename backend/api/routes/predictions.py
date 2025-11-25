@@ -44,6 +44,8 @@ async def predict_case_outcome(payload: Dict[str, Any]):
         judge_name = case_data.get("judge_name") or "Unknown Judge"
         court = case_data.get("jurisdiction") or case_data.get("court") or "Unknown Court"
         
+        case_type = case_data.get("case_type") or case_data.get("type") or "civil"
+        
         # 3. Run LLM-based Analysis
         analyzer = get_llm_analyzer()
         
@@ -53,7 +55,8 @@ async def predict_case_outcome(payload: Dict[str, Any]):
             case_name=case_name,
             case_facts=facts,
             judge_name=judge_name,
-            court=court
+            court=court,
+            case_type=case_type
         )
         
         # Transform LLM result to match expected format

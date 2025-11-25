@@ -146,7 +146,32 @@ export function usePredictions() {
   const enhanceMarketWithAI = useCallback(async (market: Market): Promise<MarketWithAI> => {
     const enhancedMarket: MarketWithAI = { ...market };
 
-    // Get AI prediction for this market
+    // Only run AI analysis on legal/court-related markets
+    const question = (market.question || market.title || '').toLowerCase();
+    const tags = (market.tags || []).map(t => t.toLowerCase());
+    
+    const isLegalMarket = 
+      question.includes('court') ||
+      question.includes('scotus') ||
+      question.includes('supreme') ||
+      question.includes('judge') ||
+      question.includes('ruling') ||
+      question.includes('verdict') ||
+      question.includes('lawsuit') ||
+      question.includes('legal') ||
+      question.includes('constitutional') ||
+      question.includes('doj') ||
+      question.includes('sec ') ||
+      question.includes('fcc') ||
+      question.includes('regulation') ||
+      tags.some(t => ['legal', 'court', 'scotus', 'lawsuit', 'judicial'].includes(t));
+
+    if (!isLegalMarket) {
+      // Skip AI prediction for non-legal markets
+      return enhancedMarket;
+    }
+
+    // Get AI prediction for this legal market
     const prediction = await getPrediction(market.id || '', {
       case_name: market.question || market.title,
       case_type: 'legal_market',
