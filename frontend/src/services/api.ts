@@ -1,9 +1,10 @@
 /**
  * API Service Layer for Precedence Trading
- * Clean wrapper around backend calls to Python FastAPI (Port 8000)
+ * Clean wrapper around backend calls to Python FastAPI
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+// Use environment variable in production, fallback to localhost in development
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Types
 export interface TradePayload {
@@ -17,6 +18,7 @@ export interface TradePayload {
 
 export interface TradeResult {
   success: boolean;
+  order_id?: string;  success: boolean;
   order_id?: string;
   transaction_hash?: string;
   error?: string;
