@@ -49,12 +49,63 @@ async def analyze_case_with_llm(payload: Dict[str, Any]):
         
         # 2. Extract relevant fields
         case_name = case_details.get("caseName", f"Case {case_id}")
-        case_facts = case_details.get("summary", "") or case_details.get("procedural_history", "") or "No case details available."
         judge_name = case_details.get("judge", "Unknown Judge")
         court = case_details.get("court", "Federal Court")
         case_type = case_details.get("case_type", "civil")
         
-        # 3. Run LLM Analysis (uses your existing llm_analyzer.py!)
+        # 3. BUILD COMPREHENSIVE CASE FACTS from all available data
+        facts_parts = []
+        
+        # Add summary/syllabus if available
+        if case_details.get("summary"):
+            facts_parts.append(f"CASE SUMMARY:\n{case_details['summary']}")
+        
+        # Add procedural history if available
+        if case_details.get("procedural_history"):
+            facts_parts.append(f"PROCEDURAL HISTORY:\n{case_details['procedural_history']}")
+        
+        # Add disposition if available
+        if case_details.get("disposition"):
+            facts_parts.append(f"DISPOSITION:\n{case_details['disposition']}")
+        
+        # Add parties information
+        parties = case_details.get("parties", {})
+        if parties.get("plaintiffs") or parties.get("defendants"):
+            parties_text = "PARTIES:\n"
+            if parties.get("plaintiffs"):
+                parties_text += f"Plaintiffs/Petitioners: {', '.join(parties['plaintiffs'])}\n"
+            if parties.get("defendants"):
+                parties_text += f"Defendants/Respondents: {', '.join(parties['defendants'])}\n"
+            facts_parts.append(parties_text)
+        
+        # ADD THE FULL OPINION TEXT - This is the gold!
+        opinions = case_details.get("opinions", [])
+        if opinions:
+            for i, opinion in enumerate(opinions[:2]):  # Limit to first 2 opinions
+                opinion_text = opinion.get("plain_text", "")
+                if opinion_text:
+                    # Truncate very long opinions to ~8000 chars to fit in context
+                    truncated = opinion_text[:8000] if len(opinion_text) > 8000 else opinion_text
+                    author = opinion.get("author", "Unknown")
+                    opinion_type = opinion.get("type", "Opinion")
+                    facts_parts.append(f"COURT OPINION ({opinion_type} by {author}):\n{truncated}")
+                    logger.info(f"Added opinion text: {len(truncated)} chars from {author}")
+        
+        # Add citations
+        citations = case_details.get("citations", [])
+        if citations:
+            citations_text = "CITATIONS: " + ", ".join(str(c) for c in citations[:5])
+            facts_parts.append(citations_text)
+        
+        # Combine all facts
+        if facts_parts:
+            case_facts = "\n\n".join(facts_parts)
+        else:
+            case_facts = "No detailed case information available."
+        
+        logger.info(f"📄 Built case_facts with {len(case_facts)} characters for LLM analysis")
+        
+        # 4. Run LLM Analysis (uses your existing llm_analyzer.py!)
         analyzer = get_llm_analyzer()
         
         result = await analyzer.analyze_case(
@@ -65,7 +116,7 @@ async def analyze_case_with_llm(payload: Dict[str, Any]):
             case_type=case_type
         )
         
-        # 4. Return formatted response
+        # 5. Return formatted response
         return {
             "predicted_outcome": result.get("predicted_outcome", "UNKNOWN"),
             "confidence": result.get("confidence_score", 0.5),
