@@ -20,6 +20,81 @@ class FlexibleCaseData(BaseModel):
     class Config:
         extra = "allow"
 
+
+# ============================================================
+# NEW ENDPOINT - Takes case_id, fetches details, runs LLM
+# ============================================================
+@router.post("/analyze-case-llm")
+async def analyze_case_with_llm(payload: Dict[str, Any]):
+    """
+    Analyze a case by ID using LLM.
+    Fetches case details from CourtListener, then runs AI analysis.
+    """
+    try:
+        case_id = payload.get("case_id")
+        if not case_id:
+            raise HTTPException(status_code=400, detail="case_id is required")
+        
+        logger.info(f"🤖 LLM Analysis requested for case_id: {case_id}")
+        
+        # 1. Fetch case details from CourtListener
+        from backend.court_listener_api import CourtListenerAPI
+        
+        async with CourtListenerAPI() as cl_client:
+            case_details = await cl_client.get_enriched_case_details(str(case_id))
+        
+        if not case_details or 'error' in case_details:
+            logger.warning(f"Could not fetch case details for {case_id}, using basic analysis")
+            case_details = {}
+        
+        # 2. Extract relevant fields
+        case_name = case_details.get("caseName", f"Case {case_id}")
+        case_facts = case_details.get("summary", "") or case_details.get("procedural_history", "") or "No case details available."
+        judge_name = case_details.get("judge", "Unknown Judge")
+        court = case_details.get("court", "Federal Court")
+        case_type = case_details.get("case_type", "civil")
+        
+        # 3. Run LLM Analysis (uses your existing llm_analyzer.py!)
+        analyzer = get_llm_analyzer()
+        
+        result = await analyzer.analyze_case(
+            case_name=case_name,
+            case_facts=case_facts,
+            judge_name=judge_name,
+            court=court,
+            case_type=case_type
+        )
+        
+        # 4. Return formatted response
+        return {
+            "predicted_outcome": result.get("predicted_outcome", "UNKNOWN"),
+            "confidence": result.get("confidence_score", 0.5),
+            "reasoning": result.get("reasoning", "Analysis based on available case information."),
+            "probabilities": result.get("probabilities", {
+                "PLAINTIFF_WIN": 0.5,
+                "DEFENDANT_WIN": 0.5
+            }),
+            "key_factors": result.get("key_factors", []),
+            "judge_analysis": result.get("judge_analysis", {}),
+            "risk_assessment": result.get("risk_assessment", ""),
+            "analysis_method": "llm_deep_analysis"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ LLM Analysis failed: {str(e)}", exc_info=True)
+        return {
+            "predicted_outcome": "UNKNOWN",
+            "confidence": 0.0,
+            "reasoning": f"Analysis error: {str(e)}",
+            "probabilities": {"PLAINTIFF_WIN": 0.5, "DEFENDANT_WIN": 0.5},
+            "key_factors": [],
+            "analysis_method": "fallback"
+        }
+# ============================================================
+
+
 @router.post("/case-outcome")
 async def predict_case_outcome(payload: Dict[str, Any]):
     """
@@ -80,6 +155,7 @@ async def predict_case_outcome(payload: Dict[str, Any]):
             "reasoning": f"Internal processing error: {str(e)}",
             "probabilities": {"PLAINTIFF_WIN": 0.0, "DEFENDANT_WIN": 0.0}
         }
+
 
 @router.get("/insights")
 async def get_ai_insights(limit: int = 4):
