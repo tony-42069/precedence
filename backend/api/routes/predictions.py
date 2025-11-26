@@ -119,7 +119,7 @@ async def analyze_case_with_llm(payload: Dict[str, Any]):
         # 5. Return formatted response
         return {
             "predicted_outcome": result.get("predicted_outcome", "UNKNOWN"),
-            "confidence": result.get("confidence_score", 0.5),
+            "confidence": result.get("confidence", 0.5),
             "reasoning": result.get("reasoning", "Analysis based on available case information."),
             "probabilities": result.get("probabilities", {
                 "PLAINTIFF_WIN": 0.5,

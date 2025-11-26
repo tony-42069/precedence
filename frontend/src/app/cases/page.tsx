@@ -719,7 +719,15 @@ export default function CasesPage() {
                     <div className="flex items-center gap-2 mt-1 text-sm text-slate-400 font-mono">
                        <span>JUDGE: {selectedCase.extracted_judge || "UNKNOWN"}</span>
                        <span>•</span>
-                       <span className="text-blue-400">AI CONFIDENCE: HIGH</span>
+                       <span className={`${
+                         predictions[selectedCase.id]?.confidence >= 0.7 ? 'text-green-400' :
+                         predictions[selectedCase.id]?.confidence >= 0.5 ? 'text-blue-400' :
+                         'text-yellow-400'
+                       }`}>AI CONFIDENCE: {
+                         predictions[selectedCase.id]?.confidence >= 0.7 ? 'HIGH' :
+                         predictions[selectedCase.id]?.confidence >= 0.5 ? 'MEDIUM' :
+                         'LOW'
+                       }</span>
                     </div>
                  </div>
                  <button onClick={() => setShowAnalysisModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={20} /></button>
