@@ -49,10 +49,20 @@ console.log('SIGNING_SERVER_URL:', SIGNING_SERVER_URL);
 
 /**
  * Helper: Create ethers signer from private key
+ * Wraps ethers v6 signer to be compatible with ClobClient (expects ethers v5)
  */
 function createEthersSigner(privateKey) {
   const provider = new ethers.JsonRpcProvider(POLYGON_RPC_URL);
-  return new ethers.Wallet(privateKey, provider);
+  const wallet = new ethers.Wallet(privateKey, provider);
+  
+  // ClobClient expects ethers v5 which has _signTypedData
+  // ethers v6 renamed it to signTypedData (no underscore)
+  // Create a compatibility wrapper
+  wallet._signTypedData = async (domain, types, value) => {
+    return wallet.signTypedData(domain, types, value);
+  };
+  
+  return wallet;
 }
 
 /**
