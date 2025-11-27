@@ -570,6 +570,162 @@ app.post('/place-order', async (req, res) => {
 });
 
 /**
+ * STEP 6: Resolve Market - Get tokenIds for a market
+ * 
+ * Fetches market details from Polymarket Gamma API and returns
+ * the clobTokenIds needed for placing orders.
+ * 
+ * Accepts: marketId, conditionId, or slug
+ */
+app.post('/resolve-market', async (req, res) => {
+  try {
+    const { marketId, conditionId, slug } = req.body;
+    
+    if (!marketId && !conditionId && !slug) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: marketId, conditionId, or slug'
+      });
+    }
+
+    const searchTerm = marketId || conditionId || slug;
+    console.log(`🔍 Resolving market: ${searchTerm}`);
+
+    let market;
+
+    // Strategy 1: Try slug lookup first
+    if (slug && !market) {
+      try {
+        const slugUrl = `https://gamma-api.polymarket.com/markets?slug=${slug}`;
+        console.log(`   Trying slug: ${slugUrl}`);
+        const response = await fetch(slugUrl);
+        const markets = await response.json();
+        if (markets && markets.length > 0) {
+          market = markets[0];
+          console.log(`   ✓ Found via slug`);
+        }
+      } catch (e) {
+        console.log(`   ✗ Slug lookup failed`);
+      }
+    }
+
+    // Strategy 2: Try condition_id lookup
+    if ((conditionId || marketId) && !market) {
+      try {
+        const id = conditionId || marketId;
+        const conditionUrl = `https://gamma-api.polymarket.com/markets?condition_id=${id}`;
+        console.log(`   Trying condition_id: ${conditionUrl}`);
+        const response = await fetch(conditionUrl);
+        const markets = await response.json();
+        if (markets && markets.length > 0) {
+          market = markets[0];
+          console.log(`   ✓ Found via condition_id`);
+        }
+      } catch (e) {
+        console.log(`   ✗ Condition lookup failed`);
+      }
+    }
+
+    // Strategy 3: Try direct ID lookup (Gamma internal ID)
+    if (marketId && !market) {
+      try {
+        const directUrl = `https://gamma-api.polymarket.com/markets/${marketId}`;
+        console.log(`   Trying direct ID: ${directUrl}`);
+        const response = await fetch(directUrl);
+        if (response.ok) {
+          market = await response.json();
+          console.log(`   ✓ Found via direct ID`);
+        }
+      } catch (e) {
+        console.log(`   ✗ Direct lookup failed`);
+      }
+    }
+
+    // Strategy 4: Try clob_token_ids lookup
+    if (marketId && !market) {
+      try {
+        const clobUrl = `https://gamma-api.polymarket.com/markets?clob_token_ids=${marketId}`;
+        console.log(`   Trying clob_token_ids: ${clobUrl}`);
+        const response = await fetch(clobUrl);
+        const markets = await response.json();
+        if (markets && markets.length > 0) {
+          market = markets[0];
+          console.log(`   ✓ Found via clob_token_ids`);
+        }
+      } catch (e) {
+        console.log(`   ✗ Clob lookup failed`);
+      }
+    }
+
+    if (!market) {
+      return res.status(404).json({
+        success: false,
+        error: 'Market not found'
+      });
+    }
+
+    // Extract token IDs - handle string or array
+    let clobTokenIds = market.clobTokenIds || market.clob_token_ids || [];
+    if (typeof clobTokenIds === 'string') {
+      try {
+        clobTokenIds = JSON.parse(clobTokenIds);
+      } catch (e) {}
+    }
+    
+    let yesTokenId, noTokenId;
+    if (Array.isArray(clobTokenIds) && clobTokenIds.length >= 2) {
+      yesTokenId = clobTokenIds[0];
+      noTokenId = clobTokenIds[1];
+    }
+
+    // Get prices
+    let yesPrice = 0.5, noPrice = 0.5;
+    try {
+      let prices = market.outcomePrices || market.outcome_prices;
+      if (typeof prices === 'string') prices = JSON.parse(prices);
+      if (Array.isArray(prices) && prices.length >= 2) {
+        yesPrice = parseFloat(prices[0]);
+        noPrice = parseFloat(prices[1]);
+      }
+    } catch (e) {}
+
+    console.log(`✅ Market resolved:`);
+    console.log(`   Question: ${market.question}`);
+    console.log(`   Yes Token: ${yesTokenId}`);
+    console.log(`   No Token: ${noTokenId}`);
+
+    res.json({
+      success: true,
+      market: {
+        id: market.id,
+        question: market.question,
+        description: market.description,
+        active: market.active,
+        closed: market.closed,
+        conditionId: market.condition_id || market.conditionId,
+        slug: market.slug,
+        volume: market.volume
+      },
+      tokens: {
+        yes: yesTokenId,
+        no: noTokenId
+      },
+      prices: {
+        yes: yesPrice,
+        no: noPrice
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Market resolution failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * Get session status
  */
 app.get('/session/:eoaAddress', (req, res) => {
@@ -610,6 +766,7 @@ app.get('/health', (req, res) => {
       deploySafe: 'POST /deploy-safe',
       deriveCredentials: 'POST /derive-credentials',
       setApprovals: 'POST /set-approvals',
+      resolveMarket: 'POST /resolve-market',
       placeOrder: 'POST /place-order',
       getSession: 'GET /session/:eoaAddress'
     }
@@ -626,7 +783,8 @@ app.listen(PORT, () => {
   console.log('   2. POST /deploy-safe     - Deploy Safe wallet');
   console.log('   3. POST /derive-credentials - Derive User API credentials');
   console.log('   4. POST /set-approvals   - Set token approvals');
-  console.log('   5. POST /place-order     - Place orders');
+  console.log('   5. POST /resolve-market  - Get tokenIds for a market');
+  console.log('   6. POST /place-order     - Place orders');
   console.log('');
   console.log('📊 Health check: http://localhost:' + PORT + '/health');
 });
