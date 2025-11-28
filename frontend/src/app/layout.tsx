@@ -1,7 +1,10 @@
+'use client';
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
+import { PrivyProvider } from '@privy-io/react-auth';
+import { UserProvider } from "../contexts/UserContext"; // <-- ADD THIS IMPORT
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,24 +16,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Precedence | Legal Prediction Markets",
-  description: "AI-powered legal prediction markets. Trade on case outcomes with confidence.",
-};
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Providers>
-          {children}
-        </Providers>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <PrivyProvider
+          appId="cmii5u5hj089jjr0c9q37ptmk"
+          config={{
+            loginMethods: ['email', 'google', 'wallet'],
+            appearance: {
+              theme: 'dark',
+              accentColor: '#0052FF',
+              logo: '/precedence-logo-transparent.png', // Add your logo
+            },
+            embeddedWallets: {
+              ethereum: {
+                createOnLogin: 'all-users', // Auto-create wallets for everyone
+              },
+            },
+          }}
+        >
+          <UserProvider>
+            {children}
+          </UserProvider>
+        </PrivyProvider>
       </body>
     </html>
   );
