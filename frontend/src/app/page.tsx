@@ -28,6 +28,7 @@ export default function Home() {
   const pathname = usePathname();
   const searchParams = useSearchParams(); // Added search params
   const { login } = usePrivy(); // Added Privy hook
+  const { logout: privyLogout } = usePrivy();
   
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,11 +55,15 @@ export default function Home() {
     }
   }, [searchParams, login]);
 
-  // Handle disconnect
-  const handleDisconnect = () => {
-    disconnect();
-    clearUser();
-  };
+// Update handleDisconnect
+const handleDisconnect = () => {
+  // Logout from Privy FIRST
+  privyLogout();
+  
+  // Then clear local state
+  disconnect(); // Old wallet disconnect
+  clearUser(); // Clear user profile
+};
 
   // Fetch markets for stats and hero
   useEffect(() => {
