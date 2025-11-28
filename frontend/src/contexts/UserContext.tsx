@@ -66,25 +66,34 @@ export function UserProvider({ children }: { children: ReactNode }) {
   /**
    * Update user profile
    */
-  const updateProfile = useCallback(async (data: Partial<UserProfile>) => {
-    if (!user) return;
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const updated = await userService.updateProfile(user.wallet_address, data);
-      setUser(updated);
-      console.log('✅ Profile updated');
-    } catch (err: any) {
-      const message = err.message || 'Failed to update profile';
-      setError(message);
-      console.error('❌ Profile update failed:', message);
-      throw err;
-    } finally {
-      setIsLoading(false);
+const updateProfile = useCallback(async (data: Partial<UserProfile>) => {
+  if (!user) return;
+  
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    // Transform data: convert null to undefined for backend compatibility
+    const transformedData: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== null) { // Only include non-null values
+        transformedData[key] = value;
+      }
     }
-  }, [user]);
+    
+    const updated = await userService.updateProfile(user.wallet_address, transformedData);
+    setUser(updated);
+    console.log('✅ Profile updated');
+  } catch (err: any) {
+    const message = err.message || 'Failed to update profile';
+    setError(message);
+    console.error('❌ Profile update failed:', message);
+    throw err;
+  } finally {
+    setIsLoading(false);
+  }
+}, [user]);
+
 
   /**
    * Refresh user data from server
