@@ -145,7 +145,7 @@ export default function ProfilePage() {
                 <div className="flex items-center space-x-4 ml-auto">
                   {!user ? (
                     <button
-                      onClick={() => setWalletModalOpen(true)}
+                      onClick={() => window.location.href = '/wallet-connect.html'} // Redirect to polished page
                       className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all"
                     >
                       Connect Wallet
