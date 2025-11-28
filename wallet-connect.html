@@ -98,39 +98,26 @@
         h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.5px; }
         .subtitle { color: var(--text-gray); font-size: 14px; margin-bottom: 32px; }
 
-        /* Wallet Buttons */
-        .wallet-stack { display: flex; flex-direction: column; gap: 12px; }
-
-        .wallet-btn {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--glass-border);
-            padding: 16px 20px; border-radius: 12px;
-            display: flex; align-items: center; justify-content: space-between;
+        /* Launch Button */
+        .launch-btn {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            padding: 16px 32px; border-radius: 12px;
             color: white; cursor: pointer; transition: all 0.2s;
-            text-align: left; font-family: 'Inter', sans-serif;
+            font-family: 'Inter', sans-serif; font-weight: 600; font-size: 16px;
+            display: inline-flex; align-items: center; gap: 12px;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(0, 82, 255, 0.3);
         }
 
-        .wallet-left { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 15px; }
-        .wallet-icon { width: 28px; height: 28px; }
-        
-        /* Phantom Hover */
-        .wallet-btn.phantom:hover:not(:disabled) {
-            background: rgba(171, 159, 242, 0.1); border-color: #AB9FF2;
-            box-shadow: 0 0 20px rgba(171, 159, 242, 0.2);
+        .launch-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 82, 255, 0.4);
         }
-        /* MetaMask Hover */
-        .wallet-btn.metamask:hover:not(:disabled) {
-            background: rgba(246, 133, 27, 0.1); border-color: #F6851B;
-            box-shadow: 0 0 20px rgba(246, 133, 27, 0.2);
-        }
-        
-        .wallet-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: grayscale(1); }
 
-        .status-indicator {
-            width: 8px; height: 8px; border-radius: 50%; background: var(--glass-border);
-            transition: 0.3s;
+        .launch-btn:active {
+            transform: translateY(0);
         }
-        .wallet-btn:hover:not(:disabled) .status-indicator { background: var(--success); box-shadow: 0 0 10px var(--success); }
 
         /* Footer Links */
         .skip-link {
@@ -140,32 +127,6 @@
         }
         .skip-link:hover { color: var(--primary); }
 
-        /* Loading & Error States */
-        .loading-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(3, 3, 4, 0.9); backdrop-filter: blur(5px);
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 10;
-        }
-        .spinner {
-            width: 30px; height: 30px; border: 2px solid var(--glass-border);
-            border-top-color: var(--primary); border-radius: 50%;
-            animation: spin 1s linear infinite; margin-bottom: 16px;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-
-        .error-msg {
-            margin-bottom: 20px; padding: 12px; border-radius: 8px;
-            background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);
-            color: #FCA5A5; font-size: 13px; display: none; text-align: left;
-        }
-        
-        .success-msg {
-            margin-bottom: 20px; padding: 12px; border-radius: 8px;
-            background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
-            color: #6EE7B7; font-size: 13px; display: none; text-align: left;
-        }
-
         /* Scan Line Effect */
         .scan-line {
             position: absolute; top: 0; left: 0; width: 100%; height: 2px;
@@ -173,10 +134,6 @@
             animation: scan 3s linear infinite; opacity: 0.5;
         }
         @keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
-        
-        .loading-text {
-            font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text-gray);
-        }
 
     </style>
 </head>
@@ -203,205 +160,34 @@
                 <img src="public/precedence-logo-transparent.png" alt="Precedence" style="width: 40px; height: 40px;">
             </div>
             
-            <h1>Sign In / Create Profile</h1>
-            <p class="subtitle">Connect your wallet to access your Precedence trading profile.</p>
+            <h1>Launch Terminal</h1>
+            <p class="subtitle">Access your Precedence trading profile and legal prediction markets.</p>
 
-            <div id="error-message" class="error-msg">
-                <strong>Connection Failed:</strong><br>Wallet not detected or request rejected.
-            </div>
-            
-            <div id="success-message" class="success-msg">
-                <strong>Profile Created!</strong><br>Redirecting to terminal...
-            </div>
-
-            <div class="wallet-stack">
-                <button id="phantom-btn" class="wallet-btn phantom" disabled>
-                    <div class="wallet-left">
-                        <img src="public/phantom-logo.png" alt="Phantom" class="wallet-icon" onerror="this.style.display='none'"> 
-                        <!-- Fallback Icon if image missing -->
-                        <i data-lucide="ghost" style="width:24px; height:24px;" class="fallback-icon"></i>
-                        <span>Phantom Wallet</span>
-                    </div>
-                    <div class="status-indicator"></div>
-                </button>
-
-                <button id="metamask-btn" class="wallet-btn metamask" disabled>
-                    <div class="wallet-left">
-                        <img src="public/matamask-logo.png" alt="MetaMask" class="wallet-icon" onerror="this.style.display='none'">
-                        <!-- Fallback Icon if image missing -->
-                        <i data-lucide="box" style="width:24px; height:24px;" class="fallback-icon"></i>
-                        <span>MetaMask</span>
-                    </div>
-                    <div class="status-indicator"></div>
-                </button>
-            </div>
+            <button class="launch-btn" onclick="launchTerminal()">
+                <span>🚀</span>
+                Launch Terminal
+            </button>
 
             <a href="https://precedence.fun/app" class="skip-link">
-                <span style="opacity: 0.5;">></span> BROWSE_WITHOUT_WALLET
+                <span style="opacity: 0.5;">></span> BROWSE_WITHOUT_ACCOUNT
             </a>
-        </div>
-
-        <!-- Loading Overlay -->
-        <div class="loading-overlay" id="loading">
-            <div class="spinner"></div>
-            <div class="loading-text" id="loading-text">ESTABLISHING UPLINK...</div>
         </div>
     </div>
 
     <script>
         lucide.createIcons();
 
-        // --- API Configuration ---
-        const API_BASE_URL = 'http://localhost:8000'; // Change to production URL when deployed
-        const APP_URL = 'http://localhost:3000'; // Change to production URL when deployed
-
-        // --- DOM Elements ---
-        const phantomBtn = document.getElementById('phantom-btn');
-        const metamaskBtn = document.getElementById('metamask-btn');
-        const loading = document.getElementById('loading');
-        const loadingText = document.getElementById('loading-text');
-        const errorMsg = document.getElementById('error-message');
-        const successMsg = document.getElementById('success-message');
-
-        let phantomAvailable = false;
-        let metaMaskAvailable = false;
-
-        // --- Helper: Register User in Database ---
-        async function registerUser(walletAddress) {
-            loadingText.textContent = 'CREATING_PROFILE...';
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/api/users/register`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        wallet_address: walletAddress
-                    })
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Failed to register user');
-                }
-
-                const user = await response.json();
-                console.log('✅ User registered:', user);
-                return user;
-            } catch (err) {
-                console.error('❌ Registration failed:', err);
-                throw err;
-            }
+        function launchTerminal() {
+            // Redirect to the Next.js app where Privy will handle authentication
+            window.location.href = '/app';
         }
 
-        // --- Helper: Handle Successful Connection ---
-        async function handleSuccessfulConnection(walletAddress, walletType) {
-            try {
-                // Register user in database
-                await registerUser(walletAddress);
-                
-                // Store in localStorage for session recovery
-                localStorage.setItem('precedence_wallet', walletAddress);
-                localStorage.setItem('wallet_type', walletType);
-                
-                // Also store in sessionStorage for immediate use
-                sessionStorage.setItem('wallet_connected', 'true');
-                sessionStorage.setItem('wallet_type', walletType);
-                sessionStorage.setItem('wallet_address', walletAddress);
-                
-                // Show success message
-                loadingText.textContent = 'PROFILE_READY!';
-                successMsg.style.display = 'block';
-                
-                // Redirect after short delay
-                setTimeout(() => {
-                    window.location.href = APP_URL;
-                }, 1000);
-                
-            } catch (err) {
-                // Still redirect even if registration fails - frontend will retry
-                console.warn('Registration failed, redirecting anyway:', err);
-                localStorage.setItem('precedence_wallet', walletAddress);
-                localStorage.setItem('wallet_type', walletType);
-                sessionStorage.setItem('wallet_connected', 'true');
-                sessionStorage.setItem('wallet_type', walletType);
-                sessionStorage.setItem('wallet_address', walletAddress);
-                window.location.href = APP_URL;
-            }
-        }
-
-        // --- Initialize ---
+        // Auto-redirect returning users who already have a session
         window.addEventListener('load', () => {
-            // 1. Check Phantom
-            if (window.solana && window.solana.isPhantom) {
-                phantomAvailable = true;
-                phantomBtn.disabled = false;
-            }
-
-            // 2. Check MetaMask
-            if (window.ethereum && window.ethereum.isMetaMask) {
-                metaMaskAvailable = true;
-                metamaskBtn.disabled = false;
-            }
-
-            // 3. If neither, show error immediately
-            if(!phantomAvailable && !metaMaskAvailable) {
-                errorMsg.style.display = 'block';
-                errorMsg.innerHTML = "<strong>No Wallets Detected:</strong><br>Please install Phantom or MetaMask extension.";
-            }
-            
-            // 4. Check if user is already connected (returning user)
             const savedWallet = localStorage.getItem('precedence_wallet');
             if (savedWallet) {
                 // Auto-redirect returning users
-                window.location.href = APP_URL;
-            }
-        });
-
-        // --- Phantom Handler ---
-        phantomBtn.addEventListener('click', async () => {
-            if (!phantomAvailable) return;
-            
-            loading.style.display = 'flex';
-            loadingText.textContent = 'CONNECTING_WALLET...';
-            errorMsg.style.display = 'none';
-            successMsg.style.display = 'none';
-
-            try {
-                const response = await window.solana.connect();
-                const publicKey = response.publicKey.toString();
-                
-                await handleSuccessfulConnection(publicKey, 'phantom');
-                
-            } catch (err) {
-                console.error(err);
-                loading.style.display = 'none';
-                errorMsg.style.display = 'block';
-                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request or connection error.";
-            }
-        });
-
-        // --- MetaMask Handler ---
-        metamaskBtn.addEventListener('click', async () => {
-            if (!metaMaskAvailable) return;
-
-            loading.style.display = 'flex';
-            loadingText.textContent = 'CONNECTING_WALLET...';
-            errorMsg.style.display = 'none';
-            successMsg.style.display = 'none';
-
-            try {
-                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                const address = accounts[0];
-
-                await handleSuccessfulConnection(address, 'metamask');
-
-            } catch (err) {
-                console.error(err);
-                loading.style.display = 'none';
-                errorMsg.style.display = 'block';
-                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request or connection error.";
+                window.location.href = '/app';
             }
         });
     </script>
