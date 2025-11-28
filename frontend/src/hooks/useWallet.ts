@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface WalletState {
   connected: boolean;
@@ -21,6 +21,9 @@ export const useWallet = () => {
     error: null,
   });
 
+  // Callback for when wallet connects - will be set by components using useUser
+  const [onConnectCallback, setOnConnectCallback] = useState<((address: string) => void) | null>(null);
+
   // Check if wallets are available
   const checkWalletAvailability = () => {
     const hasPhantom = typeof window !== 'undefined' && window.solana?.isPhantom;
@@ -28,6 +31,11 @@ export const useWallet = () => {
 
     return { hasPhantom, hasMetaMask };
   };
+
+  // Set callback for successful connection
+  const setOnConnect = useCallback((callback: (address: string) => void) => {
+    setOnConnectCallback(() => callback);
+  }, []);
 
   // Connect Phantom (Solana) wallet
   const connectPhantom = async () => {
@@ -54,12 +62,20 @@ export const useWallet = () => {
         error: null,
       });
 
+      // Trigger callback for user registration
+      if (onConnectCallback) {
+        onConnectCallback(address);
+      }
+
+      return address;
+
     } catch (error: any) {
       setWalletState(prev => ({
         ...prev,
         connecting: false,
         error: error.message || 'Failed to connect Phantom wallet',
       }));
+      throw error;
     }
   };
 
@@ -93,17 +109,25 @@ export const useWallet = () => {
         error: null,
       });
 
+      // Trigger callback for user registration
+      if (onConnectCallback) {
+        onConnectCallback(address);
+      }
+
+      return address;
+
     } catch (error: any) {
       setWalletState(prev => ({
         ...prev,
         connecting: false,
         error: error.message || 'Failed to connect MetaMask wallet',
       }));
+      throw error;
     }
   };
 
   // Disconnect wallet
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     setWalletState({
       connected: false,
       address: null,
@@ -113,37 +137,75 @@ export const useWallet = () => {
       connecting: false,
       error: null,
     });
-  };
+    
+    // Clear stored wallet data
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('precedence_wallet');
+    }
+  }, []);
 
   // Check for stored wallet connection on mount
   useEffect(() => {
-    const checkStoredConnection = () => {
+    const checkStoredConnection = async () => {
       try {
-        const connected = sessionStorage.getItem('wallet_connected') === 'true';
-        const walletType = sessionStorage.getItem('wallet_type') as 'phantom' | 'metamask' | null;
-        const address = sessionStorage.getItem('wallet_address');
+        if (typeof window === 'undefined') return;
+        
+        const savedWallet = localStorage.getItem('precedence_wallet');
+        if (!savedWallet) return;
 
-        if (connected && walletType && address) {
-          // Restore wallet state from sessionStorage
-          const network = walletType === 'phantom' ? 'solana' : 'ethereum';
+        // Try to reconnect to MetaMask
+        if (window.ethereum?.isMetaMask) {
+          try {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts.length > 0 && accounts[0].toLowerCase() === savedWallet.toLowerCase()) {
+              const balanceWei = await window.ethereum.request({
+                method: 'eth_getBalance',
+                params: [accounts[0], 'latest'],
+              });
+              const balance = (parseInt(balanceWei, 16) / 1e18).toFixed(4);
 
-          setWalletState({
-            connected: true,
-            address,
-            balance: null, // Would need to refetch balance
-            network,
-            walletType,
-            connecting: false,
-            error: null,
-          });
-
-          // Clear the stored data after restoring
-          sessionStorage.removeItem('wallet_connected');
-          sessionStorage.removeItem('wallet_type');
-          sessionStorage.removeItem('wallet_address');
+              setWalletState({
+                connected: true,
+                address: accounts[0],
+                balance,
+                network: 'ethereum',
+                walletType: 'metamask',
+                connecting: false,
+                error: null,
+              });
+              console.log('🔄 Restored MetaMask connection:', accounts[0]);
+              return;
+            }
+          } catch (e) {
+            console.log('Could not restore MetaMask connection');
+          }
         }
+
+        // Try to reconnect to Phantom
+        if (window.solana?.isPhantom) {
+          try {
+            const response = await window.solana.connect({ onlyIfTrusted: true });
+            const address = response.publicKey.toString();
+            if (address === savedWallet) {
+              setWalletState({
+                connected: true,
+                address,
+                balance: '0',
+                network: 'solana',
+                walletType: 'phantom',
+                connecting: false,
+                error: null,
+              });
+              console.log('🔄 Restored Phantom connection:', address);
+              return;
+            }
+          } catch (e) {
+            console.log('Could not restore Phantom connection');
+          }
+        }
+
       } catch (error) {
-        console.warn('Failed to restore wallet connection from sessionStorage:', error);
+        console.warn('Failed to restore wallet connection:', error);
       }
     };
 
@@ -155,37 +217,46 @@ export const useWallet = () => {
   // Listen for account changes
   useEffect(() => {
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+      const handleAccountsChanged = (accounts: string[]) => {
         if (accounts.length === 0) {
           disconnect();
-        } else {
-          // Reconnect with new account
-          connectMetaMask();
+        } else if (walletState.connected && walletState.walletType === 'metamask') {
+          // Update to new account
+          setWalletState(prev => ({
+            ...prev,
+            address: accounts[0],
+          }));
         }
-      });
+      };
 
-      window.ethereum.on('chainChanged', () => {
+      const handleChainChanged = () => {
         // Reload page on network change
         window.location.reload();
-      });
-    }
+      };
 
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      return () => {
+        window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum?.removeListener('chainChanged', handleChainChanged);
+      };
+    }
+  }, [disconnect, walletState.connected, walletState.walletType]);
+
+  useEffect(() => {
     if (window.solana) {
-      window.solana.on('disconnect', () => {
+      const handleDisconnect = () => {
         disconnect();
-      });
-    }
+      };
 
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener('accountsChanged', () => {});
-        window.ethereum.removeListener('chainChanged', () => {});
-      }
-      if (window.solana) {
-        window.solana.removeListener('disconnect', () => {});
-      }
-    };
-  }, []);
+      window.solana.on('disconnect', handleDisconnect);
+
+      return () => {
+        window.solana?.removeListener('disconnect', handleDisconnect);
+      };
+    }
+  }, [disconnect]);
 
   return {
     walletState,
@@ -193,6 +264,7 @@ export const useWallet = () => {
     connectMetaMask,
     disconnect,
     checkWalletAvailability,
+    setOnConnect,
   };
 };
 
@@ -201,7 +273,7 @@ declare global {
   interface Window {
     solana?: {
       isPhantom?: boolean;
-      connect(): Promise<{ publicKey: { toString(): string } }>;
+      connect(options?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>;
       disconnect(): Promise<void>;
       on(event: string, handler: (...args: any[]) => void): void;
       removeListener(event: string, handler: (...args: any[]) => void): void;

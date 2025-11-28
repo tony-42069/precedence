@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+'use client';
+
+import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -7,16 +9,33 @@ import {
   Gavel,
   TrendingUp,
   Wallet,
-  User
+  User,
+  LogOut,
+  Trophy
 } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
+import { useWallet } from '../hooks/useWallet';
 
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  onConnectWallet?: () => void;
 }
 
-export function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const pathname = usePathname();
+  const { user, clearUser } = useUser();
+  const { walletState, disconnect } = useWallet();
+
+  const handleDisconnect = () => {
+    disconnect();
+    clearUser();
+  };
+
+  // Format wallet address for display
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
 
   const navigationItems = [
     {
@@ -44,6 +63,12 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       description: 'Your Positions'
     },
     {
+      name: 'Leaderboard',
+      href: '/leaderboard',
+      icon: Trophy,
+      description: 'Top Traders'
+    },
+    {
       name: 'Profile',
       href: '/profile',
       icon: User,
@@ -67,7 +92,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         transition-transform duration-300 ease-in-out shadow-2xl
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
-        w-64 overflow-y-auto
+        w-64 overflow-y-auto flex flex-col
       `}>
 
         {/* Header */}
@@ -92,8 +117,10 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
           {/* Connection Indicator */}
           <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="text-xs text-green-400 font-mono hidden lg:block">ONLINE</span>
+            <div className={`w-2 h-2 rounded-full animate-pulse ${user ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
+            <span className={`text-xs font-mono hidden lg:block ${user ? 'text-green-400' : 'text-yellow-400'}`}>
+              {user ? 'ONLINE' : 'OFFLINE'}
+            </span>
 
             {/* Mobile Close Button */}
             <button
@@ -106,6 +133,61 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </button>
           </div>
         </div>
+
+        {/* User Profile Section */}
+        {user ? (
+          <div className="p-4 border-b border-white/10 bg-gradient-to-r from-green-600/5 to-blue-600/5">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                {user.username ? user.username[0].toUpperCase() : user.wallet_address.slice(2, 4).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-white truncate">
+                  {user.display_name || user.username || formatAddress(user.wallet_address)}
+                </div>
+                <div className="text-xs text-slate-400 font-mono">
+                  {formatAddress(user.wallet_address)}
+                </div>
+              </div>
+              <button
+                onClick={handleDisconnect}
+                className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                title="Disconnect"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+            
+            {/* User Stats */}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="bg-white/5 rounded-lg p-2 text-center">
+                <div className="text-xs text-slate-400">Volume</div>
+                <div className="text-sm font-mono text-white">
+                  ${user.total_volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-2 text-center">
+                <div className="text-xs text-slate-400">P&L</div>
+                <div className={`text-sm font-mono ${user.total_profit_loss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {user.total_profit_loss >= 0 ? '+' : ''}${user.total_profit_loss.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 border-b border-white/10">
+            <button
+              onClick={onConnectWallet}
+              className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
+            >
+              <Wallet size={18} />
+              <span>Connect Wallet</span>
+            </button>
+            <p className="text-xs text-slate-500 text-center mt-2">
+              Connect to start trading
+            </p>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-1">

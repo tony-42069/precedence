@@ -5,12 +5,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '../hooks/useWallet';
+import { useUser } from '../contexts/UserContext';
 import { usePredictions } from '../hooks/usePredictions';
 import { Sidebar, MobileMenuButton } from '../components/Sidebar';
 import { HeroSection } from '../components/HeroSection';
 import { MarketActivityWidget } from '../components/MarketActivityWidget';
 import { TopMarketsWidget } from '../components/TopMarketsWidget';
 import { AIInsightsWidget } from '../components/AIInsightsWidget';
+import { WalletConnectModal } from '../components/WalletConnectModal';
 import { Terminal } from 'lucide-react';
 
 interface Market {
@@ -27,9 +29,17 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
-  const { walletState, connectPhantom, connectMetaMask, disconnect, checkWalletAvailability } = useWallet();
+  const { walletState, disconnect } = useWallet();
+  const { user, clearUser } = useUser();
   const { enhanceMarketsWithAI } = usePredictions();
+
+  // Handle disconnect
+  const handleDisconnect = () => {
+    disconnect();
+    clearUser();
+  };
 
   // Fetch markets for stats and hero
   useEffect(() => {
@@ -66,6 +76,11 @@ export default function Home() {
 
   const currentView = pathname === '/' ? 'dashboard' : 'dashboard';
 
+  // Format wallet address for display
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#030304] text-slate-200 font-sans selection:bg-blue-500/30">
       
@@ -77,7 +92,11 @@ export default function Home() {
       </div>
 
       <div className="relative z-10 flex min-h-screen">
-        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        <Sidebar 
+          isOpen={sidebarOpen} 
+          onToggle={() => setSidebarOpen(!sidebarOpen)} 
+          onConnectWallet={() => setWalletModalOpen(true)}
+        />
         <MobileMenuButton onClick={() => setSidebarOpen(!sidebarOpen)} isOpen={sidebarOpen} />
 
         <div className="flex-1 w-full min-w-0 lg:ml-64">
@@ -95,56 +114,40 @@ export default function Home() {
 
                 <div className="flex items-center space-x-4 ml-auto">
                   {/* Wallet Connection */}
-                  {!walletState.connected ? (
-                    <div className="flex items-center space-x-2">
-                      {checkWalletAvailability().hasPhantom && (
-                        <button
-                          onClick={connectPhantom}
-                          disabled={walletState.connecting}
-                          className="bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-300 px-4 py-1.5 rounded-lg text-sm font-mono transition-all flex items-center space-x-2"
-                        >
-                          <span>◈</span>
-                          <span>{walletState.connecting ? 'INIT...' : 'PHANTOM'}</span>
-                        </button>
-                      )}
-                      {checkWalletAvailability().hasMetaMask && (
-                        <button
-                          onClick={connectMetaMask}
-                          disabled={walletState.connecting}
-                          className="bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-300 px-4 py-1.5 rounded-lg text-sm font-mono transition-all flex items-center space-x-2"
-                        >
-                          <span>🦊</span>
-                          <span>{walletState.connecting ? 'INIT...' : 'METAMASK'}</span>
-                        </button>
-                      )}
-                      {!checkWalletAvailability().hasPhantom && !checkWalletAvailability().hasMetaMask && (
-                        <div className="bg-yellow-500/10 border border-yellow-500/20 px-4 py-1.5 rounded-lg max-w-xs">
-                          <div className="text-xs text-yellow-500 font-mono">⚠️ WALLET_NOT_DETECTED</div>
-                        </div>
-                      )}
-                    </div>
+                  {!user ? (
+                    <button
+                      onClick={() => setWalletModalOpen(true)}
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all flex items-center space-x-2 shadow-lg hover:shadow-blue-500/25"
+                    >
+                      <span>Connect Wallet</span>
+                    </button>
                   ) : (
                     <div className="flex items-center space-x-3">
+                      {/* User Display */}
                       <div className="bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
                         <div className="flex items-center space-x-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            walletState.network === 'solana' ? 'bg-purple-500 shadow-[0_0_8px_#a855f7]' : 'bg-orange-500 shadow-[0_0_8px_#f97316]'
-                          }`}></div>
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                            {user.username ? user.username[0].toUpperCase() : user.wallet_address.slice(2, 4).toUpperCase()}
+                          </div>
                           <div className="text-sm">
                             <div className="font-mono text-slate-200 text-xs">
-                              {walletState.address?.slice(0, 6)}...{walletState.address?.slice(-4)}
+                              {user.display_name || user.username || formatAddress(user.wallet_address)}
                             </div>
                           </div>
                         </div>
                       </div>
-                      {walletState.balance && (
-                        <div className="bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hidden sm:block">
-                          <div className="text-xs font-mono font-medium text-slate-300">
-                            {walletState.balance} {walletState.network === 'solana' ? 'SOL' : 'ETH'}
-                          </div>
+                      
+                      {/* P&L Badge */}
+                      <div className="bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hidden sm:block">
+                        <div className={`text-xs font-mono font-medium ${user.total_profit_loss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {user.total_profit_loss >= 0 ? '+' : ''}${user.total_profit_loss.toFixed(2)}
                         </div>
-                      )}
-                      <button onClick={disconnect} className="text-xs text-slate-500 hover:text-red-400 font-mono underline decoration-slate-700">
+                      </div>
+                      
+                      <button 
+                        onClick={handleDisconnect} 
+                        className="text-xs text-slate-500 hover:text-red-400 font-mono underline decoration-slate-700"
+                      >
                         EXIT
                       </button>
                     </div>
@@ -206,6 +209,12 @@ export default function Home() {
           </>
         </div>
       </div>
+
+      {/* Wallet Connect Modal */}
+      <WalletConnectModal 
+        isOpen={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+      />
     </div>
   );
 }

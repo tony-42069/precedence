@@ -2,36 +2,44 @@
 
 import { X } from 'lucide-react';
 import { useWallet } from '../hooks/useWallet';
+import { useUser } from '../contexts/UserContext';
 
 interface WalletConnectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConnect?: () => void; // ✅ ADDED: Optional callback after successful connection
+  onConnect?: () => void;
 }
 
 export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnectModalProps) {
   const { connectPhantom, connectMetaMask, checkWalletAvailability, walletState } = useWallet();
+  const { registerOrFetchUser, isLoading: userLoading } = useUser();
 
   if (!isOpen) return null;
 
   const { hasPhantom, hasMetaMask } = checkWalletAvailability();
 
-  const handleConnect = async (connectFn: () => Promise<void>) => {
+  const handleConnect = async (connectFn: () => Promise<string | undefined>) => {
     try {
-      await connectFn();
-      // Wait a moment for wallet state to update, then call callbacks
-      setTimeout(() => {
-        if (walletState.connected) {
-          onClose(); // Close the wallet modal
-          if (onConnect) {
-            onConnect(); // Trigger parent's onConnect handler (opens trading modal)
-          }
+      // Connect wallet and get address
+      const address = await connectFn();
+      
+      if (address) {
+        // Register or fetch user profile from database
+        console.log('🔄 Registering user with address:', address);
+        await registerOrFetchUser(address);
+        
+        // Close modal and trigger callback
+        onClose();
+        if (onConnect) {
+          onConnect();
         }
-      }, 500);
+      }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
     }
   };
+
+  const isConnecting = walletState.connecting || userLoading;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -72,7 +80,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnect
               <div>
                 <p className="text-sm font-mono text-blue-300 mb-1">WALLET_REQUIRED</p>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Connect your wallet to place trades on prediction markets. Your wallet is used to sign transactions securely.
+                  Connect your wallet to place trades on prediction markets. Your profile will be created automatically.
                 </p>
               </div>
             </div>
@@ -84,7 +92,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnect
             {hasPhantom ? (
               <button
                 onClick={() => handleConnect(connectPhantom)}
-                disabled={walletState.connecting}
+                disabled={isConnecting}
                 className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-purple-500/10 to-purple-600/10 hover:from-purple-500/20 hover:to-purple-600/20 border border-purple-500/30 hover:border-purple-500/50 rounded-xl transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-4">
@@ -97,7 +105,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnect
                   </div>
                 </div>
                 <div className="text-purple-400 group-hover:translate-x-1 transition-transform">
-                  {walletState.connecting ? (
+                  {isConnecting ? (
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-purple-500 border-t-transparent"></div>
                   ) : (
                     '→'
@@ -130,7 +138,7 @@ export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnect
             {hasMetaMask ? (
               <button
                 onClick={() => handleConnect(connectMetaMask)}
-                disabled={walletState.connecting}
+                disabled={isConnecting}
                 className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-orange-500/10 to-orange-600/10 hover:from-orange-500/20 hover:to-orange-600/20 border border-orange-500/30 hover:border-orange-500/50 rounded-xl transition-all duration-200 group disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <div className="flex items-center gap-4">
@@ -139,11 +147,11 @@ export function WalletConnectModal({ isOpen, onClose, onConnect }: WalletConnect
                   </div>
                   <div className="text-left">
                     <div className="text-white font-semibold mb-0.5">MetaMask</div>
-                    <div className="text-xs text-slate-400 font-mono">Ethereum Wallet</div>
+                    <div className="text-xs text-slate-400 font-mono">Ethereum / Polygon</div>
                   </div>
                 </div>
                 <div className="text-orange-400 group-hover:translate-x-1 transition-transform">
-                  {walletState.connecting ? (
+                  {isConnecting ? (
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-orange-500 border-t-transparent"></div>
                   ) : (
                     '→'

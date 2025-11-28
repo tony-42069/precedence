@@ -159,6 +159,12 @@
             background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);
             color: #FCA5A5; font-size: 13px; display: none; text-align: left;
         }
+        
+        .success-msg {
+            margin-bottom: 20px; padding: 12px; border-radius: 8px;
+            background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6EE7B7; font-size: 13px; display: none; text-align: left;
+        }
 
         /* Scan Line Effect */
         .scan-line {
@@ -167,6 +173,10 @@
             animation: scan 3s linear infinite; opacity: 0.5;
         }
         @keyframes scan { 0% { top: -10%; } 100% { top: 110%; } }
+        
+        .loading-text {
+            font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text-gray);
+        }
 
     </style>
 </head>
@@ -193,11 +203,15 @@
                 <img src="public/precedence-logo-transparent.png" alt="Precedence" style="width: 40px; height: 40px;">
             </div>
             
-            <h1>Initialize Terminal</h1>
-            <p class="subtitle">Connect a Solana or Ethereum wallet to authenticate.</p>
+            <h1>Sign In / Create Profile</h1>
+            <p class="subtitle">Connect your wallet to access your Precedence trading profile.</p>
 
             <div id="error-message" class="error-msg">
                 <strong>Connection Failed:</strong><br>Wallet not detected or request rejected.
+            </div>
+            
+            <div id="success-message" class="success-msg">
+                <strong>Profile Created!</strong><br>Redirecting to terminal...
             </div>
 
             <div class="wallet-stack">
@@ -223,29 +237,101 @@
             </div>
 
             <a href="https://precedence.fun/app" class="skip-link">
-                <span style="opacity: 0.5;">></span> ENTER_VIEW_ONLY_MODE
+                <span style="opacity: 0.5;">></span> BROWSE_WITHOUT_WALLET
             </a>
         </div>
 
         <!-- Loading Overlay -->
         <div class="loading-overlay" id="loading">
             <div class="spinner"></div>
-            <div style="font-family: 'JetBrains Mono'; font-size: 12px; color: var(--text-gray);">ESTABLISHING UPLINK...</div>
+            <div class="loading-text" id="loading-text">ESTABLISHING UPLINK...</div>
         </div>
     </div>
 
     <script>
         lucide.createIcons();
 
-        // --- WALLET LOGIC (Preserved from original) ---
+        // --- API Configuration ---
+        const API_BASE_URL = 'http://localhost:8000'; // Change to production URL when deployed
+        const APP_URL = 'http://localhost:3000'; // Change to production URL when deployed
+
+        // --- DOM Elements ---
         const phantomBtn = document.getElementById('phantom-btn');
         const metamaskBtn = document.getElementById('metamask-btn');
         const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loading-text');
         const errorMsg = document.getElementById('error-message');
+        const successMsg = document.getElementById('success-message');
 
         let phantomAvailable = false;
         let metaMaskAvailable = false;
 
+        // --- Helper: Register User in Database ---
+        async function registerUser(walletAddress) {
+            loadingText.textContent = 'CREATING_PROFILE...';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/users/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        wallet_address: walletAddress
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to register user');
+                }
+
+                const user = await response.json();
+                console.log('✅ User registered:', user);
+                return user;
+            } catch (err) {
+                console.error('❌ Registration failed:', err);
+                throw err;
+            }
+        }
+
+        // --- Helper: Handle Successful Connection ---
+        async function handleSuccessfulConnection(walletAddress, walletType) {
+            try {
+                // Register user in database
+                await registerUser(walletAddress);
+                
+                // Store in localStorage for session recovery
+                localStorage.setItem('precedence_wallet', walletAddress);
+                localStorage.setItem('wallet_type', walletType);
+                
+                // Also store in sessionStorage for immediate use
+                sessionStorage.setItem('wallet_connected', 'true');
+                sessionStorage.setItem('wallet_type', walletType);
+                sessionStorage.setItem('wallet_address', walletAddress);
+                
+                // Show success message
+                loadingText.textContent = 'PROFILE_READY!';
+                successMsg.style.display = 'block';
+                
+                // Redirect after short delay
+                setTimeout(() => {
+                    window.location.href = APP_URL;
+                }, 1000);
+                
+            } catch (err) {
+                // Still redirect even if registration fails - frontend will retry
+                console.warn('Registration failed, redirecting anyway:', err);
+                localStorage.setItem('precedence_wallet', walletAddress);
+                localStorage.setItem('wallet_type', walletType);
+                sessionStorage.setItem('wallet_connected', 'true');
+                sessionStorage.setItem('wallet_type', walletType);
+                sessionStorage.setItem('wallet_address', walletAddress);
+                window.location.href = APP_URL;
+            }
+        }
+
+        // --- Initialize ---
         window.addEventListener('load', () => {
             // 1. Check Phantom
             if (window.solana && window.solana.isPhantom) {
@@ -259,58 +345,63 @@
                 metamaskBtn.disabled = false;
             }
 
-            // 3. If neither, show error immediately (Optional, but good UX)
+            // 3. If neither, show error immediately
             if(!phantomAvailable && !metaMaskAvailable) {
                 errorMsg.style.display = 'block';
                 errorMsg.innerHTML = "<strong>No Wallets Detected:</strong><br>Please install Phantom or MetaMask extension.";
             }
+            
+            // 4. Check if user is already connected (returning user)
+            const savedWallet = localStorage.getItem('precedence_wallet');
+            if (savedWallet) {
+                // Auto-redirect returning users
+                window.location.href = APP_URL;
+            }
         });
 
-        // Phantom Handler
+        // --- Phantom Handler ---
         phantomBtn.addEventListener('click', async () => {
             if (!phantomAvailable) return;
             
             loading.style.display = 'flex';
+            loadingText.textContent = 'CONNECTING_WALLET...';
             errorMsg.style.display = 'none';
+            successMsg.style.display = 'none';
 
             try {
                 const response = await window.solana.connect();
                 const publicKey = response.publicKey.toString();
                 
-                sessionStorage.setItem('wallet_connected', 'true');
-                sessionStorage.setItem('wallet_type', 'phantom');
-                sessionStorage.setItem('wallet_address', publicKey);
+                await handleSuccessfulConnection(publicKey, 'phantom');
                 
-                window.location.href = 'https://precedence.fun/app';
             } catch (err) {
                 console.error(err);
                 loading.style.display = 'none';
                 errorMsg.style.display = 'block';
-                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request.";
+                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request or connection error.";
             }
         });
 
-        // MetaMask Handler
+        // --- MetaMask Handler ---
         metamaskBtn.addEventListener('click', async () => {
             if (!metaMaskAvailable) return;
 
             loading.style.display = 'flex';
+            loadingText.textContent = 'CONNECTING_WALLET...';
             errorMsg.style.display = 'none';
+            successMsg.style.display = 'none';
 
             try {
                 const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 const address = accounts[0];
 
-                sessionStorage.setItem('wallet_connected', 'true');
-                sessionStorage.setItem('wallet_type', 'metamask');
-                sessionStorage.setItem('wallet_address', address);
+                await handleSuccessfulConnection(address, 'metamask');
 
-                window.location.href = 'https://precedence.fun/app';
             } catch (err) {
                 console.error(err);
                 loading.style.display = 'none';
                 errorMsg.style.display = 'block';
-                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request.";
+                errorMsg.innerHTML = "<strong>Connection Failed:</strong><br>User rejected request or connection error.";
             }
         });
     </script>
