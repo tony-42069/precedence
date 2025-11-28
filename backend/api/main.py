@@ -17,10 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import time
-import os
 
-from .routes import cases, markets, predictions
-from ..database import init_db, get_db
+from .routes import cases, markets, predictions, users
+from .db.connection import init_db
 
 # Configure logging
 logging.basicConfig(
@@ -75,7 +74,7 @@ app.add_middleware(
 )
 
 # Trusted host middleware (for production)
-if not os.getenv("DEBUG", False):
+if not os.getenv("DEBUG", "True").lower() == "true":
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=[
@@ -85,7 +84,7 @@ if not os.getenv("DEBUG", False):
             "*.railway.app",
             "localhost",
             "127.0.0.1"                      
-            ]
+        ]
     )
 
 # Request logging middleware
@@ -135,19 +134,22 @@ app.include_router(
     tags=["predictions"]
 )
 
-# app.include_router(
-#     trading.router,
-#     tags=["trading"]
-# )
+app.include_router(
+    users.router,
+    prefix="/api/users",
+    tags=["users"]
+)
 
 # Health check endpoint
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    from .db.connection import DATABASE_URL
     return {
         "status": "healthy",
         "service": "precedence-api",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "database": "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
     }
 
 # Root endpoint
@@ -162,7 +164,8 @@ async def root():
         "endpoints": {
             "cases": "/api/cases",
             "markets": "/api/markets",
-            "predictions": "/api/predictions"
+            "predictions": "/api/predictions",
+            "users": "/api/users"
         }
     }
 

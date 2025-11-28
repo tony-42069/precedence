@@ -57,26 +57,26 @@
 ### PROTOCOL FLOW
 How markets get created and how you win.
 
-**STEP 01 // DISCOVER**  
+- **STEP 01 // DISCOVER**  
 *Search Live Legal Events*  
 Browse thousands of active Supreme Court and Federal cases. Use our AI-powered search to find high-impact motions, rulings, and appeals worth trading on.
 
-**STEP 02 // ANALYZE**  
+- **STEP 02 // ANALYZE**  
 *AI Probability Engine*  
 Our AI models analyze judicial history, case precedents, and legal patterns to generate probability forecasts. Know the odds before you trade.
 
-**STEP 03 // REQUEST ⭐**  
+- **STEP 03 // REQUEST ⭐**  
 *Submit Market Proposals*  
 Found a case with trading potential? Request a new prediction market. If approved by Polymarket, you earn a percentage of trading volume as the market creator. Turn legal insight into passive income.
 
 *Market Creators Earn 0.5%*  
 *Lifetime earnings on trading volume*
 
-**STEP 04 // TRADE**  
+- **STEP 04 // TRADE**  
 *Execute Positions Instantly*  
 Once markets go live, trade on Polymarket's Central Limit Order Book. Zero gas fees. Millisecond execution. Your funds stay in your self-custodial wallet.
 
-**STEP 05 // SETTLE**  
+- **STEP 05 // SETTLE**  
 *Automated Smart Contract Payouts*  
 When cases resolve, UMA Oracle verifies outcomes and smart contracts automatically distribute USDC to winning positions. No disputes. No delays.
 
