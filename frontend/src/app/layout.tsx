@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             appearance: {
               theme: 'dark',
               accentColor: '#0052FF',
-              logo: '/precedence-logo-transparent.png',
+              logo: '/app/precedence-logo-transparent.png',
             },
             embeddedWallets: {
               ethereum: {
