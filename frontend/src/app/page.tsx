@@ -2,9 +2,9 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-import { useState, useEffect } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation'; // Added useSearchParams
-import { usePrivy } from '@privy-io/react-auth'; // Added Privy import
+import { useState, useEffect, useRef } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { usePrivy } from '@privy-io/react-auth';
 import { useWallet } from '../hooks/useWallet';
 import { useUser } from '../contexts/UserContext';
 import { usePredictions } from '../hooks/usePredictions';
@@ -26,9 +26,8 @@ interface Market {
 
 export default function Home() {
   const pathname = usePathname();
-  const searchParams = useSearchParams(); // Added search params
-  const { login } = usePrivy(); // Added Privy hook
-  const { logout: privyLogout } = usePrivy();
+  const searchParams = useSearchParams();
+  const { login, logout: privyLogout, ready, authenticated } = usePrivy();
   
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,30 +39,58 @@ export default function Home() {
   const { user, clearUser } = useUser();
   const { enhanceMarketsWithAI } = usePredictions();
 
+  // Track if we've already triggered login to prevent multiple calls
+  const loginTriggeredRef = useRef(false);
+
   // Handle URL parameter for auto-login (from wallet-connect.html)
   useEffect(() => {
+    // Only run once Privy is ready, user is NOT authenticated, and we haven't triggered yet
+    if (!ready || authenticated || loginTriggeredRef.current) {
+      return;
+    }
+
     const loginMethod = searchParams.get('login');
     if (loginMethod) {
       console.log('🔐 Auto-triggering Privy login:', loginMethod);
-      if (loginMethod === 'email') {
-        login({ loginMethods: ['email'] });
-      } else if (loginMethod === 'google') {
-        login({ loginMethods: ['google'] });
-      } else if (loginMethod === 'wallet') {
-        login({ loginMethods: ['wallet'] });
+      loginTriggeredRef.current = true; // Mark as triggered to prevent repeat calls
+      
+      // Small delay to ensure Privy is fully initialized
+      setTimeout(() => {
+        if (loginMethod === 'email') {
+          login({ loginMethods: ['email'] });
+        } else if (loginMethod === 'google') {
+          login({ loginMethods: ['google'] });
+        } else if (loginMethod === 'wallet') {
+          login({ loginMethods: ['wallet'] });
+        }
+      }, 100);
+    }
+  }, [ready, authenticated, searchParams, login]);
+
+  // Reset login trigger if user logs out
+  useEffect(() => {
+    if (!authenticated) {
+      // Allow re-triggering if user logs out and comes back
+      // But only reset if there's no login param (to prevent loop)
+      const loginMethod = searchParams.get('login');
+      if (!loginMethod) {
+        loginTriggeredRef.current = false;
       }
     }
-  }, [searchParams, login]);
+  }, [authenticated, searchParams]);
 
-// Update handleDisconnect
-const handleDisconnect = () => {
-  // Logout from Privy FIRST
-  privyLogout();
-  
-  // Then clear local state
-  disconnect(); // Old wallet disconnect
-  clearUser(); // Clear user profile
-};
+  // Handle disconnect
+  const handleDisconnect = () => {
+    // Logout from Privy FIRST
+    privyLogout();
+    
+    // Then clear local state
+    disconnect();
+    clearUser();
+    
+    // Reset login trigger so they can login again
+    loginTriggeredRef.current = false;
+  };
 
   // Fetch markets for stats and hero
   useEffect(() => {
