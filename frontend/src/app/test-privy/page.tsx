@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PrivyTestProvider } from '../../components/PrivyTestProvider';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { 
   Mail, 
@@ -17,8 +16,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-// Inner component that uses Privy hooks
-function PrivyTestContent() {
+export default function PrivyTestPage() {
   const { login, logout, authenticated, user, ready, createWallet } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
   const [signatureTest, setSignatureTest] = useState<{
@@ -413,14 +411,5 @@ function PrivyTestContent() {
         </div>
       </div>
     </div>
-  );
-}
-
-// Main page wrapped with provider
-export default function PrivyTestPage() {
-  return (
-    <PrivyTestProvider>
-      <PrivyTestContent />
-    </PrivyTestProvider>
   );
 }
