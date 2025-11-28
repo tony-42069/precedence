@@ -29,17 +29,35 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const { user, clearUser } = useUser();
   const { walletState, disconnect } = useWallet();
 
-  const handleDisconnect = async () => {
-    // Logout from Privy FIRST
+const handleDisconnect = async () => {
+  try {
+    // 1. Logout from Privy
     await privyLogout();
     
-    // Then clear local state
+    // 2. Clear ALL localStorage keys
+    localStorage.clear();
+    
+    // 3. Clear sessionStorage 
+    sessionStorage.clear();
+    
+    // 4. Clear user context
     disconnect();
     clearUser();
     
-    // Redirect to landing page
+    // 5. Set logout flag
+    sessionStorage.setItem('just_logged_out', 'true');
+    
+    // 6. Force redirect with delay to ensure cleanup
+    setTimeout(() => {
+      window.location.href = 'https://www.precedence.fun';
+    }, 100);
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Force redirect anyway
     window.location.href = 'https://www.precedence.fun';
-  };
+  }
+};
 
   // Format wallet address for display
   const formatAddress = (address: string) => {
@@ -180,7 +198,7 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
         ) : (
           <div className="p-4 border-b border-white/10">
             <button
-              onClick={onConnectWallet}
+              onClick={() => window.location.href = '/wallet-connect.html'} // Redirect to polished page
               className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
             >
               <Wallet size={18} />

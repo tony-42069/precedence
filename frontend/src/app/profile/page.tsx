@@ -60,17 +60,35 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleDisconnect = async () => {
-    // Logout from Privy FIRST
+ const handleDisconnect = async () => {
+  try {
+    // 1. Logout from Privy
     await privyLogout();
     
-    // Then clear local state
+    // 2. Clear ALL localStorage keys
+    localStorage.clear();
+    
+    // 3. Clear sessionStorage 
+    sessionStorage.clear();
+    
+    // 4. Clear user context
     disconnect();
     clearUser();
     
-    // Redirect to landing page
+    // 5. Set logout flag
+    sessionStorage.setItem('just_logged_out', 'true');
+    
+    // 6. Force redirect with delay to ensure cleanup
+    setTimeout(() => {
+      window.location.href = 'https://www.precedence.fun';
+    }, 100);
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Force redirect anyway
     window.location.href = 'https://www.precedence.fun';
-  };
+  }
+};
 
   const handleSaveProfile = async () => {
     if (!user) return;

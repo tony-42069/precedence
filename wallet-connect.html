@@ -288,13 +288,20 @@ function signIn(method) {
     window.location.href = `/app?login=${method}`;
 }
 
-// Auto-redirect returning users
+// Check if we just logged out (no saved wallet)
 window.addEventListener('load', () => {
-    const savedWallet = localStorage.getItem('precedence_wallet');
-    if (savedWallet) {
-        window.location.href = '/app';
-    }
+  const savedWallet = localStorage.getItem('precedence_wallet');
+  const justLoggedOut = sessionStorage.getItem('just_logged_out');
+  
+  if (savedWallet && !justLoggedOut) {
+    // Only auto-redirect if we have a wallet AND didn't just logout
+    window.location.href = '/app';
+  } else {
+    // Clear the logout flag
+    sessionStorage.removeItem('just_logged_out');
+  }
 });
+
 
     </script>
 </body>

@@ -80,20 +80,38 @@ export default function Home() {
   }, [authenticated, searchParams]);
 
   // Handle disconnect - logout from Privy and redirect to landing page
-  const handleDisconnect = async () => {
-    // Logout from Privy FIRST
+const handleDisconnect = async () => {
+  try {
+    // 1. Logout from Privy
     await privyLogout();
     
-    // Then clear local state
+    // 2. Clear ALL localStorage keys
+    localStorage.clear();
+    
+    // 3. Clear sessionStorage 
+    sessionStorage.clear();
+    
+    // 4. Clear user context
     disconnect();
     clearUser();
     
-    // Reset login trigger
+    // 5. Reset login trigger
     loginTriggeredRef.current = false;
     
-    // Redirect to landing page
+    // 6. Set logout flag
+    sessionStorage.setItem('just_logged_out', 'true');
+    
+    // 7. Force redirect with delay to ensure cleanup
+    setTimeout(() => {
+      window.location.href = 'https://www.precedence.fun';
+    }, 100);
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Force redirect anyway
     window.location.href = 'https://www.precedence.fun';
-  };
+  }
+};
 
   // Fetch markets for stats and hero
   useEffect(() => {
