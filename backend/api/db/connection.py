@@ -5,12 +5,49 @@ Supports both PostgreSQL (production) and SQLite (development fallback).
 """
 
 import os
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-# Get database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./precedence_dev.db")
+
+def _build_database_url() -> str:
+    """
+    Build database URL from environment variables.
+    
+    This keeps the password separate from the connection string in .env
+    for better security practices.
+    """
+    # Check if using SQLite for development
+    if os.getenv("USE_SQLITE", "false").lower() == "true":
+        return "sqlite:///./precedence_dev.db"
+    
+    # Build PostgreSQL URL from components
+    user = os.getenv("POSTGRES_USER", "postgres")
+    password = os.getenv("POSTGRES_PASSWORD", "")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "precedence_db")
+    
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+
+
+def _get_safe_db_url() -> str:
+    """
+    Return a safe version of the database URL for logging (password masked).
+    """
+    user = os.getenv("POSTGRES_USER", "postgres")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "precedence_db")
+    
+    if os.getenv("USE_SQLITE", "false").lower() == "true":
+        return "sqlite:///./precedence_dev.db"
+    
+    return f"postgresql://{user}:****@{host}:{port}/{db}"
+
+
+# Build database URL from environment variables
+DATABASE_URL = _build_database_url()
 
 # Determine if we're using SQLite (for development)
 IS_SQLITE = DATABASE_URL.startswith("sqlite")
@@ -64,7 +101,7 @@ def init_db():
     """
     from .models import Base
     Base.metadata.create_all(bind=engine)
-    print(f"✅ Database initialized: {DATABASE_URL[:50]}...")
+    print(f"✅ Database initialized: {_get_safe_db_url()}")
 
 
 def check_db_connection() -> bool:

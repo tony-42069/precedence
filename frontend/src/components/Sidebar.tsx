@@ -10,8 +10,7 @@ import {
   TrendingUp,
   Wallet,
   User,
-  LogOut,
-  Trophy
+  LogOut
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useWallet } from '../hooks/useWallet';
@@ -61,12 +60,6 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
       href: '/portfolio',
       icon: Wallet,
       description: 'Your Positions'
-    },
-    {
-      name: 'Leaderboard',
-      href: '/leaderboard',
-      icon: Trophy,
-      description: 'Top Traders'
     },
     {
       name: 'Profile',
