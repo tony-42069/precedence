@@ -79,17 +79,20 @@ export default function Home() {
     }
   }, [authenticated, searchParams]);
 
-  // Handle disconnect
-  const handleDisconnect = () => {
+  // Handle disconnect - logout from Privy and redirect to landing page
+  const handleDisconnect = async () => {
     // Logout from Privy FIRST
-    privyLogout();
+    await privyLogout();
     
     // Then clear local state
     disconnect();
     clearUser();
     
-    // Reset login trigger so they can login again
+    // Reset login trigger
     loginTriggeredRef.current = false;
+    
+    // Redirect to landing page
+    window.location.href = 'https://www.precedence.fun';
   };
 
   // Fetch markets for stats and hero

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { usePrivy } from '@privy-io/react-auth';
 import { useWallet } from '../../hooks/useWallet';
 import { useUser } from '../../contexts/UserContext';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
@@ -24,6 +25,7 @@ import {
 
 export default function ProfilePage() {
   const pathname = usePathname();
+  const { logout: privyLogout } = usePrivy();
   const { walletState, disconnect } = useWallet();
   const { user, clearUser, updateProfile, stats, fetchStats } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -58,9 +60,16 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    // Logout from Privy FIRST
+    await privyLogout();
+    
+    // Then clear local state
     disconnect();
     clearUser();
+    
+    // Redirect to landing page
+    window.location.href = 'https://www.precedence.fun';
   };
 
   const handleSaveProfile = async () => {

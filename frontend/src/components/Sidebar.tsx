@@ -3,7 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { usePrivy } from '@privy-io/react-auth';
 import {
   LayoutDashboard,
   Gavel,
@@ -23,12 +24,21 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout: privyLogout } = usePrivy();
   const { user, clearUser } = useUser();
   const { walletState, disconnect } = useWallet();
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    // Logout from Privy FIRST
+    await privyLogout();
+    
+    // Then clear local state
     disconnect();
     clearUser();
+    
+    // Redirect to landing page
+    window.location.href = 'https://www.precedence.fun';
   };
 
   // Format wallet address for display
