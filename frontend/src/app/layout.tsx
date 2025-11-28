@@ -2,9 +2,10 @@
 
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from 'react'; // <-- ADD THIS IMPORT
 import "./globals.css";
 import { PrivyProvider } from '@privy-io/react-auth';
-import { UserProvider } from "../contexts/UserContext"; // <-- ADD THIS IMPORT
+import { UserProvider } from "../contexts/UserContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,6 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -28,17 +28,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             appearance: {
               theme: 'dark',
               accentColor: '#0052FF',
-              logo: '/precedence-logo-transparent.png', // Add your logo
+              logo: '/precedence-logo-transparent.png',
             },
             embeddedWallets: {
               ethereum: {
-                createOnLogin: 'all-users', // Auto-create wallets for everyone
+                createOnLogin: 'all-users',
               },
             },
           }}
         >
           <UserProvider>
-            {children}
+            <Suspense fallback={<div className="min-h-screen bg-[#030304] flex items-center justify-center"><div className="text-white">Loading...</div></div>}>
+              {children}
+            </Suspense>
           </UserProvider>
         </PrivyProvider>
       </body>
