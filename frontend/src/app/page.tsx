@@ -3,7 +3,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation'; // Added useSearchParams
+import { usePrivy } from '@privy-io/react-auth'; // Added Privy import
 import { useWallet } from '../hooks/useWallet';
 import { useUser } from '../contexts/UserContext';
 import { usePredictions } from '../hooks/usePredictions';
@@ -25,6 +26,9 @@ interface Market {
 
 export default function Home() {
   const pathname = usePathname();
+  const searchParams = useSearchParams(); // Added search params
+  const { login } = usePrivy(); // Added Privy hook
+  
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -34,6 +38,21 @@ export default function Home() {
   const { walletState, disconnect } = useWallet();
   const { user, clearUser } = useUser();
   const { enhanceMarketsWithAI } = usePredictions();
+
+  // Handle URL parameter for auto-login (from wallet-connect.html)
+  useEffect(() => {
+    const loginMethod = searchParams.get('login');
+    if (loginMethod) {
+      console.log('🔐 Auto-triggering Privy login:', loginMethod);
+      if (loginMethod === 'email') {
+        login({ loginMethods: ['email'] });
+      } else if (loginMethod === 'google') {
+        login({ loginMethods: ['google'] });
+      } else if (loginMethod === 'wallet') {
+        login({ loginMethods: ['wallet'] });
+      }
+    }
+  }, [searchParams, login]);
 
   // Handle disconnect
   const handleDisconnect = () => {
@@ -169,6 +188,7 @@ export default function Home() {
           </nav>
 
           {/* Dashboard Content */}
+
           <>
             {/* New Command Center Hero */}
             <HeroSection 
