@@ -75,6 +75,18 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     return 'unknown';
   }, [market]);
 
+  // Debug: Log market structure when modal opens
+  useEffect(() => {
+    if (isOpen && market) {
+      console.log('🔍 Market object:', market);
+      console.log('🔍 Market keys:', Object.keys(market));
+      console.log('🔍 clobTokenIds:', market.clobTokenIds);
+      console.log('🔍 tokens:', market.tokens);
+      console.log('🔍 clob_token_ids:', market.clob_token_ids);
+      console.log('🔍 tokenIds:', market.tokenIds);
+    }
+  }, [isOpen, market]);
+
   // Load market data
   useEffect(() => {
     if (isOpen && market) {
@@ -152,15 +164,64 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   const payout = parseFloat(amount || '0') * (1 / price);
   const spread = ((marketData.best_ask - marketData.best_bid) * 100).toFixed(2);
 
-  // Get the correct token ID based on side
-  const getTokenId = () => {
-    const tokens = market.clobTokenIds || market.tokens;
-    if (Array.isArray(tokens)) {
-      return side === 'YES' ? tokens[0] : tokens[1];
+  /**
+   * Get the correct token ID based on side
+   * Polymarket markets have two tokens: YES (index 0) and NO (index 1)
+   * The token IDs can be in various formats depending on the data source
+   */
+  const getTokenId = (): string => {
+    // Try different possible field names for token IDs
+    const possibleTokenFields = [
+      market.clobTokenIds,           // Array of token IDs
+      market.clob_token_ids,         // Snake case version
+      market.tokenIds,               // Alternative name
+      market.token_ids,              // Snake case alternative
+      market.tokens,                 // Might be array of objects or strings
+    ];
+
+    for (const tokens of possibleTokenFields) {
+      if (!tokens) continue;
+
+      // If it's an array of strings (token IDs directly)
+      if (Array.isArray(tokens) && tokens.length >= 2) {
+        if (typeof tokens[0] === 'string') {
+          const tokenId = side === 'YES' ? tokens[0] : tokens[1];
+          console.log(`✅ Found token ID from array: ${tokenId}`);
+          return tokenId;
+        }
+        
+        // If it's an array of objects with token_id property
+        if (tokens[0]?.token_id) {
+          const tokenId = side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
+          console.log(`✅ Found token ID from object array: ${tokenId}`);
+          return tokenId;
+        }
+
+        // If it's an array of objects with outcome property
+        if (tokens[0]?.outcome !== undefined) {
+          const yesToken = tokens.find((t: any) => t.outcome === 'Yes' || t.outcome === 'YES' || t.outcome === 0);
+          const noToken = tokens.find((t: any) => t.outcome === 'No' || t.outcome === 'NO' || t.outcome === 1);
+          const token = side === 'YES' ? yesToken : noToken;
+          if (token?.token_id) {
+            console.log(`✅ Found token ID from outcome object: ${token.token_id}`);
+            return token.token_id;
+          }
+        }
+      }
     }
-    if (tokens?.[0]?.token_id) {
-      return side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
+
+    // Last resort: check if there's a condition_id we can use to fetch tokens
+    if (market.condition_id || market.conditionId) {
+      console.log('⚠️ No token IDs found, but have condition_id:', market.condition_id || market.conditionId);
     }
+
+    console.error('❌ Could not find token ID. Market structure:', {
+      id: market.id,
+      keys: Object.keys(market),
+      clobTokenIds: market.clobTokenIds,
+      tokens: market.tokens,
+    });
+
     return '';
   };
 
@@ -184,9 +245,18 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
     const tokenId = getTokenId();
     if (!tokenId) {
-      alert('Invalid market token ID');
+      alert('Invalid market token ID. This market may not support trading yet.');
+      console.error('❌ No token ID found for market:', market);
       return;
     }
+
+    console.log('📤 Placing order:', {
+      tokenId,
+      price,
+      size: parseFloat(amount),
+      side: 'BUY',
+      negRisk: market.negRisk || market.neg_risk || false,
+    });
 
     // Place the order
     const result = await placeOrder({
@@ -194,7 +264,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       price,
       size: parseFloat(amount),
       side: 'BUY',
-      negRisk: market.negRisk || false,
+      negRisk: market.negRisk || market.neg_risk || false,
     });
 
     if (result.success) {
