@@ -25,7 +25,6 @@ import { getContractConfig } from '@polymarket/builder-relayer-client/dist/confi
 
 import {
   POLYGON_CHAIN_ID,
-  POLYGON_RPC_URL,
   CLOB_API_URL,
   RELAYER_URL,
   BUILDER_SIGN_URL,
@@ -162,6 +161,20 @@ export const usePolymarketSession = () => {
   }, []);
 
   /**
+   * Check if a Safe is deployed at the given address
+   * Uses ethers to check if there's bytecode at the address
+   */
+  const checkSafeDeployed = useCallback(async (safeAddress: string, provider: ethers.providers.Provider): Promise<boolean> => {
+    try {
+      const code = await provider.getCode(safeAddress);
+      // If there's bytecode (not just '0x'), the contract is deployed
+      return code !== '0x' && code.length > 2;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /**
    * Initialize the trading session
    */
   const initializeSession = useCallback(async () => {
@@ -188,6 +201,7 @@ export const usePolymarketSession = () => {
       signerRef.current = signer;
 
       const eoaAddress = await signer.getAddress();
+      const provider = signer.provider;
       console.log('📍 EOA Address:', eoaAddress);
 
       // Step 2: Derive Safe address (deterministic)
@@ -211,7 +225,6 @@ export const usePolymarketSession = () => {
       const ethereumProvider = await wallets[0].getEthereumProvider();
       const { createWalletClient, custom } = await import('viem');
       const { polygon } = await import('viem/chains');
-      const { privateKeyToAccount } = await import('viem/accounts');
       
       // Create viem wallet client from provider
       const walletClient = createWalletClient({
@@ -227,23 +240,31 @@ export const usePolymarketSession = () => {
       );
       relayClientRef.current = relayClient;
 
-      // Step 5: Check if Safe is deployed
+      // Step 5: Check if Safe is deployed using ethers provider
       setCurrentStep('deploying_safe');
       let isSafeDeployed = false;
       
-      try {
-        isSafeDeployed = await relayClient.getDeployed(safeAddress);
+      if (provider) {
+        isSafeDeployed = await checkSafeDeployed(safeAddress, provider);
         console.log('🏦 Safe deployed:', isSafeDeployed);
-      } catch {
-        console.log('⚠️ Could not check Safe deployment status');
       }
 
       if (!isSafeDeployed) {
         console.log('🚀 Deploying Safe wallet...');
-        const deployResponse = await relayClient.deploy();
-        const deployResult = await deployResponse.wait();
-        console.log('✅ Safe deployed:', deployResult?.proxyAddress || safeAddress);
-        isSafeDeployed = true;
+        try {
+          const deployResponse = await relayClient.deploy();
+          const deployResult = await deployResponse.wait();
+          console.log('✅ Safe deployed:', deployResult?.proxyAddress || safeAddress);
+          isSafeDeployed = true;
+        } catch (deployError: any) {
+          // Safe might already be deployed (race condition or already exists)
+          if (deployError.message?.includes('already deployed') || deployError.message?.includes('Safe already exists')) {
+            console.log('✅ Safe already deployed');
+            isSafeDeployed = true;
+          } else {
+            throw deployError;
+          }
+        }
       }
 
       // Step 6: Derive User API Credentials
@@ -341,7 +362,8 @@ export const usePolymarketSession = () => {
     getPrivySigner, 
     createBuilderConfig, 
     loadStoredSession, 
-    saveSession
+    saveSession,
+    checkSafeDeployed
   ]);
 
   /**

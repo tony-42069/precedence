@@ -8,7 +8,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { ClobClient } from '@polymarket/clob-client';
+import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
 
 // Order types
 export interface OrderParams {
@@ -52,12 +52,12 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
     try {
       console.log('📝 Creating order:', params);
 
-      // Create order object
+      // Create order object using the proper Side enum
       const order = {
         tokenID: params.tokenId,
         price: params.price,
         size: params.size,
-        side: params.side,
+        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
         feeRateBps: 0,
         expiration: 0, // Good-til-Cancel
         taker: '0x0000000000000000000000000000000000000000',
@@ -65,11 +65,11 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
 
       setState('submitting');
 
-      // Submit order with builder attribution
+      // Submit order with builder attribution using OrderType enum
       const response = await client.createAndPostOrder(
         order,
         { negRisk: params.negRisk ?? false },
-        'GTC' // Good-til-Cancel
+        OrderType.GTC
       );
 
       const orderId = response?.orderID || response?.id;
@@ -125,17 +125,21 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
 
       setState('submitting');
 
-      // Create market order
+      // Create market order using proper Side enum
       const marketOrder = {
         tokenID: tokenId,
         amount,
-        side,
+        side: side === 'BUY' ? Side.BUY : Side.SELL,
       };
 
-      const response = await client.createMarketOrder(marketOrder);
-      const postResponse = await client.postOrder(response, 'FOK'); // Fill-or-Kill
+      // Use createAndPostMarketOrder which handles both steps
+      const response = await client.createAndPostMarketOrder(
+        marketOrder,
+        { negRisk: negRisk ?? false },
+        OrderType.FOK
+      );
 
-      const orderId = postResponse?.orderID || postResponse?.id;
+      const orderId = response?.orderID || response?.id;
       
       console.log('✅ Market order placed:', orderId);
       
@@ -206,7 +210,7 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
   }, [getClobClient]);
 
   /**
-   * Get open orders
+   * Get open orders - uses getOpenOrders method
    */
   const getOpenOrders = useCallback(async () => {
     const client = getClobClient();
@@ -216,8 +220,8 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
     }
 
     try {
-      const orders = await client.getOrders({});
-      return orders;
+      const response = await client.getOpenOrders();
+      return response || [];
     } catch (err: any) {
       console.error('❌ Failed to get orders:', err);
       return [];
