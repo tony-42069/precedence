@@ -27,7 +27,7 @@ import {
   POLYGON_CHAIN_ID,
   CLOB_API_URL,
   RELAYER_URL,
-  BUILDER_SIGN_URL,
+  getBuilderSignUrl,
   SIGNATURE_TYPES,
   STORAGE_KEYS,
   USDC_ADDRESS,
@@ -118,11 +118,15 @@ export const usePolymarketSession = () => {
 
   /**
    * Create BuilderConfig for remote signing
+   * Uses the full absolute URL for the signing endpoint
    */
   const createBuilderConfig = useCallback(() => {
+    const signUrl = getBuilderSignUrl();
+    console.log('🔧 Builder sign URL:', signUrl);
+    
     return new BuilderConfig({
       remoteBuilderConfig: {
-        url: BUILDER_SIGN_URL,
+        url: signUrl,
       },
     });
   }, []);

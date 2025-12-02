@@ -50,5 +50,20 @@ export const STORAGE_KEYS = {
   SAFE_ADDRESS: 'precedence_safe_address',
 } as const;
 
-// Builder Signing Endpoint (Next.js API route)
-export const BUILDER_SIGN_URL = '/api/polymarket/sign';
+// Builder Signing Endpoint - relative path (will be converted to full URL in hooks)
+export const BUILDER_SIGN_PATH = '/api/polymarket/sign';
+
+/**
+ * Get the full Builder Sign URL based on current environment
+ * Must be called client-side where window is available
+ */
+export const getBuilderSignUrl = (): string => {
+  if (typeof window === 'undefined') {
+    // Server-side fallback
+    return process.env.NEXT_PUBLIC_APP_URL 
+      ? `${process.env.NEXT_PUBLIC_APP_URL}${BUILDER_SIGN_PATH}`
+      : `http://localhost:3000${BUILDER_SIGN_PATH}`;
+  }
+  // Client-side - use current origin
+  return `${window.location.origin}${BUILDER_SIGN_PATH}`;
+};
