@@ -56,6 +56,8 @@ export const BUILDER_SIGN_PATH = '/api/polymarket/sign';
 /**
  * Get the full Builder Sign URL based on current environment
  * Must be called client-side where window is available
+ * 
+ * NOTE: In production, Next.js uses basePath '/app', so API routes are at /app/api/...
  */
 export const getBuilderSignUrl = (): string => {
   if (typeof window === 'undefined') {
@@ -64,6 +66,10 @@ export const getBuilderSignUrl = (): string => {
       ? `${process.env.NEXT_PUBLIC_APP_URL}${BUILDER_SIGN_PATH}`
       : `http://localhost:3000${BUILDER_SIGN_PATH}`;
   }
-  // Client-side - use current origin
-  return `${window.location.origin}${BUILDER_SIGN_PATH}`;
+  
+  // Client-side - check if we're in production (has /app basePath)
+  const isProduction = window.location.pathname.startsWith('/app');
+  const basePath = isProduction ? '/app' : '';
+  
+  return `${window.location.origin}${basePath}${BUILDER_SIGN_PATH}`;
 };
