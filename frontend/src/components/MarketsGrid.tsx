@@ -1,11 +1,17 @@
+/**
+ * Markets Grid Component
+ * 
+ * Displays prediction markets with trading functionality.
+ * Uses Privy for authentication instead of direct wallet connection.
+ */
+
 'use client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 import { useState, useEffect, useRef } from 'react';
+import { usePrivy } from '@privy-io/react-auth';
 import { TradingModal } from './TradingModal';
-import { WalletConnectModal } from './WalletConnectModal';
-import { useWallet } from '../hooks/useWallet';
 import { usePredictions } from '../hooks/usePredictions';
 
 interface Market {
@@ -26,16 +32,17 @@ interface MarketsGridProps {
 }
 
 export function MarketsGrid({ highlightId }: MarketsGridProps) {
+  // Use Privy for authentication
+  const { authenticated, login } = usePrivy();
+
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [showMarketModal, setShowMarketModal] = useState(false);
-  const [showWalletModal, setShowWalletModal] = useState(false);
   const [highlightedMarketId, setHighlightedMarketId] = useState<string | null>(highlightId || null);
   
-  const { walletState } = useWallet();
   const { enhanceMarketsWithAI } = usePredictions();
   
   // Ref for scrolling to highlighted market
@@ -121,15 +128,15 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
 
   // Handler for trade button clicks
   const handleTradeClick = (market: Market) => {
-    if (!walletState.connected) {
-      // No wallet connected → Show wallet connect modal
-      setSelectedMarket(market);
-      setShowWalletModal(true);
-    } else {
-      // Wallet connected → Open trading modal
-      setSelectedMarket(market);
-      setShowTradingModal(true);
+    setSelectedMarket(market);
+    
+    if (!authenticated) {
+      // Not authenticated → Trigger Privy login, then open trading modal
+      login();
     }
+    
+    // Always open trading modal - it will handle auth state internally
+    setShowTradingModal(true);
   };
 
   const filteredMarkets = markets.filter(market => {
@@ -182,7 +189,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
         ))}
       </div>
 
-      {/* Markets Grid - Matching Dashboard Style */}
+      {/* Markets Grid */}
       {filteredMarkets.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredMarkets.map((market, index) => {
@@ -272,7 +279,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     </div>
                   )}
 
-                  {/* Trading Buttons - NOW ALWAYS ENABLED */}
+                  {/* Trading Buttons */}
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleTradeClick(market)}
@@ -312,19 +319,6 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
           </p>
         </div>
       )}
-
-      {/* Wallet Connect Modal */}
-      <WalletConnectModal
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-        onConnect={() => {
-          // After wallet connects, close wallet modal and open trading modal
-          setShowWalletModal(false);
-          if (selectedMarket) {
-            setShowTradingModal(true);
-          }
-        }}
-      />
 
       {/* Trading Modal */}
       <TradingModal

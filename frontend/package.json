@@ -9,16 +9,21 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@polymarket/builder-relayer-client": "^0.0.6",
+    "@polymarket/builder-signing-sdk": "^0.0.8",
+    "@polymarket/clob-client": "^4.22.8",
+    "@polymarket/relayer-client": "^2.0.2",
     "@privy-io/react-auth": "^3.8.0",
     "@solana-program/system": "^0.10.0",
     "@solana-program/token": "^0.9.0",
     "@solana/kit": "^5.0.0",
     "@solana/web3.js": "^1.87.6",
-    "ethers": "^6.8.1",
+    "ethers": "^5.8.0",
     "lucide-react": "^0.554.0",
     "next": "16.0.1",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "viem": "^2.39.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,10 +1,18 @@
+/**
+ * Trading Modal Component
+ * 
+ * Displays market data and handles order placement using Polymarket CLOB.
+ * Uses Privy wallet for signing via usePolymarketSession.
+ */
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useTrading } from '../hooks/useTrading';
-import { useWallet } from '../hooks/useWallet';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { usePolymarketSession } from '../hooks/usePolymarketSession';
+import { usePolymarketOrder } from '../hooks/usePolymarketOrder';
 import { apiService } from '../services/api';
-import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2 } from 'lucide-react';
+import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2 } from 'lucide-react';
 
 interface TradingModalProps {
   market: any;
@@ -20,6 +28,32 @@ interface MarketData {
 }
 
 export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => {
+  // Privy authentication
+  const { authenticated, login } = usePrivy();
+  const { wallets, ready: walletsReady } = useWallets();
+
+  // Polymarket session and order hooks
+  const {
+    session,
+    currentStep,
+    isReady,
+    isInitializing,
+    initializeSession,
+    getClobClient,
+    statusMessage: sessionStatus,
+  } = usePolymarketSession();
+
+  const {
+    placeOrder,
+    isLoading: isOrderLoading,
+    isSuccess: isOrderSuccess,
+    isError: isOrderError,
+    error: orderError,
+    statusMessage: orderStatus,
+    reset: resetOrder,
+  } = usePolymarketOrder(getClobClient);
+
+  // Local state
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
   const [marketData, setMarketData] = useState<MarketData>({
@@ -29,35 +63,24 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     best_ask: 0.55,
   });
 
-  const { executeTrade, statusMessage, isLoading, isDeployingWallet, isApprovingToken, isExecutingTrade, isSuccess, isError, reset } = useTrading();
-  const { walletState } = useWallet();
-
-// ⭐ STAGE 1.1: MARKET TYPE DETECTION
+  // Market type detection
   const marketType = useMemo(() => {
     if (!market?.id) return 'invalid';
-
-    // Demo markets (returned by our resolution API)
     if (market.id?.toString().startsWith('demo') || market.id?.toString().startsWith('fallback')) {
       return 'demo';
     }
-
-    // Real Polymarket markets - check if we have real price data
-    // Market IDs can be numeric (like 517855) or alphanumeric
     if (market.id && (market.current_yes_price || market.outcomePrices)) {
       return 'real';
     }
-
     return 'unknown';
   }, [market]);
 
-  // ⭐ STAGE 1.2: SMART DATA LOADING STRATEGY
+  // Load market data
   useEffect(() => {
     if (isOpen && market) {
       const loadMarketData = async () => {
         try {
-          // First, try to use prices already in the market object (from /resolve)
           if (market.current_yes_price && market.current_no_price) {
-            console.log('✅ Using prices from market object:', market.current_yes_price, market.current_no_price);
             setMarketData({
               current_yes_price: market.current_yes_price,
               current_no_price: market.current_no_price,
@@ -69,20 +92,15 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
           switch (marketType) {
             case 'demo':
-              // ✅ USE DEMO DATA DIRECTLY - NO API CALLS
-              console.log('🔧 Using demo market data:', market.id);
-              const demoPrices = {
+              setMarketData({
                 current_yes_price: market.current_yes_price || 0.045,
                 current_no_price: market.current_no_price || 0.955,
                 best_bid: (market.current_yes_price || 0.045) * 0.9,
                 best_ask: (market.current_yes_price || 0.045) * 1.1,
-              };
-              setMarketData(demoPrices);
+              });
               break;
 
             case 'real':
-              // 🔄 FETCH REAL DATA FROM POLYMARKET (fallback if prices not in object)
-              console.log('📈 Fetching live market data for:', market.id);
               const data = await apiService.fetchMarketPrice(market.id);
               if (data.current_yes_price && data.current_no_price) {
                 setMarketData({
@@ -95,7 +113,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               break;
 
             default:
-              console.warn('❓ Unknown market type, using fallback prices');
               setMarketData({
                 current_yes_price: 0.5,
                 current_no_price: 0.5,
@@ -105,7 +122,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
           }
         } catch (error) {
           console.error('❌ Failed to load market data:', error);
-          // Fallback to market object prices if API fails
           if (market?.current_yes_price) {
             setMarketData({
               current_yes_price: market.current_yes_price,
@@ -121,14 +137,14 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     }
   }, [isOpen, market, marketType]);
 
-  // Reset trading state when modal closes
+  // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
-      reset();
+      resetOrder();
       setAmount('');
       setSide('YES');
     }
-  }, [isOpen, reset]);
+  }, [isOpen, resetOrder]);
 
   if (!isOpen) return null;
 
@@ -136,9 +152,28 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   const payout = parseFloat(amount || '0') * (1 / price);
   const spread = ((marketData.best_ask - marketData.best_bid) * 100).toFixed(2);
 
+  // Get the correct token ID based on side
+  const getTokenId = () => {
+    const tokens = market.clobTokenIds || market.tokens;
+    if (Array.isArray(tokens)) {
+      return side === 'YES' ? tokens[0] : tokens[1];
+    }
+    if (tokens?.[0]?.token_id) {
+      return side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
+    }
+    return '';
+  };
+
+  // Handle trade execution
   const handleTrade = async () => {
-    if (!walletState.connected || !walletState.address) {
-      alert('Please connect your wallet first!');
+    if (!authenticated) {
+      login();
+      return;
+    }
+
+    if (!isReady) {
+      // Initialize session first
+      await initializeSession();
       return;
     }
 
@@ -147,37 +182,53 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       return;
     }
 
-    try {
-      await executeTrade(
-        {
-          marketId: market.condition_id || market.id,
-          tokenId: market.clobTokenIds?.[0] || market.tokens?.[0]?.token_id || '',
-          side,
-          amount: parseFloat(amount),
-          price,
-        },
-        walletState.address
-      );
+    const tokenId = getTokenId();
+    if (!tokenId) {
+      alert('Invalid market token ID');
+      return;
+    }
 
-      // Success handled by hook
-    } catch (err) {
-      console.error('Trade failed:', err);
-      // Error handled by hook
+    // Place the order
+    const result = await placeOrder({
+      tokenId,
+      price,
+      size: parseFloat(amount),
+      side: 'BUY',
+      negRisk: market.negRisk || false,
+    });
+
+    if (result.success) {
+      console.log('🎉 Trade successful:', result.orderId);
     }
   };
 
+  // Determine button state and text
   const getActionButtonText = () => {
-    if (isDeployingWallet) return 'WALLET_DEPLOYING...';
-    if (isApprovingToken) return 'APPROVING_USDC...';
-    if (isExecutingTrade) return 'EXECUTING_TRADE...';
+    if (!authenticated) return 'CONNECT WALLET';
+    if (isInitializing) return 'INITIALIZING...';
+    if (!isReady) return 'INITIALIZE TRADING';
+    if (isOrderLoading) return 'PLACING ORDER...';
+    if (isOrderSuccess) return '✅ ORDER PLACED!';
     return 'CONFIRM_TRADE';
   };
 
   const getActionButtonColor = () => {
-    if (isError) return 'bg-red-600 hover:bg-red-700';
-    if (isSuccess) return 'bg-green-600 hover:bg-green-700';
+    if (isOrderError) return 'bg-red-600 hover:bg-red-700';
+    if (isOrderSuccess) return 'bg-green-600 hover:bg-green-700';
+    if (!authenticated) return 'bg-purple-600 hover:bg-purple-500';
     return 'bg-blue-600 hover:bg-blue-500';
   };
+
+  const isButtonDisabled = () => {
+    if (!authenticated) return false; // Can always click to connect
+    if (isInitializing || isOrderLoading) return true;
+    if (!isReady && !isInitializing) return false; // Can click to initialize
+    if (!amount || parseFloat(amount) <= 0) return true;
+    return false;
+  };
+
+  // Status message to display
+  const displayStatus = isInitializing ? sessionStatus : orderStatus;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -218,12 +269,29 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
         {/* Body */}
         <div className="relative p-6 space-y-6">
 
-          {/* ⭐ STAGE 3.1: DEMO MARKET VISUAL INDICATORS */}
+          {/* Demo Market Indicator */}
           {marketType === 'demo' && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
               <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
                 <Settings2 size={14} />
                 TEST MODE: Demo market for trading pipeline testing
+              </div>
+            </div>
+          )}
+
+          {/* Session Status Indicator */}
+          {authenticated && !isReady && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
+              <div className="flex items-center gap-2 text-blue-400 text-xs font-mono">
+                <Shield size={14} />
+                {isInitializing ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    {sessionStatus}
+                  </>
+                ) : (
+                  'Click "Initialize Trading" to set up your secure wallet'
+                )}
               </div>
             </div>
           )}
@@ -235,7 +303,8 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 Live Price Data
               </span>
               <span className="text-xs text-green-400 font-mono">
-                SPREAD: {spread}%</span>
+                SPREAD: {spread}%
+              </span>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -249,7 +318,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                   <TrendingUp size={12} className="text-green-400" />
                 </div>
                 <div className="text-lg font-mono font-bold text-green-400 mt-1">
-                  {(marketData.current_yes_price).toFixed(3)}
+                  {marketData.current_yes_price.toFixed(3)}
                 </div>
               </div>
 
@@ -263,7 +332,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                   <TrendingDown size={12} className="text-red-400" />
                 </div>
                 <div className="text-lg font-mono font-bold text-red-400 mt-1">
-                  {(marketData.current_no_price).toFixed(3)}
+                  {marketData.current_no_price.toFixed(3)}
                 </div>
               </div>
             </div>
@@ -321,7 +390,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 className="w-full pl-12 pr-4 py-4 bg-[#030304] border border-white/10 rounded-xl text-white font-mono text-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-slate-600"
-                disabled={isLoading}
+                disabled={isOrderLoading || isInitializing}
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-mono">
                 USDC
@@ -333,7 +402,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Estimated Return:</span>
                   <span className="text-green-400 font-mono font-bold">
-                    {(payout).toFixed(2)} shares
+                    {payout.toFixed(2)} shares
                   </span>
                 </div>
               </div>
@@ -341,15 +410,15 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
           </div>
 
           {/* Status Messages */}
-          {statusMessage && (
+          {displayStatus && (
             <div className={`p-4 rounded-xl font-mono text-sm ${
-              isError
+              isOrderError
                 ? 'bg-red-500/10 border border-red-500/20 text-red-400'
-                : isSuccess
+                : isOrderSuccess
                 ? 'bg-green-500/10 border border-green-500/20 text-green-400'
                 : 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
             }`}>
-              {statusMessage}
+              {displayStatus}
             </div>
           )}
 
@@ -359,12 +428,22 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
         <div className="relative p-6 border-t border-white/10 bg-[#151518]">
           <div className="flex items-center gap-3">
 
-            {/* Wallet Status */}
-            {walletState.connected && (
+            {/* Wallet/Session Status */}
+            {authenticated && walletsReady && wallets.length > 0 && (
               <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                <Wallet size={14} className="text-green-400" />
+                <Wallet size={14} className={isReady ? 'text-green-400' : 'text-yellow-400'} />
                 <span className="text-xs text-slate-400 font-mono">
-                  {walletState.walletType}
+                  {isReady ? 'READY' : 'SETUP NEEDED'}
+                </span>
+              </div>
+            )}
+
+            {/* Safe Address Badge */}
+            {session?.safeAddress && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
+                <Shield size={14} className="text-blue-400" />
+                <span className="text-xs text-slate-400 font-mono">
+                  {session.safeAddress.slice(0, 6)}...{session.safeAddress.slice(-4)}
                 </span>
               </div>
             )}
@@ -373,7 +452,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
             <div className="flex gap-3 ml-auto">
               <button
                 onClick={onClose}
-                disabled={isLoading}
+                disabled={isOrderLoading || isInitializing}
                 className="px-6 py-3 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-mono text-sm font-medium rounded-xl transition-all duration-200"
               >
                 CANCEL
@@ -381,11 +460,14 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
               <button
                 onClick={handleTrade}
-                disabled={isLoading || !amount || !walletState.connected}
+                disabled={isButtonDisabled()}
                 className={`px-8 py-3 border ${getActionButtonColor()} text-white font-mono text-sm font-bold rounded-xl transition-all duration-200 transform ${
-                  isLoading ? '' : 'hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.3)]'
-                } disabled:opacity-50 disabled:transform-none disabled:shadow-none`}
+                  isOrderLoading || isInitializing ? '' : 'hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.3)]'
+                } disabled:opacity-50 disabled:transform-none disabled:shadow-none flex items-center gap-2`}
               >
+                {(isOrderLoading || isInitializing) && (
+                  <Loader2 size={16} className="animate-spin" />
+                )}
                 {getActionButtonText()}
               </button>
             </div>
