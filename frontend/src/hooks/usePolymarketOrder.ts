@@ -10,7 +10,6 @@
 
 import { useState, useCallback } from 'react';
 import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
-import { getBuilderSignUrl } from '../constants/polymarket';
 
 // Order types
 export interface OrderParams {
@@ -83,9 +82,14 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
 
       setState('submitting');
 
-      // Get the funder (Safe address) from the client
-      // @ts-ignore - accessing internal property
-      const owner = client.funder || client.proxyWalletAddress;
+      // The owner is the maker address (Safe address) from the signed order
+      const owner = signedOrder.maker;
+      
+      if (!owner) {
+        throw new Error('Could not determine order owner from signed order');
+      }
+
+      console.log('📦 Order owner (Safe):', owner);
 
       // Submit through our server-side proxy to avoid CORS
       const proxyUrl = getOrderProxyUrl();
@@ -110,7 +114,7 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
         throw new Error(result.error || `Order failed: ${response.status}`);
       }
 
-      const orderId = result.orderID || result.id || result.orderID;
+      const orderId = result.orderID || result.id;
       
       console.log('✅ Order placed:', orderId);
       
@@ -161,9 +165,7 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
     try {
       console.log('📝 Creating market order:', { tokenId, amount, side });
 
-      setState('submitting');
-
-      // Create market order
+      // Create market order args
       const marketOrderArgs = {
         tokenID: tokenId,
         amount,
@@ -175,9 +177,10 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
       
       console.log('✅ Market order signed:', signedOrder);
 
-      // Get the funder (Safe address)
-      // @ts-ignore
-      const owner = client.funder || client.proxyWalletAddress;
+      setState('submitting');
+
+      // The owner is the maker from the signed order
+      const owner = signedOrder.maker;
 
       // Submit through proxy
       const proxyUrl = getOrderProxyUrl();
