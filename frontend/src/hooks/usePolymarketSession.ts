@@ -59,7 +59,7 @@ export type SessionStep =
   | 'error';
 
 // User API Credentials type
-interface UserApiCredentials {
+export interface UserApiCredentials {
   key: string;
   secret: string;
   passphrase: string;
@@ -492,6 +492,13 @@ export const usePolymarketSession = () => {
     return relayClientRef.current;
   }, []);
 
+  /**
+   * Get the current credentials (for order submission)
+   */
+  const getCredentials = useCallback(() => {
+    return credentialsRef.current;
+  }, []);
+
   // Auto-initialize when Privy is ready and authenticated
   useEffect(() => {
     if (privyReady && walletsReady && authenticated && wallets.length > 0 && !session && !isInitializing) {
@@ -539,5 +546,6 @@ export const usePolymarketSession = () => {
     // Clients
     getClobClient,
     getRelayClient,
+    getCredentials,
   };
 };

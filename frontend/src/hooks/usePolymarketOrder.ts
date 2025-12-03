@@ -2,8 +2,9 @@
  * usePolymarketOrder Hook
  * 
  * Handles order placement on Polymarket using the authenticated ClobClient.
- * Orders are signed client-side but submitted through our server-side proxy
- * to avoid CORS issues with clob.polymarket.com.
+ * Uses createAndPostOrder which handles signing and posting in one call.
+ * 
+ * Based on: https://github.com/ayv8er/polymarket-safe-trader
  */
 
 'use client';
@@ -28,24 +29,14 @@ export interface OrderResult {
 
 export type OrderState = 'idle' | 'creating' | 'submitting' | 'success' | 'error';
 
-// Get the order proxy URL
-const getOrderProxyUrl = (): string => {
-  if (typeof window === 'undefined') {
-    return '/api/polymarket/order';
-  }
-  const isProduction = window.location.pathname.startsWith('/app');
-  const basePath = isProduction ? '/app' : '';
-  return `${window.location.origin}${basePath}/api/polymarket/order`;
-};
-
 export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
   const [state, setState] = useState<OrderState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
   /**
-   * Place a limit order
-   * Creates order client-side, submits through server proxy
+   * Place a limit order using ClobClient's createAndPostOrder
+   * This handles signing AND posting in one call
    */
   const placeOrder = useCallback(async (params: OrderParams): Promise<OrderResult> => {
     const client = getClobClient();
@@ -62,169 +53,65 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
     setLastOrderId(null);
 
     try {
-      console.log('📝 Creating order:', params);
+      console.log('📝 Creating and posting order:', params);
 
-      // Create the signed order using ClobClient
-      const orderArgs = {
-        tokenID: params.tokenId,
-        price: params.price,
-        size: params.size,
-        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
-        feeRateBps: 0,
-        expiration: 0,
-        taker: '0x0000000000000000000000000000000000000000',
-      };
-
-      // Create the order (this signs it client-side)
-      const signedOrder = await client.createOrder(orderArgs, { negRisk: params.negRisk ?? false });
-      
-      console.log('✅ Order signed:', signedOrder);
-
-      setState('submitting');
-
-      // The owner is the maker address (Safe address) from the signed order
-      const owner = signedOrder.maker;
-      
-      if (!owner) {
-        throw new Error('Could not determine order owner from signed order');
-      }
-
-      console.log('📦 Order owner (Safe):', owner);
-
-      // Submit through our server-side proxy to avoid CORS
-      const proxyUrl = getOrderProxyUrl();
-      console.log('📤 Submitting order via proxy:', proxyUrl);
-
-      const response = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Use createAndPostOrder which handles signing AND posting
+      // This is the correct method per polymarket-safe-trader example
+      const response = await client.createAndPostOrder(
+        {
+          tokenID: params.tokenId,
+          price: params.price,
+          size: params.size,
+          side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+          feeRateBps: 0,
+          expiration: 0,
         },
-        body: JSON.stringify({
-          order: signedOrder,
-          owner: owner,
-          orderType: 'GTC',
-        }),
-      });
+        { negRisk: params.negRisk ?? false },
+        OrderType.GTC
+      );
+      
+      console.log('✅ Order response:', response);
 
-      const result = await response.json();
-      console.log('📥 Proxy response:', result);
-
-      if (!response.ok || result.error) {
-        throw new Error(result.error || `Order failed: ${response.status}`);
+      const orderId = response?.orderID || response?.id;
+      
+      if (orderId) {
+        console.log('🎉 Order placed successfully:', orderId);
+        setLastOrderId(orderId);
+        setState('success');
+        return { success: true, orderId };
+      } else {
+        // Check if response indicates an error
+        if (response?.error) {
+          throw new Error(response.error);
+        }
+        // Order might have been placed but no ID returned
+        console.log('⚠️ Order submitted but no ID returned:', response);
+        setState('success');
+        return { success: true };
       }
-
-      const orderId = result.orderID || result.id;
-      
-      console.log('✅ Order placed:', orderId);
-      
-      setLastOrderId(orderId);
-      setState('success');
-
-      return {
-        success: true,
-        orderId,
-      };
 
     } catch (err: any) {
       console.error('❌ Order failed:', err);
       
-      const errorMsg = err.message || 'Failed to place order';
-      setError(errorMsg);
-      setState('error');
-
-      return {
-        success: false,
-        error: errorMsg,
-      };
-    }
-  }, [getClobClient]);
-
-  /**
-   * Place a market order (fills at best available price)
-   */
-  const placeMarketOrder = useCallback(async (
-    tokenId: string,
-    amount: number,
-    side: 'BUY' | 'SELL',
-    negRisk?: boolean
-  ): Promise<OrderResult> => {
-    const client = getClobClient();
-    
-    if (!client) {
-      const errorMsg = 'Trading session not initialized';
-      setError(errorMsg);
-      setState('error');
-      return { success: false, error: errorMsg };
-    }
-
-    setState('creating');
-    setError(null);
-    setLastOrderId(null);
-
-    try {
-      console.log('📝 Creating market order:', { tokenId, amount, side });
-
-      // Create market order args
-      const marketOrderArgs = {
-        tokenID: tokenId,
-        amount,
-        side: side === 'BUY' ? Side.BUY : Side.SELL,
-      };
-
-      // Create and sign the market order
-      const signedOrder = await client.createMarketOrder(marketOrderArgs, { negRisk: negRisk ?? false });
-      
-      console.log('✅ Market order signed:', signedOrder);
-
-      setState('submitting');
-
-      // The owner is the maker from the signed order
-      const owner = signedOrder.maker;
-
-      // Submit through proxy
-      const proxyUrl = getOrderProxyUrl();
-      const response = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          order: signedOrder,
-          owner: owner,
-          orderType: 'FOK',
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
-        throw new Error(result.error || `Market order failed: ${response.status}`);
+      // Extract error message
+      let errorMsg = 'Failed to place order';
+      if (err.message) {
+        errorMsg = err.message;
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (typeof err === 'string') {
+        errorMsg = err;
       }
-
-      const orderId = result.orderID || result.id;
       
-      console.log('✅ Market order placed:', orderId);
+      // Check for geo-block indicators
+      if (errorMsg.includes('403') || errorMsg.includes('Forbidden') || errorMsg.includes('Cloudflare')) {
+        errorMsg = 'Order blocked (403). This may be due to geographical restrictions. Try using a VPN to a non-restricted country.';
+      }
       
-      setLastOrderId(orderId);
-      setState('success');
-
-      return {
-        success: true,
-        orderId,
-      };
-
-    } catch (err: any) {
-      console.error('❌ Market order failed:', err);
-      
-      const errorMsg = err.message || 'Failed to place market order';
       setError(errorMsg);
       setState('error');
 
-      return {
-        success: false,
-        error: errorMsg,
-      };
+      return { success: false, error: errorMsg };
     }
   }, [getClobClient]);
 
@@ -328,7 +215,6 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
 
     // Actions
     placeOrder,
-    placeMarketOrder,
     cancelOrder,
     cancelAllOrders,
     getOpenOrders,

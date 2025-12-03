@@ -1,43 +1,46 @@
 /**
  * Polymarket Order API Route
  * 
- * Creates and submits orders to Polymarket CLOB API server-side.
+ * Submits orders to Polymarket CLOB API server-side with proper authentication.
  * This avoids CORS issues since the request comes from our server.
- * 
- * The order is signed client-side, then submitted server-side.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 
 const CLOB_API_URL = 'https://clob.polymarket.com';
 
 interface OrderRequest {
-  // Signed order data from client
-  order: {
-    salt: string;
-    maker: string;
-    signer: string;
-    taker: string;
-    tokenId: string;
-    makerAmount: string;
-    takerAmount: string;
-    expiration: string;
-    nonce: string;
-    feeRateBps: string;
-    side: string;
-    signatureType: number;
-    signature: string;
-  };
-  // Owner address (Safe address)
+  order: any;
   owner: string;
-  // Order type
   orderType: 'GTC' | 'FOK' | 'GTD';
+  credentials?: {
+    key: string;
+    secret: string;
+    passphrase: string;
+  };
+}
+
+/**
+ * Build HMAC signature for Polymarket API authentication
+ */
+function buildHmacSignature(
+  secret: string,
+  timestamp: number,
+  method: string,
+  path: string,
+  body: string = ''
+): string {
+  const message = `${timestamp}${method}${path}${body}`;
+  const hmac = crypto.createHmac('sha256', Buffer.from(secret, 'base64'));
+  hmac.update(message);
+  return hmac.digest('base64');
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: OrderRequest = await request.json();
-    const { order, owner, orderType } = body;
+    const { order, owner, orderType, credentials } = body;
 
     if (!order || !owner) {
       return NextResponse.json(
@@ -52,19 +55,52 @@ export async function POST(request: NextRequest) {
       maker: order.maker,
       owner,
       orderType,
+      hasCredentials: !!credentials,
     });
 
+    // Prepare the order payload
+    const orderPayload = {
+      order,
+      owner,
+      orderType,
+    };
+
+    const payloadString = JSON.stringify(orderPayload);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const path = '/order';
+    const method = 'POST';
+
+    // Build headers
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add API authentication headers if credentials provided
+    if (credentials?.key && credentials?.secret && credentials?.passphrase) {
+      const signature = buildHmacSignature(
+        credentials.secret,
+        timestamp,
+        method,
+        path,
+        payloadString
+      );
+
+      headers['POLY_ADDRESS'] = owner;
+      headers['POLY_API_KEY'] = credentials.key;
+      headers['POLY_PASSPHRASE'] = credentials.passphrase;
+      headers['POLY_TIMESTAMP'] = timestamp.toString();
+      headers['POLY_SIGNATURE'] = signature;
+
+      console.log('🔐 Added API authentication headers');
+    } else {
+      console.log('⚠️ No credentials provided, submitting without API auth');
+    }
+
     // Submit order to Polymarket CLOB
-    const response = await fetch(`${CLOB_API_URL}/order`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        order,
-        owner,
-        orderType,
-      }),
+    const response = await fetch(`${CLOB_API_URL}${path}`, {
+      method,
+      headers,
+      body: payloadString,
     });
 
     const responseText = await response.text();
