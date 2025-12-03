@@ -2,13 +2,15 @@
  * usePolymarketOrder Hook
  * 
  * Handles order placement on Polymarket using the authenticated ClobClient.
- * Requires an active trading session from usePolymarketSession.
+ * Orders are signed client-side but submitted through our server-side proxy
+ * to avoid CORS issues with clob.polymarket.com.
  */
 
 'use client';
 
 import { useState, useCallback } from 'react';
 import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
+import { getBuilderSignUrl } from '../constants/polymarket';
 
 // Order types
 export interface OrderParams {
@@ -27,6 +29,16 @@ export interface OrderResult {
 
 export type OrderState = 'idle' | 'creating' | 'submitting' | 'success' | 'error';
 
+// Get the order proxy URL
+const getOrderProxyUrl = (): string => {
+  if (typeof window === 'undefined') {
+    return '/api/polymarket/order';
+  }
+  const isProduction = window.location.pathname.startsWith('/app');
+  const basePath = isProduction ? '/app' : '';
+  return `${window.location.origin}${basePath}/api/polymarket/order`;
+};
+
 export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
   const [state, setState] = useState<OrderState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +46,7 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
 
   /**
    * Place a limit order
+   * Creates order client-side, submits through server proxy
    */
   const placeOrder = useCallback(async (params: OrderParams): Promise<OrderResult> => {
     const client = getClobClient();
@@ -52,27 +65,52 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
     try {
       console.log('📝 Creating order:', params);
 
-      // Create order object using the proper Side enum
-      const order = {
+      // Create the signed order using ClobClient
+      const orderArgs = {
         tokenID: params.tokenId,
         price: params.price,
         size: params.size,
         side: params.side === 'BUY' ? Side.BUY : Side.SELL,
         feeRateBps: 0,
-        expiration: 0, // Good-til-Cancel
+        expiration: 0,
         taker: '0x0000000000000000000000000000000000000000',
       };
 
+      // Create the order (this signs it client-side)
+      const signedOrder = await client.createOrder(orderArgs, { negRisk: params.negRisk ?? false });
+      
+      console.log('✅ Order signed:', signedOrder);
+
       setState('submitting');
 
-      // Submit order with builder attribution using OrderType enum
-      const response = await client.createAndPostOrder(
-        order,
-        { negRisk: params.negRisk ?? false },
-        OrderType.GTC
-      );
+      // Get the funder (Safe address) from the client
+      // @ts-ignore - accessing internal property
+      const owner = client.funder || client.proxyWalletAddress;
 
-      const orderId = response?.orderID || response?.id;
+      // Submit through our server-side proxy to avoid CORS
+      const proxyUrl = getOrderProxyUrl();
+      console.log('📤 Submitting order via proxy:', proxyUrl);
+
+      const response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order: signedOrder,
+          owner: owner,
+          orderType: 'GTC',
+        }),
+      });
+
+      const result = await response.json();
+      console.log('📥 Proxy response:', result);
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || `Order failed: ${response.status}`);
+      }
+
+      const orderId = result.orderID || result.id || result.orderID;
       
       console.log('✅ Order placed:', orderId);
       
@@ -125,21 +163,43 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
 
       setState('submitting');
 
-      // Create market order using proper Side enum
-      const marketOrder = {
+      // Create market order
+      const marketOrderArgs = {
         tokenID: tokenId,
         amount,
         side: side === 'BUY' ? Side.BUY : Side.SELL,
       };
 
-      // Use createAndPostMarketOrder which handles both steps
-      const response = await client.createAndPostMarketOrder(
-        marketOrder,
-        { negRisk: negRisk ?? false },
-        OrderType.FOK
-      );
+      // Create and sign the market order
+      const signedOrder = await client.createMarketOrder(marketOrderArgs, { negRisk: negRisk ?? false });
+      
+      console.log('✅ Market order signed:', signedOrder);
 
-      const orderId = response?.orderID || response?.id;
+      // Get the funder (Safe address)
+      // @ts-ignore
+      const owner = client.funder || client.proxyWalletAddress;
+
+      // Submit through proxy
+      const proxyUrl = getOrderProxyUrl();
+      const response = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          order: signedOrder,
+          owner: owner,
+          orderType: 'FOK',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || `Market order failed: ${response.status}`);
+      }
+
+      const orderId = result.orderID || result.id;
       
       console.log('✅ Market order placed:', orderId);
       
@@ -210,7 +270,7 @@ export const usePolymarketOrder = (getClobClient: () => ClobClient | null) => {
   }, [getClobClient]);
 
   /**
-   * Get open orders - uses getOpenOrders method
+   * Get open orders
    */
   const getOpenOrders = useCallback(async () => {
     const client = getClobClient();
