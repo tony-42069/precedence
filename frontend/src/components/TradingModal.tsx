@@ -164,89 +164,67 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   const spread = ((marketData.best_ask - marketData.best_bid) * 100).toFixed(2);
 
   /**
-   * Helper function to parse tokens (handles both arrays and JSON strings)
-   */
-  const parseTokens = (value: any): string[] | null => {
-    if (!value) return null;
-    
-    // If it's already an array of strings
-    if (Array.isArray(value)) {
-      return value;
-    }
-    
-    // If it's a JSON string, parse it
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-      } catch {
-        // Not valid JSON, ignore
-      }
-    }
-    
-    return null;
-  };
-
-  /**
    * Get the correct token ID based on side
    * Polymarket markets have two tokens: YES (index 0) and NO (index 1)
-   * The token IDs can be in various formats depending on the data source
+   * Token IDs can be arrays or JSON strings
    */
   const getTokenId = (): string => {
     // Try different possible field names for token IDs
     const possibleTokenFields = [
-      market.clobTokenIds,           // Array or JSON string of token IDs
-      market.clob_token_ids,         // Snake case version
-      market.tokenIds,               // Alternative name
-      market.token_ids,              // Snake case alternative
-      market.tokens,                 // Might be array of objects or strings
+      market.clobTokenIds,
+      market.clob_token_ids,
+      market.tokenIds,
+      market.token_ids,
+      market.tokens,
     ];
 
     for (const rawTokens of possibleTokenFields) {
-      // Parse the tokens (handles JSON strings)
-      const tokens = parseTokens(rawTokens);
-      
+      if (!rawTokens) continue;
+
+      let tokens: any[] | null = null;
+
+      // If it's already an array
+      if (Array.isArray(rawTokens)) {
+        tokens = rawTokens;
+      }
+      // If it's a JSON string, parse it
+      else if (typeof rawTokens === 'string') {
+        try {
+          const parsed = JSON.parse(rawTokens);
+          if (Array.isArray(parsed)) {
+            tokens = parsed;
+          }
+        } catch {
+          // Not valid JSON, skip
+          continue;
+        }
+      }
+
       if (!tokens || tokens.length < 2) continue;
 
-      // If it's an array of strings (token IDs directly)
+      // Check if first element is a string (direct token IDs)
       if (typeof tokens[0] === 'string') {
         const tokenId = side === 'YES' ? tokens[0] : tokens[1];
-        console.log(`✅ Found token ID from array: ${tokenId}`);
+        console.log(`✅ Found token ID: ${tokenId}`);
         return tokenId;
       }
       
-      // If it's an array of objects with token_id property
-      if (tokens[0]?.token_id) {
-        const tokenId = side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
-        console.log(`✅ Found token ID from object array: ${tokenId}`);
-        return tokenId;
-      }
-
-      // If it's an array of objects with outcome property
-      if (tokens[0]?.outcome !== undefined) {
-        const yesToken = tokens.find((t: any) => t.outcome === 'Yes' || t.outcome === 'YES' || t.outcome === 0);
-        const noToken = tokens.find((t: any) => t.outcome === 'No' || t.outcome === 'NO' || t.outcome === 1);
-        const token = side === 'YES' ? yesToken : noToken;
-        if (token?.token_id) {
-          console.log(`✅ Found token ID from outcome object: ${token.token_id}`);
-          return token.token_id;
+      // Check if first element is an object with token_id
+      if (typeof tokens[0] === 'object' && tokens[0] !== null) {
+        if ('token_id' in tokens[0]) {
+          const tokenId = side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
+          if (tokenId) {
+            console.log(`✅ Found token ID from object: ${tokenId}`);
+            return tokenId;
+          }
         }
       }
     }
 
-    // Last resort: check if there's a condition_id we can use to fetch tokens
-    if (market.condition_id || market.conditionId) {
-      console.log('⚠️ No token IDs found, but have condition_id:', market.condition_id || market.conditionId);
-    }
-
     console.error('❌ Could not find token ID. Market structure:', {
       id: market.id,
-      keys: Object.keys(market),
       clobTokenIds: market.clobTokenIds,
       clobTokenIdsType: typeof market.clobTokenIds,
-      tokens: market.tokens,
     });
 
     return '';
