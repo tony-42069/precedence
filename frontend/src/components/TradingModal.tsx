@@ -3,6 +3,7 @@
  * 
  * Displays market data and handles order placement using Polymarket CLOB.
  * Uses Privy wallet for signing via usePolymarketSession.
+ * Includes geo-restriction detection and warnings.
  */
 
 'use client';
@@ -11,8 +12,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { usePolymarketSession } from '../hooks/usePolymarketSession';
 import { usePolymarketOrder } from '../hooks/usePolymarketOrder';
+import { useGeoRestriction } from '../hooks/useGeoRestriction';
 import { apiService } from '../services/api';
-import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2 } from 'lucide-react';
+import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info } from 'lucide-react';
 
 interface TradingModalProps {
   market: any;
@@ -31,6 +33,15 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   // Privy authentication
   const { authenticated, login } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
+
+  // Geo-restriction check
+  const { 
+    isLoading: isGeoLoading, 
+    isRestricted, 
+    isUSUser,
+    geoData,
+    restrictionMessage 
+  } = useGeoRestriction();
 
   // Polymarket session and order hooks
   const {
@@ -284,7 +295,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     if (!isReady) return 'INITIALIZE TRADING';
     if (isOrderLoading) return 'PLACING ORDER...';
     if (isOrderSuccess) return '✅ ORDER PLACED!';
-    return 'CONFIRM_TRADE';
+    return 'CONFIRM TRADE';
   };
 
   const getActionButtonColor = () => {
@@ -314,9 +325,9 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       />
 
       {/* Modal */}
-      <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+      <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
         {/* Cyber Grid Background */}
-        <div className="absolute inset-0 opacity-10">
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="cyber-grid-bg w-full h-full"></div>
         </div>
 
@@ -344,9 +355,47 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
         {/* Body */}
         <div className="relative p-6 space-y-6">
 
+          {/* Geo-Restriction Warning */}
+          {!isGeoLoading && isRestricted && (
+            <div className={`rounded-xl p-4 border ${
+              isUSUser 
+                ? 'bg-amber-500/10 border-amber-500/30' 
+                : 'bg-red-500/10 border-red-500/30'
+            }`}>
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-lg ${isUSUser ? 'bg-amber-500/20' : 'bg-red-500/20'}`}>
+                  {isUSUser ? (
+                    <Info size={18} className="text-amber-400" />
+                  ) : (
+                    <AlertTriangle size={18} className="text-red-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className={`font-semibold text-sm mb-1 ${isUSUser ? 'text-amber-400' : 'text-red-400'}`}>
+                    {isUSUser ? 'US Trading Coming Soon' : 'Region Restricted'}
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {restrictionMessage}
+                  </p>
+                  {isUSUser && (
+                    <p className="text-xs text-amber-400/80 mt-2 flex items-center gap-1">
+                      <Globe size={12} />
+                      Polymarket has received CFTC approval and US access is expected soon.
+                    </p>
+                  )}
+                  {geoData && (
+                    <p className="text-xs text-slate-500 mt-2">
+                      Detected location: {geoData.city ? `${geoData.city}, ` : ''}{geoData.country}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Demo Market Indicator */}
           {marketType === 'demo' && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
               <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
                 <Settings2 size={14} />
                 TEST MODE: Demo market for trading pipeline testing
@@ -355,8 +404,8 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
           )}
 
           {/* Session Status Indicator */}
-          {authenticated && !isReady && (
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
+          {authenticated && !isReady && !isRestricted && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
               <div className="flex items-center gap-2 text-blue-400 text-xs font-mono">
                 <Shield size={14} />
                 {isInitializing ? (
@@ -383,11 +432,14 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className={`p-3 rounded-lg border transition-all ${
-                side === 'YES'
-                  ? 'border-green-500/50 bg-green-500/10'
-                  : 'border-white/10'
-              }`}>
+              <button
+                onClick={() => setSide('YES')}
+                className={`p-3 rounded-lg border transition-all text-left ${
+                  side === 'YES'
+                    ? 'border-green-500/50 bg-green-500/10'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-400">YES</span>
                   <TrendingUp size={12} className="text-green-400" />
@@ -395,13 +447,16 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 <div className="text-lg font-mono font-bold text-green-400 mt-1">
                   {marketData.current_yes_price.toFixed(3)}
                 </div>
-              </div>
+              </button>
 
-              <div className={`p-3 rounded-lg border transition-all ${
-                side === 'NO'
-                  ? 'border-red-500/50 bg-red-500/10'
-                  : 'border-white/10'
-              }`}>
+              <button
+                onClick={() => setSide('NO')}
+                className={`p-3 rounded-lg border transition-all text-left ${
+                  side === 'NO'
+                    ? 'border-red-500/50 bg-red-500/10'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-400">NO</span>
                   <TrendingDown size={12} className="text-red-400" />
@@ -409,36 +464,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 <div className="text-lg font-mono font-bold text-red-400 mt-1">
                   {marketData.current_no_price.toFixed(3)}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Side Selection */}
-          <div>
-            <label className="block text-xs text-slate-400 uppercase tracking-wider font-mono mb-3">
-              Select Outcome
-            </label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setSide('YES')}
-                className={`flex-1 p-4 rounded-xl border transition-all font-mono text-sm font-bold uppercase tracking-wide ${
-                  side === 'YES'
-                    ? 'border-green-500 bg-green-500/20 text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.3)]'
-                    : 'border-white/10 hover:border-white/20 text-slate-300'
-                }`}
-              >
-                YES ✓
-              </button>
-
-              <button
-                onClick={() => setSide('NO')}
-                className={`flex-1 p-4 rounded-xl border transition-all font-mono text-sm font-bold uppercase tracking-wide ${
-                  side === 'NO'
-                    ? 'border-red-500 bg-red-500/20 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-                    : 'border-white/10 hover:border-white/20 text-slate-300'
-                }`}
-              >
-                NO ✗
               </button>
             </div>
           </div>
@@ -449,12 +474,17 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               <label className="block text-xs text-slate-400 uppercase tracking-wider font-mono">
                 Investment Amount
               </label>
-              <button
-                onClick={() => setAmount('100')}
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                MAX
-              </button>
+              <div className="flex gap-2">
+                {[10, 50, 100].map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => setAmount(preset.toString())}
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20"
+                  >
+                    ${preset}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="relative">
@@ -472,12 +502,18 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               </span>
             </div>
 
-            {amount && (
+            {amount && parseFloat(amount) > 0 && (
               <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Estimated Return:</span>
                   <span className="text-green-400 font-mono font-bold">
-                    {payout.toFixed(2)} shares
+                    {payout.toFixed(2)} shares @ ${price.toFixed(3)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs mt-1">
+                  <span className="text-slate-500">Potential Payout:</span>
+                  <span className="text-slate-400 font-mono">
+                    ${payout.toFixed(2)} if {side} wins
                   </span>
                 </div>
               </div>
@@ -508,7 +544,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
                 <Wallet size={14} className={isReady ? 'text-green-400' : 'text-yellow-400'} />
                 <span className="text-xs text-slate-400 font-mono">
-                  {isReady ? 'READY' : 'SETUP NEEDED'}
+                  {isReady ? 'READY' : 'SETUP'}
                 </span>
               </div>
             )}
