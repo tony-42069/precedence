@@ -179,6 +179,16 @@ export const usePolymarketSession = () => {
   }, []);
 
   /**
+   * Validate credentials have all required fields
+   */
+  const isValidCredentials = (creds: any): creds is UserApiCredentials => {
+    return creds && 
+           typeof creds.key === 'string' && creds.key.length > 0 &&
+           typeof creds.secret === 'string' && creds.secret.length > 0 &&
+           typeof creds.passphrase === 'string' && creds.passphrase.length > 0;
+  };
+
+  /**
    * Initialize the trading session
    */
   const initializeSession = useCallback(async () => {
@@ -213,13 +223,13 @@ export const usePolymarketSession = () => {
       const safeAddress = deriveSafe(eoaAddress, contractConfig.SafeContracts.SafeFactory);
       console.log('📍 Derived Safe Address:', safeAddress);
 
-      // Step 3: Check for stored session
+      // Step 3: Check for stored session with valid credentials
       const storedSession = loadStoredSession();
-      if (storedSession && storedSession.eoaAddress.toLowerCase() === eoaAddress.toLowerCase()) {
-        console.log('📦 Found stored session');
-        if (storedSession.credentials) {
-          credentialsRef.current = storedSession.credentials;
-        }
+      if (storedSession && 
+          storedSession.eoaAddress.toLowerCase() === eoaAddress.toLowerCase() &&
+          isValidCredentials(storedSession.credentials)) {
+        console.log('📦 Found stored session with valid credentials');
+        credentialsRef.current = storedSession.credentials;
       }
 
       // Step 4: Create RelayClient with builder config
@@ -271,33 +281,63 @@ export const usePolymarketSession = () => {
         }
       }
 
-      // Step 6: Derive User API Credentials
+      // Step 6: Derive User API Credentials (ALWAYS do this, don't trust stored)
       setCurrentStep('deriving_credentials');
-      let credentials = credentialsRef.current;
+      let credentials: UserApiCredentials | null = null;
+
+      console.log('🔑 Deriving User API credentials...');
+      
+      // Create temporary ClobClient to derive credentials
+      const tempClient = new ClobClient(
+        CLOB_API_URL,
+        POLYGON_CHAIN_ID,
+        signer as any
+      );
+
+      try {
+        // Try to derive existing credentials first
+        const derivedCreds = await tempClient.deriveApiKey();
+        console.log('🔍 Derived credentials response:', derivedCreds);
+        
+        if (isValidCredentials(derivedCreds)) {
+          credentials = derivedCreds as UserApiCredentials;
+          console.log('✅ Derived existing credentials:', {
+            key: credentials.key,
+            hasSecret: !!credentials.secret,
+            hasPassphrase: !!credentials.passphrase,
+          });
+        } else {
+          throw new Error('Derived credentials are invalid');
+        }
+      } catch (deriveError: any) {
+        console.log('⚠️ Derive failed, creating new credentials...', deriveError.message);
+        
+        // If derive fails, create new credentials
+        try {
+          const newCreds = await tempClient.createApiKey();
+          console.log('🔍 Created credentials response:', newCreds);
+          
+          if (isValidCredentials(newCreds)) {
+            credentials = newCreds as UserApiCredentials;
+            console.log('✅ Created new credentials:', {
+              key: credentials.key,
+              hasSecret: !!credentials.secret,
+              hasPassphrase: !!credentials.passphrase,
+            });
+          } else {
+            throw new Error('Created credentials are invalid');
+          }
+        } catch (createError: any) {
+          console.error('❌ Failed to create credentials:', createError);
+          throw new Error(`Failed to create API credentials: ${createError.message}`);
+        }
+      }
 
       if (!credentials) {
-        console.log('🔑 Deriving User API credentials...');
-        
-        // Create temporary ClobClient to derive credentials
-        const tempClient = new ClobClient(
-          CLOB_API_URL,
-          POLYGON_CHAIN_ID,
-          signer as any
-        );
-
-        try {
-          // Try to derive existing credentials first
-          credentials = await tempClient.deriveApiKey() as UserApiCredentials;
-          console.log('✅ Derived existing credentials');
-        } catch {
-          // If derive fails, create new credentials
-          console.log('📝 Creating new credentials...');
-          credentials = await tempClient.createApiKey() as UserApiCredentials;
-          console.log('✅ Created new credentials');
-        }
-
-        credentialsRef.current = credentials;
+        throw new Error('Failed to obtain valid API credentials');
       }
+
+      credentialsRef.current = credentials;
 
       // Step 7: Set token approvals
       setCurrentStep('setting_approvals');
@@ -316,7 +356,14 @@ export const usePolymarketSession = () => {
         console.log('⚠️ Approval check:', approvalError.message);
       }
 
-      // Step 8: Create authenticated ClobClient
+      // Step 8: Create authenticated ClobClient with verified credentials
+      console.log('🔧 Creating authenticated ClobClient with credentials:', {
+        key: credentials.key,
+        hasSecret: !!credentials.secret,
+        secretLength: credentials.secret?.length,
+        hasPassphrase: !!credentials.passphrase,
+      });
+
       const authenticatedClient = new ClobClient(
         CLOB_API_URL,
         POLYGON_CHAIN_ID,
