@@ -110,20 +110,20 @@ export function HeroSection({ markets, marketsCount, totalVolume, loading = fals
           
           {/* Title Section */}
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono mb-6 shadow-[0_0_15px_rgba(0,82,255,0.2)]">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-mono mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
               <Zap size={12} className="animate-pulse" />
-              <span className="uppercase tracking-wider">Command Center Active</span>
+              <span className="uppercase tracking-wider">Terminal Online</span>
             </div>
             
             <h1 className="text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
-              Legal Prediction
+              Legal Intelligence
               <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-blue-400 animate-gradient">
-                Command Center
+                Terminal
               </span>
             </h1>
             
             <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              Real-time intelligence on Supreme Court decisions, regulatory rulings, and high-profile legal cases
+              AI-powered legal analytics meets prediction market trading. Analyze judges, track cases, trade outcomes.
             </p>
           </div>
 

@@ -385,7 +385,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                   )}
                   {geoData && (
                     <p className="text-xs text-slate-500 mt-2">
-                      Detected location: {geoData.city ? `${geoData.city}, ` : ''}{geoData.country}
+                      Detected location: {geoData.region ? `${geoData.region}, ` : ''}{geoData.country}
                     </p>
                   )}
                 </div>

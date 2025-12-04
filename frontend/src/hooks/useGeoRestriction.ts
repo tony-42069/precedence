@@ -39,7 +39,6 @@ interface GeoData {
   country: string;
   countryCode: string;
   region?: string;
-  city?: string;
 }
 
 interface GeoRestrictionState {
@@ -78,12 +77,12 @@ export const useGeoRestriction = () => {
 
         const countryCode = data.country_code || data.country;
         const country = data.country_name || countryCode;
+        const region = data.region; // State/Province name
 
         const geoData: GeoData = {
           country,
           countryCode,
-          region: data.region,
-          city: data.city,
+          region,
         };
 
         const isRestricted = RESTRICTED_COUNTRIES.includes(countryCode);

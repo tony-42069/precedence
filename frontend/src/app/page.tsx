@@ -10,9 +10,10 @@ import { useUser } from '../contexts/UserContext';
 import { usePredictions } from '../hooks/usePredictions';
 import { Sidebar, MobileMenuButton } from '../components/Sidebar';
 import { HeroSection } from '../components/HeroSection';
-import { MarketActivityWidget } from '../components/MarketActivityWidget';
+import { LegalMarketsSpotlight } from '../components/LegalMarketsSpotlight';
 import { TopMarketsWidget } from '../components/TopMarketsWidget';
-import { AIInsightsWidget } from '../components/AIInsightsWidget';
+import { JudgeSpotlightWidget } from '../components/JudgeSpotlightWidget';
+import { QuickActionsWidget } from '../components/QuickActionsWidget';
 import { WalletConnectModal } from '../components/WalletConnectModal';
 import { Terminal } from 'lucide-react';
 
@@ -251,32 +252,36 @@ const handleDisconnect = async () => {
               loading={loading}
             />
 
-            {/* Dashboard Widgets - WIDER LAYOUT */}
-            <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 py-4 pb-12">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-[1800px] mx-auto">
-                <div className="lg:col-span-1 bg-[#0A0A0C]/60 border border-white/10 rounded-xl p-4 backdrop-blur-md">
-                  <MarketActivityWidget />
-                </div>
-                <div className="lg:col-span-1 bg-[#0A0A0C]/60 border border-white/10 rounded-xl p-4 backdrop-blur-md">
-                  <TopMarketsWidget />
-                </div>
-                <div className="lg:col-span-1 bg-[#0A0A0C]/60 border border-white/10 rounded-xl p-4 backdrop-blur-md">
-                  <AIInsightsWidget />
-                </div>
+            {/* Quick Actions - Compact Strip */}
+            <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 pt-4 pb-4">
+              <div className="max-w-5xl mx-auto">
+                <QuickActionsWidget />
               </div>
+            </div>
 
-              {/* Quick Link to Markets */}
-              <div className="mt-12 text-center max-w-[1800px] mx-auto">
-                <a 
-                  href="/markets"
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] hover:scale-105 transform duration-200"
-                >
-                  <span>VIEW ALL MARKETS</span>
-                  <span className="text-xl">→</span>
-                </a>
-                <p className="text-slate-500 text-sm mt-4 font-mono">
-                  Browse {markets.length} active markets and start trading
-                </p>
+            {/* Dashboard Content - Constrained Width */}
+            <div className="w-full px-4 sm:px-6 lg:px-12 xl:px-16 pb-8">
+              <div className="max-w-5xl mx-auto space-y-6">
+                
+                {/* Row 1: Judge Spotlight - Horizontal Banner Style */}
+                <JudgeSpotlightWidget />
+                
+                {/* Row 2: Trending Markets - Compact List */}
+                <TopMarketsWidget />
+                
+                {/* Row 3: Legal Markets */}
+                <LegalMarketsSpotlight />
+
+                {/* CTA */}
+                <div className="text-center pt-4">
+                  <a 
+                    href="/markets"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-lg text-sm transition-all shadow-lg hover:shadow-blue-500/25 hover:scale-105 transform duration-200"
+                  >
+                    <span>VIEW ALL MARKETS</span>
+                    <span>→</span>
+                  </a>
+                </div>
               </div>
             </div>
           </>

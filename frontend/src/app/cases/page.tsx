@@ -2,7 +2,8 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { TradingModal } from '../../components/TradingModal';
 import { apiService } from '../../services/api';
@@ -87,10 +88,13 @@ interface Prediction {
 }
 
 export default function CasesPage() {
+  const searchParams = useSearchParams();
+  
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCourt, setSelectedCourt] = useState('scotus');
+  const [selectedCourt, setSelectedCourt] = useState('all');
   const [searchResults, setSearchResults] = useState<CourtCase[]>([]);
   const [loading, setLoading] = useState(false);
+  const [judgeFilter, setJudgeFilter] = useState<string | null>(null);
 
   // Prediction State
   const [predictions, setPredictions] = useState<Record<number, Prediction>>({});
@@ -108,6 +112,39 @@ export default function CasesPage() {
   const [requestedCase, setRequestedCase] = useState<CourtCase | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Handle ?judge= URL parameter - auto-search when coming from Judge Spotlight
+  useEffect(() => {
+    const judgeParam = searchParams.get('judge');
+    if (judgeParam) {
+      setJudgeFilter(judgeParam);
+      setSearchQuery(judgeParam);
+      setSelectedCourt('scotus'); // Most judges in spotlight are SCOTUS
+      
+      // Auto-trigger search
+      const autoSearch = async () => {
+        setLoading(true);
+        setPredictions({});
+        try {
+          const response = await fetch(`${API_URL}/api/cases/?query=${encodeURIComponent(judgeParam)}&court=scotus&limit=20`);
+          if (response.ok) {
+            const data = await response.json();
+            // Filter results to only show cases with this judge
+            const filtered = data.filter((c: CourtCase) => 
+              c.extracted_judge?.toLowerCase().includes(judgeParam.toLowerCase()) ||
+              c.caseName?.toLowerCase().includes(judgeParam.toLowerCase())
+            );
+            setSearchResults(filtered.length > 0 ? filtered : data);
+          }
+        } catch (error) {
+          console.error("Auto-search failed", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      autoSearch();
+    }
+  }, [searchParams]);
 
   // Search Handler
   const handleSearch = async (e: React.FormEvent) => {
@@ -303,9 +340,36 @@ export default function CasesPage() {
               <p className="text-lg text-slate-300 font-light tracking-wide">Predict. Analyze. Profit.</p>
             </div>
 
+            {/* Judge Filter Banner - Shows when coming from Judge Spotlight */}
+            {judgeFilter && (
+              <div className="mb-6 bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4 max-w-4xl mx-auto">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Scale size={20} className="text-cyan-400" />
+                    <div>
+                      <p className="text-sm text-cyan-300 font-semibold">Viewing cases for Judge: {judgeFilter}</p>
+                      <p className="text-xs text-slate-400">Showing cases where this judge presided or was mentioned</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setJudgeFilter(null);
+                      setSearchQuery('');
+                      setSearchResults([]);
+                      // Clear URL param
+                      window.history.replaceState({}, '', '/cases');
+                    }}
+                    className="text-xs font-mono text-slate-400 hover:text-white px-3 py-1 rounded border border-white/10 hover:border-white/30"
+                  >
+                    Clear Filter
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Search Section */}
             <div className="mb-8 text-center">
-              <p className="text-slate-400">Search active cases. Trade on the outcome.</p>
+              <p className="text-slate-400">{judgeFilter ? `Cases involving ${judgeFilter}` : 'Search active cases. Trade on the outcome.'}</p>
             </div>
 
             {/* Search Bar */}

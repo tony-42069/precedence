@@ -72,7 +72,7 @@ const handleDisconnect = async () => {
       description: 'Portfolio & Overview'
     },
     {
-      name: 'Court Cases',
+      name: 'Cases',
       href: '/cases',
       icon: Gavel,
       description: 'Search Legal Cases'
