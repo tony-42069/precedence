@@ -275,7 +275,7 @@ const handleDisconnect = async () => {
                 {/* CTA */}
                 <div className="text-center pt-4">
                   <a 
-                    href="/markets"
+                    href="/app/markets"
                     className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-lg text-sm transition-all shadow-lg hover:shadow-blue-500/25 hover:scale-105 transform duration-200"
                   >
                     <span>VIEW ALL MARKETS</span>

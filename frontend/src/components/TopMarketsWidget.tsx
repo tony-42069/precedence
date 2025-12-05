@@ -76,7 +76,7 @@ export function TopMarketsWidget() {
           <TrendingUp size={16} className="text-green-400" />
           <span className="text-sm font-mono text-slate-400">TRENDING MARKETS</span>
         </div>
-        <a href="/markets" className="text-xs font-mono text-purple-400 hover:text-purple-300">
+        <a href="/app/markets" className="text-xs font-mono text-purple-400 hover:text-purple-300">
           View All →
         </a>
       </div>
@@ -86,7 +86,7 @@ export function TopMarketsWidget() {
         {trendingMarkets.map((market, index) => (
           <a
             key={market.id}
-            href={`/markets?highlight=${market.id}`}
+            href={`/app/markets?highlight=${market.id}`}
             className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors group"
           >
             {/* Rank */}
