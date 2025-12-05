@@ -132,7 +132,7 @@ const handleDisconnect = async () => {
               <h1 className="text-lg font-mono font-bold text-white">
                 PRECEDENCE
               </h1>
-              <p className="text-[10px] text-blue-400 uppercase tracking-wider font-mono">AI LEGAL TERMINAL</p>
+              <p className="text-[10px] text-blue-400 uppercase tracking-wider font-mono">LEGAL PREDICTION MARKETS</p>
             </div>
           </div>
 
