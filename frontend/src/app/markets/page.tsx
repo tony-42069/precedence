@@ -83,10 +83,10 @@ function MarketsContent() {
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-2">
                   <TrendingUp className="text-blue-400" size={32} />
-                  <h1 className="text-3xl font-bold text-white">Legal Prediction Markets</h1>
+                  <h1 className="text-3xl font-bold text-white">Prediction Markets</h1>
                 </div>
                 <p className="text-slate-400 text-sm font-mono">
-                  Trade on the outcomes of legal cases, regulatory decisions, and policy changes
+                  What's happening in the world of prediction markets
                 </p>
               </div>
 

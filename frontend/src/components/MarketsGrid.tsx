@@ -144,14 +144,14 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   const filteredMarkets = markets.filter(market => {
     if (filter === 'all') return true;
     const q = market.question?.toLowerCase() || '';
-    if (filter === 'supreme-court') {
-      return q.includes('supreme court') || q.includes('scotus');
+    if (filter === 'politics') {
+      return q.includes('trump') || q.includes('biden') || q.includes('election') || q.includes('president') || q.includes('congress') || q.includes('republican') || q.includes('democrat') || q.includes('governor') || q.includes('senate') || q.includes('vote');
     }
-    if (filter === 'regulatory') {
-      return q.includes('sec') || q.includes('fcc') || q.includes('doj') || q.includes('regulation');
+    if (filter === 'economy') {
+      return q.includes('fed') || q.includes('rate') || q.includes('recession') || q.includes('inflation') || q.includes('gdp') || q.includes('tariff') || q.includes('stock') || q.includes('market') || q.includes('economy');
     }
-    if (filter === 'constitutional') {
-      return q.includes('constitutional') || q.includes('amendment');
+    if (filter === 'crypto') {
+      return q.includes('bitcoin') || q.includes('btc') || q.includes('ethereum') || q.includes('eth') || q.includes('crypto') || q.includes('usdt') || q.includes('tether') || q.includes('solana') || q.includes('coinbase');
     }
     return true;
   });
@@ -173,9 +173,9 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       <div className="flex flex-wrap gap-3">
         {[
           { id: 'all', label: 'All Markets' },
-          { id: 'supreme-court', label: '🏛️ Supreme Court' },
-          { id: 'regulatory', label: '⚖️ Regulatory' },
-          { id: 'constitutional', label: '📜 Constitutional' }
+          { id: 'politics', label: '🏛️ Politics' },
+          { id: 'economy', label: '💰 Economy' },
+          { id: 'crypto', label: '🪙 Crypto' }
         ].map(cat => (
           <button
             key={cat.id}
@@ -255,8 +255,14 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     </div>
                   </div>
 
-                  {/* Question */}
-                  <h3 className="text-lg font-medium text-white mb-4 leading-snug min-h-[3.5rem]">
+                  {/* Question - Clickable */}
+                  <h3 
+                    onClick={() => {
+                      setSelectedMarket(market);
+                      setShowMarketModal(true);
+                    }}
+                    className="text-lg font-medium text-white mb-4 leading-snug min-h-[3.5rem] cursor-pointer hover:text-blue-400 transition-colors"
+                  >
                     {market.question || 'Market Question'}
                   </h3>
 
