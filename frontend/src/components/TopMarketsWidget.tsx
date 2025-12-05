@@ -10,6 +10,8 @@ interface TrendingMarket {
   question: string;
   volume: string | number;
   current_yes_price: number;
+  image?: string;
+  icon?: string;
 }
 
 export function TopMarketsWidget() {
@@ -54,7 +56,7 @@ export function TopMarketsWidget() {
           <span className="text-sm font-mono text-slate-400">TRENDING MARKETS</span>
         </div>
         {[1,2,3].map(i => (
-          <div key={i} className="h-12 bg-white/5 rounded-lg animate-pulse"></div>
+          <div key={i} className="h-14 bg-white/5 rounded-lg animate-pulse"></div>
         ))}
       </div>
     );
@@ -67,7 +69,6 @@ export function TopMarketsWidget() {
   }
 
   return (
-    /* COMPACT LIST STYLE - No outer card wrapper! */
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
@@ -80,27 +81,43 @@ export function TopMarketsWidget() {
         </a>
       </div>
 
-      {/* Market List - Simple rows, no cards */}
-      <div className="space-y-1">
+      {/* Market List with Images */}
+      <div className="space-y-2">
         {trendingMarkets.map((market, index) => (
           <a
             key={market.id}
             href={`/markets?highlight=${market.id}`}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors group"
+            className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors group"
           >
             {/* Rank */}
-            <span className="w-6 text-center text-sm font-mono text-purple-400 font-bold">
+            <span className="w-5 text-center text-sm font-mono text-purple-400 font-bold flex-shrink-0">
               {index + 1}
             </span>
             
+            {/* Market Image */}
+            {(market.image || market.icon) ? (
+              <img 
+                src={market.image || market.icon} 
+                alt=""
+                className="w-10 h-10 rounded-lg object-cover border border-white/10 flex-shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
+                <TrendingUp size={16} className="text-purple-400" />
+              </div>
+            )}
+            
             {/* Question */}
-            <span className="flex-1 text-sm text-slate-300 group-hover:text-white truncate">
+            <span className="flex-1 text-sm text-slate-300 group-hover:text-white truncate min-w-0">
               {market.question}
             </span>
             
             {/* Probability */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden hidden sm:block">
                 <div 
                   className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
                   style={{ width: `${getProb(market)}%` }}
@@ -110,7 +127,7 @@ export function TopMarketsWidget() {
             </div>
             
             {/* Volume */}
-            <span className="text-sm font-mono text-green-400 font-bold w-16 text-right flex-shrink-0">
+            <span className="text-sm font-mono text-green-400 font-bold w-14 text-right flex-shrink-0">
               {formatVolume(market.volume)}
             </span>
           </a>

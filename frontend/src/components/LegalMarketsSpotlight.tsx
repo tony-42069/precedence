@@ -10,6 +10,8 @@ interface LegalMarket {
   question: string;
   volume: number;
   current_yes_price: number;
+  image?: string;
+  icon?: string;
 }
 
 // EXPANDED keywords to catch more legal/political/regulatory markets
@@ -36,7 +38,6 @@ export function LegalMarketsSpotlight() {
   useEffect(() => {
     const fetchLegalMarkets = async () => {
       try {
-        // Try multiple endpoints
         let allMarkets: LegalMarket[] = [];
         
         // Try legal endpoint first
@@ -99,7 +100,7 @@ export function LegalMarketsSpotlight() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[1,2,3,4].map(i => (
-            <div key={i} className="h-20 bg-white/5 rounded-lg animate-pulse"></div>
+            <div key={i} className="h-28 bg-white/5 rounded-lg animate-pulse"></div>
           ))}
         </div>
       </div>
@@ -128,28 +129,44 @@ export function LegalMarketsSpotlight() {
             <a
               key={market.id}
               href={`/markets?highlight=${market.id}`}
-              className="p-3 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-blue-500/30 transition-all group"
+              className="flex gap-3 p-3 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-blue-500/30 transition-all group"
             >
-              <p className="text-sm text-slate-300 group-hover:text-white line-clamp-2 mb-3">
-                {market.question}
-              </p>
-              
-              {/* Yes/No Prices */}
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex-1 flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded px-2 py-1">
-                  <span className="text-[10px] font-mono text-green-400 uppercase">Yes</span>
-                  <span className="text-xs font-mono text-green-400 font-bold">{getProb(market.current_yes_price)}¢</span>
-                </div>
-                <div className="flex-1 flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded px-2 py-1">
-                  <span className="text-[10px] font-mono text-red-400 uppercase">No</span>
-                  <span className="text-xs font-mono text-red-400 font-bold">{100 - getProb(market.current_yes_price)}¢</span>
-                </div>
+              {/* Market Image */}
+              <div className="flex-shrink-0">
+                {(market.image || market.icon) ? (
+                  <img 
+                    src={market.image || market.icon} 
+                    alt=""
+                    className="w-16 h-16 rounded-lg object-cover border border-white/10"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                    <Scale size={20} className="text-blue-400" />
+                  </div>
+                )}
               </div>
-              
-              {/* Volume */}
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-slate-500 font-mono">VOLUME</span>
-                <span className="font-mono text-green-400 font-bold">{formatVolume(market.volume)}</span>
+
+              {/* Market Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-slate-300 group-hover:text-white line-clamp-2 mb-2">
+                  {market.question}
+                </p>
+                
+                {/* Yes/No Prices */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/20 rounded px-1.5 py-0.5">
+                    <span className="text-[9px] font-mono text-green-400">YES</span>
+                    <span className="text-[10px] font-mono text-green-400 font-bold">{getProb(market.current_yes_price)}¢</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/20 rounded px-1.5 py-0.5">
+                    <span className="text-[9px] font-mono text-red-400">NO</span>
+                    <span className="text-[10px] font-mono text-red-400 font-bold">{100 - getProb(market.current_yes_price)}¢</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-green-400 font-bold ml-auto">{formatVolume(market.volume)}</span>
+                </div>
               </div>
             </a>
           ))}

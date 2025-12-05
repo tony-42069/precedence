@@ -25,6 +25,8 @@ interface Market {
   current_yes_price?: number;
   current_no_price?: number;
   end_date?: string;
+  image?: string;
+  icon?: string;
 }
 
 interface MarketsGridProps {
@@ -207,6 +209,20 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     : 'border-white/10 hover:border-blue-500/30'
                 }`}
               >
+                {/* Market Image Header */}
+                {(market.image || market.icon) && (
+                  <div className="w-full h-32 overflow-hidden border-b border-white/5">
+                    <img 
+                      src={market.image || market.icon} 
+                      alt=""
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).parentElement!.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+
                 <div className="p-6">
                   {/* Highlighted Badge */}
                   {isHighlighted && (
