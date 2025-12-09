@@ -2,7 +2,7 @@
 
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Suspense } from 'react'; // <-- ADD THIS IMPORT
+import { Suspense } from 'react';
 import "./globals.css";
 import { PrivyProvider } from '@privy-io/react-auth';
 import { UserProvider } from "../contexts/UserContext";
