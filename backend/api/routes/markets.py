@@ -245,49 +245,83 @@ async def get_trending_markets(
     Get trending prediction markets from Polymarket.
     
     Returns the hottest markets right now - what's actually being traded.
-    Optionally filter by category to focus on specific topics.
+    Uses the Events API with volume sorting to get REAL trending markets.
     
     Example: /api/markets/trending?limit=5&category=Legal
     """
     try:
         import httpx
+        import json
         
         logger.info(f"🔥 Fetching trending markets: limit={limit}, category={category}")
         
-        # Fetch from Polymarket Gamma API
-        gamma_url = "https://gamma-api.polymarket.com/markets"
+        # Use the Events API which supports proper sorting by volume
+        # This is what Polymarket's frontend actually uses for trending
+        events_url = "https://gamma-api.polymarket.com/events"
         
-        # Fetch more markets to have enough for filtering
+        # Fetch events sorted by volume (descending) - this gets the BIG markets
         params = {
             "active": True,
             "closed": False,
             "archived": False,
-            "limit": limit * 5 if category else limit,  # Fetch more if filtering
-            "offset": 0
+            "limit": 100,  # Fetch more to filter and sort properly
+            "order": "volume",  # Sort by volume!
+            "ascending": False  # Descending = highest volume first
         }
         
-        response = httpx.get(gamma_url, params=params, timeout=10.0)
+        response = httpx.get(events_url, params=params, timeout=15.0)
         
         if response.status_code != 200:
-            logger.error(f"Gamma API error: {response.status_code}")
+            logger.error(f"Events API error: {response.status_code}")
             raise HTTPException(status_code=502, detail="Failed to fetch from Polymarket")
         
-        all_markets = response.json()
-        logger.info(f"📊 Fetched {len(all_markets)} markets from Polymarket")
+        events = response.json()
+        logger.info(f"📊 Fetched {len(events)} events from Polymarket")
         
-        # Parse prices and enhance data
-        for market in all_markets:
-            try:
-                outcome_prices = market.get('outcomePrices', '["0.5", "0.5"]')
-                if isinstance(outcome_prices, str):
-                    import json
-                    outcome_prices = json.loads(outcome_prices)
-                
-                market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
-                market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
-            except:
+        # Convert events to market format and extract the primary market from each event
+        all_markets = []
+        for event in events:
+            # Get volume from event level
+            event_volume = float(event.get('volume', 0) or 0)
+            
+            # Create a market-like object from the event
+            market = {
+                'id': event.get('id'),
+                'question': event.get('title', ''),
+                'slug': event.get('slug', ''),
+                'description': event.get('description', ''),
+                'image': event.get('image', ''),
+                'icon': event.get('icon', ''),
+                'volume': event_volume,
+                'liquidity': float(event.get('liquidity', 0) or 0),
+                'active': event.get('active', True),
+                'closed': event.get('closed', False),
+                'endDate': event.get('endDate', ''),
+                'startDate': event.get('startDate', ''),
+                'volume24hr': float(event.get('volume24hr', 0) or 0),
+                'competitive': event.get('competitive', 0),
+            }
+            
+            # Try to get price from nested markets if available
+            nested_markets = event.get('markets', [])
+            if nested_markets and len(nested_markets) > 0:
+                first_market = nested_markets[0]
+                try:
+                    outcome_prices = first_market.get('outcomePrices', '["0.5", "0.5"]')
+                    if isinstance(outcome_prices, str):
+                        outcome_prices = json.loads(outcome_prices)
+                    market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                    market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+                    # Use nested market ID if available
+                    market['id'] = first_market.get('id', market['id'])
+                except:
+                    market['current_yes_price'] = 0.5
+                    market['current_no_price'] = 0.5
+            else:
                 market['current_yes_price'] = 0.5
                 market['current_no_price'] = 0.5
+            
+            all_markets.append(market)
         
         # Filter by category if specified
         if category:
@@ -296,36 +330,34 @@ async def get_trending_markets(
             
             # Define category keywords
             category_keywords = {
-                'legal': ['court', 'scotus', 'supreme', 'ruling', 'judge', 'lawsuit', 'sec', 'ftc', 'doj', 'legal', 'trial', 'case', 'indictment', 'prosecutor'],
-                'politics': ['election', 'president', 'congress', 'senate', 'democrat', 'republican', 'vote', 'political', 'campaign', 'poll'],
-                'crypto': ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'btc', 'eth', 'defi', 'nft', 'coinbase', 'binance'],
-                'culture': ['celebrity', 'music', 'movie', 'entertainment', 'award', 'grammy', 'oscar', 'emmy', 'netflix', 'spotify'],
-                'sports': ['super bowl', 'nba', 'nfl', 'mlb', 'nhl', 'world cup', 'championship', 'playoff', 'finals'],
-                'economics': ['fed', 'interest rate', 'inflation', 'gdp', 'unemployment', 'recession', 'powell', 'fomc', 'economy']
+                'legal': ['court', 'scotus', 'supreme', 'ruling', 'judge', 'lawsuit', 'sec', 'ftc', 'doj', 'legal', 'trial', 'case', 'indictment', 'prosecutor', 'impeach'],
+                'politics': ['election', 'president', 'congress', 'senate', 'democrat', 'republican', 'vote', 'political', 'campaign', 'poll', 'trump', 'biden', 'governor', 'nominee'],
+                'crypto': ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'btc', 'eth', 'defi', 'nft', 'coinbase', 'binance', 'usdt', 'tether', 'solana'],
+                'culture': ['celebrity', 'music', 'movie', 'entertainment', 'award', 'grammy', 'oscar', 'emmy', 'netflix', 'spotify', 'film', 'grossing'],
+                'sports': ['super bowl', 'nba', 'nfl', 'mlb', 'nhl', 'world cup', 'championship', 'playoff', 'finals', 'champion', 'uefa', 'f1', 'formula'],
+                'economics': ['fed', 'interest rate', 'inflation', 'gdp', 'unemployment', 'recession', 'powell', 'fomc', 'economy', 'rate cut', 'rate hike']
             }
             
             keywords = category_keywords.get(category_lower, [])
             
             for market in all_markets:
-                # Check question, description, and tags for category match
                 question = market.get('question', '').lower()
                 description = market.get('description', '').lower()
-                tags = [t.lower() if isinstance(t, str) else t.get('label', '').lower() 
-                       for t in market.get('tags', [])]
-                
-                combined_text = f"{question} {description} {' '.join(tags)}"
+                combined_text = f"{question} {description}"
                 
                 if any(keyword in combined_text for keyword in keywords):
                     filtered_markets.append(market)
             
+            # Already sorted by volume from API, just take top N
             markets_to_return = filtered_markets[:limit]
             logger.info(f"✅ Filtered to {len(markets_to_return)} {category} markets")
         else:
-            # No filter - just return top by volume
+            # Already sorted by volume from API
             markets_to_return = all_markets[:limit]
         
-        # Sort by volume to get "trending" (most traded)
-        markets_to_return.sort(key=lambda m: float(m.get('volume', 0)), reverse=True)
+        # Log what we're returning for debugging
+        for m in markets_to_return[:3]:
+            logger.info(f"  → {m.get('question', '')[:50]}... Vol: ${m.get('volume', 0)/1000000:.1f}M")
         
         logger.info(f"🔥 Returning {len(markets_to_return)} trending markets")
         
