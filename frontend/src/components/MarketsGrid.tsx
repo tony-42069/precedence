@@ -215,7 +215,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
 
   // Render outcomes for multi-outcome markets
   const renderMultiOutcomes = (market: Market) => {
-    const outcomes = market.outcomes || [];
+    const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
     if (outcomes.length === 0) return renderBinaryPrices(market);
 
     // Color palette for outcomes
@@ -406,11 +406,11 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                   {isBinary ? renderBinaryPrices(market) : renderMultiOutcomes(market)}
 
                   {/* Tags */}
-                  {market.tags && market.tags.length > 0 && (
+                  {market.tags && Array.isArray(market.tags) && market.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-4">
                       {market.tags.slice(0, 3).map((tag, tagIndex) => (
                         <span key={tagIndex} className="inline-flex items-center px-2 py-1 rounded text-[10px] font-mono uppercase bg-white/5 text-slate-400 border border-white/5">
-                          {tag}
+                          {typeof tag === 'string' ? tag : String(tag)}
                         </span>
                       ))}
                     </div>
@@ -501,7 +501,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
               </div>
 
               {/* Outcomes Display in Modal */}
-              {!isBinaryMarket(selectedMarket) && selectedMarket.outcomes && selectedMarket.outcomes.length > 0 && (
+              {!isBinaryMarket(selectedMarket) && Array.isArray(selectedMarket.outcomes) && selectedMarket.outcomes.length > 0 && (
                 <div>
                   <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">All Outcomes</h3>
                   <div className="space-y-2">
@@ -572,10 +572,10 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
               </div>
 
               {/* Tags */}
-              {selectedMarket.tags && (
+              {selectedMarket.tags && Array.isArray(selectedMarket.tags) && selectedMarket.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {selectedMarket.tags.map((tag, i) => (
-                    <span key={i} className="px-2 py-1 bg-white/5 border border-white/10 rounded text-xs text-slate-400 font-mono uppercase">{tag}</span>
+                    <span key={i} className="px-2 py-1 bg-white/5 border border-white/10 rounded text-xs text-slate-400 font-mono uppercase">{typeof tag === 'string' ? tag : String(tag)}</span>
                   ))}
                 </div>
               )}
