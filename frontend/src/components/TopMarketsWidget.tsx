@@ -3,15 +3,26 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 import React, { useState, useEffect } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Users } from 'lucide-react';
+
+interface MarketOutcome {
+  name: string;
+  price: number;
+  id?: string;
+}
 
 interface TrendingMarket {
   id: string;
   question: string;
   volume: string | number;
+  volume1wk?: string | number;
   current_yes_price: number;
   image?: string;
   icon?: string;
+  is_binary?: boolean;
+  num_outcomes?: number;
+  outcomes?: MarketOutcome[];
+  top_outcome?: string;
 }
 
 export function TopMarketsWidget() {
@@ -21,7 +32,8 @@ export function TopMarketsWidget() {
   useEffect(() => {
     const fetchTrendingMarkets = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/markets/trending?limit=5`);
+        // Fetch trending markets sorted by weekly volume, excluding sports
+        const response = await fetch(`${API_URL}/api/markets/trending?limit=5&sort_by=volume1wk&exclude_sports=true`);
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
         setTrendingMarkets(data.trending || []);
@@ -46,7 +58,38 @@ export function TopMarketsWidget() {
     return `$${Math.round(numVolume)}`;
   };
 
-  const getProb = (market: TrendingMarket): number => Math.round((market.current_yes_price || 0) * 100);
+  const getDisplayPrice = (market: TrendingMarket): string => {
+    if (market.is_binary) {
+      // Binary market - show YES percentage
+      return `${Math.round((market.current_yes_price || 0) * 100)}%`;
+    } else if (market.top_outcome) {
+      // Multi-outcome - show top outcome with percentage
+      return `${Math.round((market.current_yes_price || 0) * 100)}%`;
+    }
+    return `${Math.round((market.current_yes_price || 0) * 100)}%`;
+  };
+
+  const getMarketTypeLabel = (market: TrendingMarket): React.ReactNode => {
+    if (market.is_binary) {
+      return (
+        <span className="text-xs text-green-400">YES {Math.round((market.current_yes_price || 0) * 100)}%</span>
+      );
+    } else if (market.outcomes && market.outcomes.length > 0) {
+      // Show top outcome name and percentage
+      const topOutcome = market.outcomes[0];
+      const displayName = topOutcome.name.length > 15 
+        ? topOutcome.name.substring(0, 15) + '...' 
+        : topOutcome.name;
+      return (
+        <div className="flex items-center gap-1">
+          <Users size={10} className="text-purple-400" />
+          <span className="text-xs text-purple-400">{displayName}</span>
+          <span className="text-xs text-blue-400">{Math.round(topOutcome.price * 100)}%</span>
+        </div>
+      );
+    }
+    return <span className="text-xs text-blue-400">{getDisplayPrice(market)}</span>;
+  };
 
   if (loading) {
     return (
@@ -75,6 +118,7 @@ export function TopMarketsWidget() {
         <div className="flex items-center gap-2">
           <TrendingUp size={16} className="text-green-400" />
           <span className="text-sm font-mono text-slate-400">TRENDING MARKETS</span>
+          <span className="text-xs text-slate-600">(7d vol)</span>
         </div>
         <a href="/app/markets" className="text-xs font-mono text-purple-400 hover:text-purple-300">
           View All →
@@ -110,25 +154,18 @@ export function TopMarketsWidget() {
               </div>
             )}
             
-            {/* Question */}
-            <span className="flex-1 text-sm text-slate-300 group-hover:text-white truncate min-w-0">
-              {market.question}
-            </span>
-            
-            {/* Probability */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-12 h-1.5 bg-white/10 rounded-full overflow-hidden hidden sm:block">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
-                  style={{ width: `${getProb(market)}%` }}
-                />
-              </div>
-              <span className="text-xs font-mono text-blue-400 w-8 text-right">{getProb(market)}%</span>
+            {/* Question and Market Type */}
+            <div className="flex-1 min-w-0">
+              <span className="text-sm text-slate-300 group-hover:text-white truncate block">
+                {market.question}
+              </span>
+              {/* Show market type indicator */}
+              {getMarketTypeLabel(market)}
             </div>
             
-            {/* Volume */}
-            <span className="text-sm font-mono text-green-400 font-bold w-14 text-right flex-shrink-0">
-              {formatVolume(market.volume)}
+            {/* Volume (weekly) */}
+            <span className="text-sm font-mono text-green-400 font-bold w-16 text-right flex-shrink-0">
+              {formatVolume(market.volume1wk || market.volume)}
             </span>
           </a>
         ))}
