@@ -283,10 +283,13 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
         </div>
       );
     } else {
-      // Multi-outcome market - single trade button
+      // Multi-outcome market - open market details modal to show all outcomes
       return (
         <button
-          onClick={() => handleTradeClick(market)}
+          onClick={() => {
+            setSelectedMarket(market);
+            setShowMarketModal(true);
+          }}
           className="w-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 border border-blue-500/30 text-blue-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
         >
           VIEW OUTCOMES & TRADE
