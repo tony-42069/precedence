@@ -2,7 +2,10 @@
  * Markets Grid Component
  * 
  * Displays prediction markets with trading functionality.
- * Handles both binary (Yes/No) and multi-outcome markets.
+ * Handles both binary (Yes/No) and multi-outcome markets properly.
+ * 
+ * Binary markets: BUY YES / BUY NO → Trading Modal
+ * Multi-outcome markets: SELECT OUTCOME → Outcome Modal → Trading Modal
  */
 
 'use client';
@@ -13,12 +16,13 @@ import { useState, useEffect, useRef } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { TradingModal } from './TradingModal';
 import { usePredictions } from '../hooks/usePredictions';
-import { Users } from 'lucide-react';
+import { Users, ChevronRight } from 'lucide-react';
 
 interface MarketOutcome {
   name: string;
   price: number;
   id?: string;
+  market_id?: string;
 }
 
 interface Market {
@@ -34,7 +38,6 @@ interface Market {
   end_date?: string;
   image?: string;
   icon?: string;
-  // Multi-outcome market fields
   is_binary?: boolean;
   num_outcomes?: number;
   outcomes?: MarketOutcome[];
@@ -46,32 +49,29 @@ interface MarketsGridProps {
 }
 
 export function MarketsGrid({ highlightId }: MarketsGridProps) {
-  // Use Privy for authentication
   const { authenticated, login } = usePrivy();
 
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
+  const [selectedOutcome, setSelectedOutcome] = useState<MarketOutcome | null>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [showMarketModal, setShowMarketModal] = useState(false);
+  const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [highlightedMarketId, setHighlightedMarketId] = useState<string | null>(highlightId || null);
   
   const { enhanceMarketsWithAI } = usePredictions();
-  
-  // Ref for scrolling to highlighted market
   const marketRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
-        // First fetch legal markets
         const response = await fetch(`${API_URL}/api/markets/legal`);
         if (response.ok) {
           const data = await response.json();
           let rawMarkets = Array.isArray(data) ? data : (data.markets || []);
           
-          // If highlightId is provided and not in legal markets, fetch it from trending
           if (highlightId && !rawMarkets.find((m: Market) => m.id === highlightId)) {
             console.log('Highlighted market not in legal markets, fetching from trending...');
             try {
@@ -82,7 +82,6 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                 const highlightedMarket = trendingMarkets.find((m: Market) => m.id === highlightId);
                 
                 if (highlightedMarket) {
-                  // Add the highlighted market to the beginning of the list
                   rawMarkets = [highlightedMarket, ...rawMarkets];
                   console.log('✅ Added highlighted market to top of list');
                 }
@@ -94,7 +93,6 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
           
           setMarkets(rawMarkets);
 
-          // Enhance with AI predictions
           if (rawMarkets.length > 0) {
             const enhancedMarkets = await enhanceMarketsWithAI(rawMarkets);
             const finalMarkets = rawMarkets.map((market: Market) => {
@@ -114,21 +112,15 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
     fetchMarkets();
   }, [enhanceMarketsWithAI, highlightId]);
 
-  // Auto-scroll to highlighted market
   useEffect(() => {
     if (highlightId && !loading && markets.length > 0) {
       const timeout = setTimeout(() => {
         const element = marketRefs.current[highlightId];
         if (element) {
-          element.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center' 
-          });
-          console.log('📍 Scrolled to highlighted market:', highlightId);
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-      }, 500); // Wait for render
+      }, 500);
 
-      // Remove highlight after 5 seconds
       const highlightTimeout = setTimeout(() => {
         setHighlightedMarketId(null);
       }, 5000);
@@ -140,27 +132,51 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
     }
   }, [highlightId, loading, markets]);
 
-  // Handler for trade button clicks
-  const handleTradeClick = (market: Market, outcomeIndex?: number) => {
+  // Handler for binary market trade clicks
+  const handleTradeClick = (market: Market) => {
     setSelectedMarket(market);
+    setSelectedOutcome(null);
     
     if (!authenticated) {
-      // Not authenticated → Trigger Privy login, then open trading modal
       login();
     }
     
-    // Always open trading modal - it will handle auth state internally
     setShowTradingModal(true);
   };
 
-  // Check if market is binary (Yes/No) or multi-outcome
-  const isBinaryMarket = (market: Market): boolean => {
-    // If is_binary is explicitly set, use it
-    if (market.is_binary !== undefined) return market.is_binary;
-    // If there are outcomes array with more than 2 items, it's multi-outcome
-    if (market.outcomes && market.outcomes.length > 2) return false;
-    // Default to binary
-    return true;
+  // Handler for multi-outcome market - opens outcome selector
+  const handleSelectOutcome = (market: Market) => {
+    setSelectedMarket(market);
+    setShowOutcomeModal(true);
+  };
+
+  // Handler for when user picks a specific outcome
+  const handleOutcomeSelected = (outcome: MarketOutcome) => {
+    setSelectedOutcome(outcome);
+    setShowOutcomeModal(false);
+    
+    if (!authenticated) {
+      login();
+    }
+    
+    // Create a modified market object with the selected outcome's prices
+    const marketWithOutcome: Market = {
+      ...selectedMarket!,
+      id: outcome.market_id || outcome.id,
+      current_yes_price: outcome.price,
+      current_no_price: 1 - outcome.price,
+      question: `${selectedMarket?.question} - ${outcome.name}`,
+    };
+    
+    setSelectedMarket(marketWithOutcome);
+    setShowTradingModal(true);
+  };
+
+  // Check if market has multiple outcomes
+  const isMultiOutcome = (market: Market): boolean => {
+    if (market.is_binary === false) return true;
+    if (Array.isArray(market.outcomes) && market.outcomes.length > 2) return true;
+    return false;
   };
 
   const filteredMarkets = markets.filter(market => {
@@ -188,115 +204,6 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       </div>
     );
   }
-
-  // Render price display for binary markets (Yes/No)
-  const renderBinaryPrices = (market: Market) => (
-    <div className="flex items-center gap-2 mb-4 font-mono text-sm">
-      <div className="flex-1 bg-white/5 rounded p-2 border border-white/5 group-hover:border-green-500/30 transition-colors">
-        <div className="flex justify-between">
-          <span className="text-slate-500 text-xs">YES</span>
-          <span className="text-green-400 font-bold">${(market.current_yes_price || 0).toFixed(2)}</span>
-        </div>
-        <div className="w-full bg-white/10 h-1 mt-1 rounded-full overflow-hidden">
-          <div className="bg-green-500 h-full" style={{ width: `${(market.current_yes_price || 0) * 100}%` }}></div>
-        </div>
-      </div>
-      <div className="flex-1 bg-white/5 rounded p-2 border border-white/5 group-hover:border-red-500/30 transition-colors">
-        <div className="flex justify-between">
-          <span className="text-slate-500 text-xs">NO</span>
-          <span className="text-red-400 font-bold">${(market.current_no_price || 0).toFixed(2)}</span>
-        </div>
-        <div className="w-full bg-white/10 h-1 mt-1 rounded-full overflow-hidden">
-          <div className="bg-red-500 h-full" style={{ width: `${(market.current_no_price || 0) * 100}%` }}></div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render outcomes for multi-outcome markets
-  const renderMultiOutcomes = (market: Market) => {
-    const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
-    if (outcomes.length === 0) return renderBinaryPrices(market);
-
-    // Color palette for outcomes
-    const colors = [
-      { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400', bar: 'bg-blue-500' },
-      { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400', bar: 'bg-purple-500' },
-      { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-400', bar: 'bg-cyan-500' },
-      { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400', bar: 'bg-amber-500' },
-      { bg: 'bg-pink-500/10', border: 'border-pink-500/30', text: 'text-pink-400', bar: 'bg-pink-500' },
-    ];
-
-    return (
-      <div className="space-y-2 mb-4">
-        <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
-          <Users size={12} />
-          <span>{market.num_outcomes || outcomes.length} outcomes</span>
-        </div>
-        {outcomes.slice(0, 3).map((outcome, index) => {
-          const color = colors[index % colors.length];
-          return (
-            <div 
-              key={outcome.id || index} 
-              className={`${color.bg} rounded p-2 border ${color.border} font-mono text-sm`}
-            >
-              <div className="flex justify-between items-center">
-                <span className="text-slate-300 text-xs truncate max-w-[60%]">
-                  {outcome.name}
-                </span>
-                <span className={`${color.text} font-bold`}>
-                  {Math.round(outcome.price * 100)}%
-                </span>
-              </div>
-              <div className="w-full bg-white/10 h-1 mt-1 rounded-full overflow-hidden">
-                <div className={`${color.bar} h-full`} style={{ width: `${outcome.price * 100}%` }}></div>
-              </div>
-            </div>
-          );
-        })}
-        {outcomes.length > 3 && (
-          <div className="text-xs text-slate-500 text-center">
-            +{outcomes.length - 3} more outcomes
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Render trade buttons based on market type
-  const renderTradeButtons = (market: Market) => {
-    if (isBinaryMarket(market)) {
-      return (
-        <div className="flex space-x-2">
-          <button
-            onClick={() => handleTradeClick(market)}
-            className="flex-1 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
-          >
-            BUY YES
-          </button>
-          <button
-            onClick={() => handleTradeClick(market)}
-            className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
-          >
-            BUY NO
-          </button>
-        </div>
-      );
-    } else {
-      // Multi-outcome market - open market details modal to show all outcomes
-      return (
-        <button
-          onClick={() => {
-            setSelectedMarket(market);
-            setShowMarketModal(true);
-          }}
-          className="w-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 hover:from-blue-500/30 hover:to-purple-500/30 border border-blue-500/30 text-blue-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
-        >
-          VIEW OUTCOMES & TRADE
-        </button>
-      );
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -327,7 +234,8 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredMarkets.map((market, index) => {
             const isHighlighted = highlightedMarketId === market.id;
-            const isBinary = isBinaryMarket(market);
+            const isMulti = isMultiOutcome(market);
+            const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
             
             return (
               <div 
@@ -375,11 +283,10 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                         <span className={`w-1.5 h-1.5 rounded-full ${market.closed ? 'bg-red-500' : 'bg-green-500'}`}></span>
                         {market.closed ? 'Closed' : 'Active'}
                       </span>
-                      {/* Multi-outcome badge */}
-                      {!isBinary && (
+                      {isMulti && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20">
                           <Users size={10} />
-                          Multi
+                          {market.num_outcomes || outcomes.length}
                         </span>
                       )}
                     </div>
@@ -394,7 +301,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     </div>
                   </div>
 
-                  {/* Question - Clickable */}
+                  {/* Question */}
                   <h3 
                     onClick={() => {
                       setSelectedMarket(market);
@@ -405,8 +312,62 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     {market.question || 'Market Question'}
                   </h3>
 
-                  {/* Price Display - Binary or Multi-outcome */}
-                  {isBinary ? renderBinaryPrices(market) : renderMultiOutcomes(market)}
+                  {/* Price Display - Different for binary vs multi-outcome */}
+                  {isMulti ? (
+                    // Multi-outcome: Show top 3 outcomes
+                    <div className="space-y-2 mb-4">
+                      {outcomes.slice(0, 3).map((outcome, idx) => {
+                        const colors = [
+                          { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400' },
+                          { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400' },
+                          { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-400' },
+                        ];
+                        const color = colors[idx % colors.length];
+                        return (
+                          <div 
+                            key={outcome.id || idx}
+                            className={`${color.bg} rounded p-2 border ${color.border} font-mono text-sm`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-300 text-xs truncate max-w-[65%]">
+                                {outcome.name}
+                              </span>
+                              <span className={`${color.text} font-bold`}>
+                                {Math.round(outcome.price * 100)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {outcomes.length > 3 && (
+                        <div className="text-xs text-slate-500 text-center">
+                          +{outcomes.length - 3} more outcomes
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // Binary: Show YES/NO prices
+                    <div className="flex items-center gap-2 mb-4 font-mono text-sm">
+                      <div className="flex-1 bg-white/5 rounded p-2 border border-white/5 group-hover:border-green-500/30 transition-colors">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 text-xs">YES</span>
+                          <span className="text-green-400 font-bold">${(market.current_yes_price || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="w-full bg-white/10 h-1 mt-1 rounded-full overflow-hidden">
+                          <div className="bg-green-500 h-full" style={{ width: `${(market.current_yes_price || 0) * 100}%` }}></div>
+                        </div>
+                      </div>
+                      <div className="flex-1 bg-white/5 rounded p-2 border border-white/5 group-hover:border-red-500/30 transition-colors">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 text-xs">NO</span>
+                          <span className="text-red-400 font-bold">${(market.current_no_price || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="w-full bg-white/10 h-1 mt-1 rounded-full overflow-hidden">
+                          <div className="bg-red-500 h-full" style={{ width: `${(market.current_no_price || 0) * 100}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Tags */}
                   {market.tags && Array.isArray(market.tags) && market.tags.length > 0 && (
@@ -419,8 +380,34 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     </div>
                   )}
 
-                  {/* Trading Buttons */}
-                  {renderTradeButtons(market)}
+                  {/* Trading Buttons - Different for binary vs multi-outcome */}
+                  {isMulti ? (
+                    // Multi-outcome: Single button to select outcome
+                    <button
+                      onClick={() => handleSelectOutcome(market)}
+                      className="w-full bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 text-purple-400 font-mono py-2.5 px-3 rounded-lg transition-colors text-xs cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <Users size={14} />
+                      SELECT OUTCOME TO TRADE
+                      <ChevronRight size={14} />
+                    </button>
+                  ) : (
+                    // Binary: BUY YES / BUY NO buttons
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleTradeClick(market)}
+                        className="flex-1 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
+                      >
+                        BUY YES
+                      </button>
+                      <button
+                        onClick={() => handleTradeClick(market)}
+                        className="flex-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 font-mono py-2 px-3 rounded-lg transition-colors text-xs cursor-pointer"
+                      >
+                        BUY NO
+                      </button>
+                    </div>
+                  )}
 
                   {/* View Analytics Button */}
                   <button
@@ -451,10 +438,91 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       <TradingModal
         market={selectedMarket}
         isOpen={showTradingModal}
-        onClose={() => setShowTradingModal(false)}
+        onClose={() => {
+          setShowTradingModal(false);
+          setSelectedOutcome(null);
+        }}
       />
 
-      {/* Market Details Modal */}
+      {/* Outcome Selection Modal - For Multi-Outcome Markets */}
+      {showOutcomeModal && selectedMarket && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowOutcomeModal(false)}></div>
+          <div className="relative bg-[#0A0A0C] border border-white/10 rounded-2xl w-full max-w-lg max-h-[80vh] overflow-hidden shadow-2xl">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-white/10 sticky top-0 bg-[#0A0A0C] z-20">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <Users size={10} />
+                      {selectedMarket.num_outcomes || selectedMarket.outcomes?.length || 0} Outcomes
+                    </span>
+                  </div>
+                  <h2 className="text-lg font-bold text-white leading-snug">{selectedMarket.question}</h2>
+                  <p className="text-sm text-slate-400 mt-1">Select an outcome to trade</p>
+                </div>
+                <button 
+                  onClick={() => setShowOutcomeModal(false)} 
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <span className="text-slate-400 text-xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Outcomes List */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              <div className="space-y-2">
+                {Array.isArray(selectedMarket.outcomes) && selectedMarket.outcomes.map((outcome, index) => {
+                  const percentage = Math.round(outcome.price * 100);
+                  return (
+                    <button
+                      key={outcome.id || index}
+                      onClick={() => handleOutcomeSelected(outcome)}
+                      className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-lg p-4 flex justify-between items-center transition-all group"
+                    >
+                      <div className="flex-1 text-left">
+                        <span className="text-white font-medium group-hover:text-purple-300 transition-colors">
+                          {outcome.name}
+                        </span>
+                        <div className="w-full bg-white/10 h-1.5 mt-2 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-gradient-to-r from-purple-500 to-blue-500 h-full transition-all" 
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="ml-4 text-right">
+                        <div className="text-xl font-mono font-bold text-purple-400">
+                          {percentage}%
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          ${outcome.price.toFixed(2)}
+                        </div>
+                      </div>
+                      <ChevronRight size={20} className="ml-3 text-slate-500 group-hover:text-purple-400 transition-colors" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-white/10 bg-[#0A0A0C]">
+              <button 
+                onClick={() => setShowOutcomeModal(false)}
+                className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Market Details Modal (Analytics) */}
       {showMarketModal && selectedMarket && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowMarketModal(false)}></div>
@@ -469,12 +537,6 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                   }`}>
                     {selectedMarket.closed ? 'CLOSED' : 'ACTIVE'}
                   </span>
-                  {!isBinaryMarket(selectedMarket) && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono uppercase bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                      <Users size={10} />
-                      {selectedMarket.num_outcomes || selectedMarket.outcomes?.length || 0} Outcomes
-                    </span>
-                  )}
                   <span className="text-slate-500 text-xs font-mono">ID: {selectedMarket.id?.substring(0, 8)}</span>
                 </div>
                 <h2 className="text-xl font-bold text-white leading-snug">{selectedMarket.question}</h2>
@@ -503,68 +565,30 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                 </div>
               </div>
 
-              {/* Outcomes Display in Modal */}
-              {!isBinaryMarket(selectedMarket) && Array.isArray(selectedMarket.outcomes) && selectedMarket.outcomes.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">All Outcomes</h3>
-                  <div className="space-y-2">
-                    {selectedMarket.outcomes.map((outcome, index) => {
-                      const colors = ['blue', 'purple', 'cyan', 'amber', 'pink', 'green', 'orange'];
-                      const color = colors[index % colors.length];
-                      return (
-                        <div 
-                          key={outcome.id || index}
-                          className={`bg-${color}-500/10 border border-${color}-500/20 rounded-lg p-3 flex justify-between items-center`}
-                          style={{
-                            backgroundColor: `rgba(var(--${color}-rgb, 59, 130, 246), 0.1)`,
-                            borderColor: `rgba(var(--${color}-rgb, 59, 130, 246), 0.2)`
-                          }}
-                        >
-                          <span className="text-white font-medium">{outcome.name}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-lg font-mono font-bold text-blue-400">
-                              {Math.round(outcome.price * 100)}%
-                            </span>
-                            <button 
-                              onClick={() => handleTradeClick(selectedMarket, index)}
-                              className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 rounded text-xs text-blue-400 font-mono"
-                            >
-                              BUY
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Binary market prices in modal */}
-              {isBinaryMarket(selectedMarket) && (
-                <div>
-                  <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Current Prices</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
-                      <div className="text-xs text-slate-400 uppercase mb-1">YES</div>
-                      <div className="text-2xl font-mono font-bold text-green-400">
-                        ${(selectedMarket.current_yes_price || 0).toFixed(2)}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {Math.round((selectedMarket.current_yes_price || 0) * 100)}% chance
-                      </div>
+              {/* Current Prices */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Current Prices</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
+                    <div className="text-xs text-slate-400 uppercase mb-1">YES</div>
+                    <div className="text-2xl font-mono font-bold text-green-400">
+                      ${(selectedMarket.current_yes_price || 0).toFixed(2)}
                     </div>
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center">
-                      <div className="text-xs text-slate-400 uppercase mb-1">NO</div>
-                      <div className="text-2xl font-mono font-bold text-red-400">
-                        ${(selectedMarket.current_no_price || 0).toFixed(2)}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {Math.round((selectedMarket.current_no_price || 0) * 100)}% chance
-                      </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {Math.round((selectedMarket.current_yes_price || 0) * 100)}% chance
+                    </div>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center">
+                    <div className="text-xs text-slate-400 uppercase mb-1">NO</div>
+                    <div className="text-2xl font-mono font-bold text-red-400">
+                      ${(selectedMarket.current_no_price || 0).toFixed(2)}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {Math.round((selectedMarket.current_no_price || 0) * 100)}% chance
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Description */}
               <div>
@@ -585,15 +609,28 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
 
               {/* Actions */}
               <div className="flex gap-4 pt-4">
-                <button 
-                  onClick={() => {
-                    setShowMarketModal(false);
-                    handleTradeClick(selectedMarket);
-                  }}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
-                >
-                  TRADE NOW
-                </button>
+                {isMultiOutcome(selectedMarket) ? (
+                  <button 
+                    onClick={() => {
+                      setShowMarketModal(false);
+                      handleSelectOutcome(selectedMarket);
+                    }}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] flex items-center justify-center gap-2"
+                  >
+                    <Users size={18} />
+                    SELECT OUTCOME TO TRADE
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setShowMarketModal(false);
+                      handleTradeClick(selectedMarket);
+                    }}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                  >
+                    TRADE NOW
+                  </button>
+                )}
                 <button 
                   onClick={() => setShowMarketModal(false)} 
                   className="px-6 py-3 border border-white/10 hover:bg-white/5 rounded-xl text-slate-300 font-medium"

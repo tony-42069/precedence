@@ -347,9 +347,9 @@ async def get_trending_markets(
                     market['current_yes_price'] = 0.5
                     market['current_no_price'] = 0.5
             elif nested_markets:
-                # Multi-outcome market - get top outcomes with their prices
+                # Multi-outcome market - get ALL outcomes with their prices
                 outcomes = []
-                for nm in nested_markets[:5]:  # Top 5 outcomes
+                for nm in nested_markets:  # ALL outcomes, not just top 5
                     try:
                         outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
                         if isinstance(outcome_prices, str):
@@ -364,14 +364,15 @@ async def get_trending_markets(
                         outcomes.append({
                             'name': outcome_name,
                             'price': float(outcome_prices[0]) if outcome_prices else 0.5,
-                            'id': nm.get('id')
+                            'id': nm.get('id'),
+                            'market_id': nm.get('id')  # Include market_id for trading
                         })
                     except:
                         pass
                 
-                # Sort outcomes by price (highest first) and take top 3
+                # Sort outcomes by price (highest first)
                 outcomes.sort(key=lambda x: x['price'], reverse=True)
-                market['outcomes'] = outcomes[:3]
+                market['outcomes'] = outcomes  # Return ALL outcomes, not just top 3
                 
                 # For display purposes, use the top outcome's price
                 if outcomes:
