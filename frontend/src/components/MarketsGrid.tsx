@@ -21,6 +21,7 @@ import { Users, ChevronRight } from 'lucide-react';
 interface MarketOutcome {
   name: string;           // Display name from groupItemTitle: "2 (50 bps)"
   question?: string;      // Full question: "Will 2 Fed rate cuts happen in 2025?"
+  description?: string;   // Full rules/context for this outcome
   price: number;          // YES price for display/sorting
   yes_price?: number;     // YES price for trading
   no_price?: number;      // NO price for trading  
@@ -167,6 +168,7 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       ...selectedMarket!,
       id: outcome.market_id || outcome.id,                           // Use outcome's market ID
       question: outcome.question || `${selectedMarket?.question} - ${outcome.name}`,  // Use outcome's full question
+      description: outcome.description || selectedMarket?.description,  // Use outcome's description if available
       current_yes_price: outcome.yes_price ?? outcome.price,         // Use outcome's YES price
       current_no_price: outcome.no_price ?? (1 - outcome.price),     // Use outcome's NO price
     };

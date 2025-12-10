@@ -349,6 +349,8 @@ async def get_trending_markets(
             elif nested_markets:
                 # Multi-outcome market - get ALL ACTIVE outcomes with their prices
                 outcomes = []
+                detailed_description = None  # Will get from first active market
+                
                 for nm in nested_markets:
                     try:
                         # SKIP CLOSED/RESOLVED markets - these are already decided
@@ -367,15 +369,26 @@ async def get_trending_markets(
                         if yes_price >= 0.99 or yes_price <= 0.01:
                             continue
                         
+                        # Grab detailed description from first active nested market
+                        # These contain the full rules, not the generic event description
+                        if detailed_description is None:
+                            nested_desc = nm.get('description', '')
+                            if nested_desc and len(nested_desc) > 50:  # Only if it's substantial
+                                detailed_description = nested_desc
+                        
                         # Use groupItemTitle for display name (cleaner than question)
                         outcome_name = nm.get('groupItemTitle', '') or nm.get('question', 'Unknown')
                         
                         # Get the full question for the trading modal
                         outcome_question = nm.get('question', outcome_name)
                         
+                        # Get outcome-specific description for context
+                        outcome_description = nm.get('description', '')
+                        
                         outcomes.append({
                             'name': outcome_name,                    # Display name: "2 (50 bps)"
                             'question': outcome_question,            # Full question for trading: "Will 2 Fed rate cuts happen in 2025?"
+                            'description': outcome_description,      # Full rules for this outcome
                             'yes_price': yes_price,                  # YES price for trading
                             'no_price': no_price,                    # NO price for trading
                             'price': yes_price,                      # For sorting/display (same as yes_price)
@@ -390,6 +403,10 @@ async def get_trending_markets(
                 outcomes.sort(key=lambda x: x['price'], reverse=True)
                 market['outcomes'] = outcomes
                 market['num_outcomes'] = len(outcomes)  # Update to reflect active outcomes only
+                
+                # Use detailed description from nested market if available
+                if detailed_description:
+                    market['description'] = detailed_description
                 
                 # For display purposes, use the top outcome's price
                 if outcomes:
