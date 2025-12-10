@@ -19,10 +19,13 @@ import { usePredictions } from '../hooks/usePredictions';
 import { Users, ChevronRight } from 'lucide-react';
 
 interface MarketOutcome {
-  name: string;
-  price: number;
-  id?: string;
-  market_id?: string;
+  name: string;           // Display name from groupItemTitle: "2 (50 bps)"
+  question?: string;      // Full question: "Will 2 Fed rate cuts happen in 2025?"
+  price: number;          // YES price for display/sorting
+  yes_price?: number;     // YES price for trading
+  no_price?: number;      // NO price for trading  
+  id?: string;            // Market ID for trading
+  market_id?: string;     // Same as id
 }
 
 interface Market {
@@ -159,13 +162,13 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       login();
     }
     
-    // Create a modified market object with the selected outcome's prices
+    // Create a market object for trading with the selected outcome's data
     const marketWithOutcome: Market = {
       ...selectedMarket!,
-      id: outcome.market_id || outcome.id,
-      current_yes_price: outcome.price,
-      current_no_price: 1 - outcome.price,
-      question: `${selectedMarket?.question} - ${outcome.name}`,
+      id: outcome.market_id || outcome.id,                           // Use outcome's market ID
+      question: outcome.question || `${selectedMarket?.question} - ${outcome.name}`,  // Use outcome's full question
+      current_yes_price: outcome.yes_price ?? outcome.price,         // Use outcome's YES price
+      current_no_price: outcome.no_price ?? (1 - outcome.price),     // Use outcome's NO price
     };
     
     setSelectedMarket(marketWithOutcome);
@@ -314,27 +317,28 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
 
                   {/* Price Display - Different for binary vs multi-outcome */}
                   {isMulti ? (
-                    // Multi-outcome: Show top 3 outcomes
+                    // Multi-outcome: Show top 3 outcomes with YES/NO
                     <div className="space-y-2 mb-4">
                       {outcomes.slice(0, 3).map((outcome, idx) => {
-                        const colors = [
-                          { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400' },
-                          { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400' },
-                          { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-400' },
-                        ];
-                        const color = colors[idx % colors.length];
+                        const yesPrice = outcome.yes_price ?? outcome.price;
+                        const noPrice = outcome.no_price ?? (1 - outcome.price);
                         return (
                           <div 
                             key={outcome.id || idx}
-                            className={`${color.bg} rounded p-2 border ${color.border} font-mono text-sm`}
+                            className="bg-white/5 rounded p-2 border border-white/10 font-mono text-sm"
                           >
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-300 text-xs truncate max-w-[65%]">
-                                {outcome.name}
-                              </span>
-                              <span className={`${color.text} font-bold`}>
-                                {Math.round(outcome.price * 100)}%
-                              </span>
+                            <div className="text-slate-300 text-xs truncate mb-1">
+                              {outcome.name}
+                            </div>
+                            <div className="flex gap-2">
+                              <div className="flex-1 flex justify-between">
+                                <span className="text-slate-500 text-[10px]">YES</span>
+                                <span className="text-green-400 text-xs font-bold">${yesPrice.toFixed(2)}</span>
+                              </div>
+                              <div className="flex-1 flex justify-between">
+                                <span className="text-slate-500 text-[10px]">NO</span>
+                                <span className="text-red-400 text-xs font-bold">${noPrice.toFixed(2)}</span>
+                              </div>
                             </div>
                           </div>
                         );
@@ -476,33 +480,40 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
             <div className="p-4 overflow-y-auto max-h-[60vh]">
               <div className="space-y-2">
                 {Array.isArray(selectedMarket.outcomes) && selectedMarket.outcomes.map((outcome, index) => {
-                  const percentage = Math.round(outcome.price * 100);
+                  const yesPrice = outcome.yes_price ?? outcome.price;
+                  const noPrice = outcome.no_price ?? (1 - outcome.price);
+                  const yesPercent = Math.round(yesPrice * 100);
+                  
                   return (
                     <button
                       key={outcome.id || index}
                       onClick={() => handleOutcomeSelected(outcome)}
-                      className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-lg p-4 flex justify-between items-center transition-all group"
+                      className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-lg p-4 transition-all group"
                     >
-                      <div className="flex-1 text-left">
-                        <span className="text-white font-medium group-hover:text-purple-300 transition-colors">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-white font-medium group-hover:text-purple-300 transition-colors text-left">
                           {outcome.name}
                         </span>
-                        <div className="w-full bg-white/10 h-1.5 mt-2 rounded-full overflow-hidden">
-                          <div 
-                            className="bg-gradient-to-r from-purple-500 to-blue-500 h-full transition-all" 
-                            style={{ width: `${percentage}%` }}
-                          ></div>
+                        <ChevronRight size={18} className="text-slate-500 group-hover:text-purple-400 transition-colors flex-shrink-0" />
+                      </div>
+                      
+                      {/* YES/NO prices side by side */}
+                      <div className="flex gap-3 mt-2">
+                        <div className="flex-1 bg-green-500/10 rounded p-2 border border-green-500/20">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-400">YES</span>
+                            <span className="text-green-400 font-mono font-bold">${yesPrice.toFixed(2)}</span>
+                          </div>
+                          <div className="text-xs text-slate-500 text-right">{yesPercent}%</div>
+                        </div>
+                        <div className="flex-1 bg-red-500/10 rounded p-2 border border-red-500/20">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-400">NO</span>
+                            <span className="text-red-400 font-mono font-bold">${noPrice.toFixed(2)}</span>
+                          </div>
+                          <div className="text-xs text-slate-500 text-right">{Math.round(noPrice * 100)}%</div>
                         </div>
                       </div>
-                      <div className="ml-4 text-right">
-                        <div className="text-xl font-mono font-bold text-purple-400">
-                          {percentage}%
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          ${outcome.price.toFixed(2)}
-                        </div>
-                      </div>
-                      <ChevronRight size={20} className="ml-3 text-slate-500 group-hover:text-purple-400 transition-colors" />
                     </button>
                   );
                 })}

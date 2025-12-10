@@ -347,32 +347,49 @@ async def get_trending_markets(
                     market['current_yes_price'] = 0.5
                     market['current_no_price'] = 0.5
             elif nested_markets:
-                # Multi-outcome market - get ALL outcomes with their prices
+                # Multi-outcome market - get ALL ACTIVE outcomes with their prices
                 outcomes = []
-                for nm in nested_markets:  # ALL outcomes, not just top 5
+                for nm in nested_markets:
                     try:
+                        # SKIP CLOSED/RESOLVED markets - these are already decided
+                        if nm.get('closed', False):
+                            continue
+                        
+                        # Parse outcome prices: [0] = YES price, [1] = NO price
                         outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
                         if isinstance(outcome_prices, str):
                             outcome_prices = json.loads(outcome_prices)
                         
-                        # Get outcome name from groupItemTitle or question
+                        yes_price = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                        no_price = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+                        
+                        # Skip if essentially resolved (YES >= 99% or YES <= 1%)
+                        if yes_price >= 0.99 or yes_price <= 0.01:
+                            continue
+                        
+                        # Use groupItemTitle for display name (cleaner than question)
                         outcome_name = nm.get('groupItemTitle', '') or nm.get('question', 'Unknown')
-                        # Clean up outcome name (remove the question part if it's there)
-                        if '?' in outcome_name:
-                            outcome_name = outcome_name.split('?')[-1].strip() or outcome_name
+                        
+                        # Get the full question for the trading modal
+                        outcome_question = nm.get('question', outcome_name)
                         
                         outcomes.append({
-                            'name': outcome_name,
-                            'price': float(outcome_prices[0]) if outcome_prices else 0.5,
-                            'id': nm.get('id'),
-                            'market_id': nm.get('id')  # Include market_id for trading
+                            'name': outcome_name,                    # Display name: "2 (50 bps)"
+                            'question': outcome_question,            # Full question for trading: "Will 2 Fed rate cuts happen in 2025?"
+                            'yes_price': yes_price,                  # YES price for trading
+                            'no_price': no_price,                    # NO price for trading
+                            'price': yes_price,                      # For sorting/display (same as yes_price)
+                            'id': nm.get('id'),                      # Market ID for trading
+                            'market_id': nm.get('id'),               # Duplicate for clarity
                         })
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Failed to parse outcome: {e}")
                         pass
                 
-                # Sort outcomes by price (highest first)
+                # Sort outcomes by YES price (highest first = most likely)
                 outcomes.sort(key=lambda x: x['price'], reverse=True)
-                market['outcomes'] = outcomes  # Return ALL outcomes, not just top 3
+                market['outcomes'] = outcomes
+                market['num_outcomes'] = len(outcomes)  # Update to reflect active outcomes only
                 
                 # For display purposes, use the top outcome's price
                 if outcomes:

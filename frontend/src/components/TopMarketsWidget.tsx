@@ -8,7 +8,10 @@ import { TrendingUp, Users } from 'lucide-react';
 interface MarketOutcome {
   name: string;
   price: number;
+  yes_price?: number;
+  no_price?: number;
   id?: string;
+  question?: string;
 }
 
 interface TrendingMarket {
@@ -70,21 +73,24 @@ export function TopMarketsWidget() {
   };
 
   const getMarketTypeLabel = (market: TrendingMarket): React.ReactNode => {
-    if (market.is_binary) {
+    if (market.is_binary !== false) {
+      // Binary market - show YES percentage
       return (
         <span className="text-xs text-green-400">YES {Math.round((market.current_yes_price || 0) * 100)}%</span>
       );
     } else if (market.outcomes && market.outcomes.length > 0) {
-      // Show top outcome name and percentage
+      // Multi-outcome - show outcome count and top outcome
       const topOutcome = market.outcomes[0];
-      const displayName = topOutcome.name.length > 15 
-        ? topOutcome.name.substring(0, 15) + '...' 
+      const yesPrice = topOutcome.yes_price ?? topOutcome.price;
+      const displayName = topOutcome.name.length > 12 
+        ? topOutcome.name.substring(0, 12) + '...' 
         : topOutcome.name;
       return (
         <div className="flex items-center gap-1">
           <Users size={10} className="text-purple-400" />
-          <span className="text-xs text-purple-400">{displayName}</span>
-          <span className="text-xs text-blue-400">{Math.round(topOutcome.price * 100)}%</span>
+          <span className="text-[10px] text-slate-500">{market.num_outcomes || market.outcomes.length}</span>
+          <span className="text-xs text-purple-400 truncate">{displayName}</span>
+          <span className="text-xs text-green-400">{Math.round(yesPrice * 100)}%</span>
         </div>
       );
     }
