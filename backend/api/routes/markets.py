@@ -348,7 +348,7 @@ async def get_trending_markets(
                     market['current_no_price'] = 0.5
             elif nested_markets:
                 # Multi-outcome market - get ALL ACTIVE outcomes with their prices
-                outcomes = []
+                outcomes_raw = []
                 detailed_description = None  # Will get from first active market
                 
                 for nm in nested_markets:
@@ -365,8 +365,9 @@ async def get_trending_markets(
                         yes_price = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
                         no_price = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
                         
-                        # Skip if essentially resolved (YES >= 99% or YES <= 1%)
-                        if yes_price >= 0.99 or yes_price <= 0.01:
+                        # Skip if fully resolved (YES >= 99%)
+                        # But KEEP low probability outcomes (YES <= 1%) - these are valid bets
+                        if yes_price >= 0.99:
                             continue
                         
                         # Grab detailed description from first active nested market
@@ -385,19 +386,36 @@ async def get_trending_markets(
                         # Get outcome-specific description for context
                         outcome_description = nm.get('description', '')
                         
-                        outcomes.append({
-                            'name': outcome_name,                    # Display name: "2 (50 bps)"
-                            'question': outcome_question,            # Full question for trading: "Will 2 Fed rate cuts happen in 2025?"
+                        outcomes_raw.append({
+                            'name': outcome_name,                    # Display name: "↑ 115,000"
+                            'question': outcome_question,            # Full question for trading
                             'description': outcome_description,      # Full rules for this outcome
                             'yes_price': yes_price,                  # YES price for trading
                             'no_price': no_price,                    # NO price for trading
-                            'price': yes_price,                      # For sorting/display (same as yes_price)
+                            'price': yes_price,                      # For sorting/display
                             'id': nm.get('id'),                      # Market ID for trading
                             'market_id': nm.get('id'),               # Duplicate for clarity
                         })
                     except Exception as e:
                         logger.warning(f"Failed to parse outcome: {e}")
                         pass
+                
+                # DEDUPLICATE by name - keep the one with price furthest from 50%
+                # This removes stale duplicate markets that are stuck at 50%
+                outcomes_by_name = {}
+                for outcome in outcomes_raw:
+                    name = outcome['name']
+                    if name not in outcomes_by_name:
+                        outcomes_by_name[name] = outcome
+                    else:
+                        # Compare: keep the one with price furthest from 0.5 (more decisive)
+                        existing = outcomes_by_name[name]
+                        existing_distance = abs(existing['price'] - 0.5)
+                        new_distance = abs(outcome['price'] - 0.5)
+                        if new_distance > existing_distance:
+                            outcomes_by_name[name] = outcome
+                
+                outcomes = list(outcomes_by_name.values())
                 
                 # Sort outcomes by YES price (highest first = most likely)
                 outcomes.sort(key=lambda x: x['price'], reverse=True)
