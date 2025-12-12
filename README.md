@@ -114,12 +114,12 @@ When cases resolve, UMA Oracle verifies outcomes and smart contracts automatical
 | Case outcome predictions (LLM) | ✅ Live |
 | CourtListener integration | ✅ Live |
 | Real-time market prices | ✅ Live |
+| User profile persistence | ✅ Live |
 
 ### In Development 🚧
 
 | Feature | Status |
 |---------|--------|
-| User profile persistence | 🚧 Planned |
 | Portfolio tracking | 🚧 Planned |
 | Trade history | 🚧 Planned |
 | Leaderboards | 🚧 Planned |
