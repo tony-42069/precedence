@@ -15,6 +15,8 @@
 
 require('dotenv').config({ path: './.env', silent: true });
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { ClobClient } = require('@polymarket/clob-client');
 const { RelayClient } = require('@polymarket/builder-relayer-client');
 const { BuilderConfig } = require('@polymarket/builder-signing-sdk');
@@ -39,6 +41,28 @@ const CLOB_API_URL = 'https://clob.polymarket.com';
 const POLYGON_CHAIN_ID = 137;
 const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
+// ===========================================
+// PRECEDENCE FEE CONFIGURATION
+// ===========================================
+const PRECEDENCE_TREASURY_ADDRESS = process.env.PRECEDENCE_TREASURY_ADDRESS;
+const PRECEDENCE_TREASURY_PRIVATE_KEY = process.env.PRECEDENCE_TREASURY_PRIVATE_KEY;
+const PRECEDENCE_FEE_PERCENT = parseFloat(process.env.PRECEDENCE_FEE_PERCENT || '1'); // Default 1%
+const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'; // USDC on Polygon
+const USDC_DECIMALS = 6;
+
+// Fee logging file path
+const FEE_LOG_PATH = path.join(__dirname, 'data', 'fee_transactions.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(path.join(__dirname, 'data'))) {
+  fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+}
+
+// Initialize fee log file if it doesn't exist
+if (!fs.existsSync(FEE_LOG_PATH)) {
+  fs.writeFileSync(FEE_LOG_PATH, JSON.stringify({ transactions: [], totalCollected: '0' }, null, 2));
+}
+
 // In-memory session storage (in production, use Redis or database)
 const userSessions = new Map();
 
@@ -46,6 +70,8 @@ console.log('='.repeat(60));
 console.log('Polymarket Builder Trading Service v2 - REFACTORED');
 console.log('='.repeat(60));
 console.log('SIGNING_SERVER_URL:', SIGNING_SERVER_URL);
+console.log('TREASURY_ADDRESS:', PRECEDENCE_TREASURY_ADDRESS || '❌ NOT SET');
+console.log('FEE_PERCENT:', PRECEDENCE_FEE_PERCENT + '%');
 
 /**
  * Helper: Create ethers signer from private key
@@ -94,6 +120,194 @@ function getBuilderConfig() {
 function deriveSafeAddress(eoaAddress) {
   const config = getContractConfig(POLYGON_CHAIN_ID);
   return deriveSafe(eoaAddress, config.SafeContracts.SafeFactory);
+}
+
+// ===========================================
+// FEE SYSTEM HELPERS
+// ===========================================
+
+/**
+ * Calculate fee for a trade
+ * @param {number} tradeValue - The trade value in USD
+ * @param {string} side - 'BUY' or 'SELL'
+ * @returns {object} Fee calculation result
+ */
+function calculateFee(tradeValue, side) {
+  // Only charge fees on SELL orders
+  if (side.toUpperCase() !== 'SELL') {
+    return {
+      tradeValue: tradeValue,
+      feePercent: 0,
+      feeAmount: 0,
+      netAmount: tradeValue,
+      hasFee: false
+    };
+  }
+
+  const feeAmount = tradeValue * (PRECEDENCE_FEE_PERCENT / 100);
+  const netAmount = tradeValue - feeAmount;
+
+  return {
+    tradeValue: tradeValue,
+    feePercent: PRECEDENCE_FEE_PERCENT,
+    feeAmount: parseFloat(feeAmount.toFixed(6)),
+    netAmount: parseFloat(netAmount.toFixed(6)),
+    hasFee: true
+  };
+}
+
+/**
+ * Log fee transaction to file
+ * @param {object} feeData - Fee transaction data
+ */
+function logFeeTransaction(feeData) {
+  try {
+    const logData = JSON.parse(fs.readFileSync(FEE_LOG_PATH, 'utf8'));
+
+    const transaction = {
+      id: `fee_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+      userId: feeData.userId || null,
+      walletAddress: feeData.walletAddress,
+      safeAddress: feeData.safeAddress,
+      marketId: feeData.marketId,
+      tokenId: feeData.tokenId,
+      side: feeData.side,
+      tradeValue: feeData.tradeValue,
+      feePercent: feeData.feePercent,
+      feeAmount: feeData.feeAmount,
+      treasuryTxHash: feeData.treasuryTxHash || null,
+      orderTxHash: feeData.orderTxHash || null,
+      status: feeData.status || 'completed'
+    };
+
+    logData.transactions.push(transaction);
+
+    // Update total collected
+    const currentTotal = parseFloat(logData.totalCollected || '0');
+    logData.totalCollected = (currentTotal + feeData.feeAmount).toFixed(6);
+
+    fs.writeFileSync(FEE_LOG_PATH, JSON.stringify(logData, null, 2));
+
+    console.log(`💰 Fee logged: $${feeData.feeAmount} (Total: $${logData.totalCollected})`);
+
+    return transaction;
+  } catch (error) {
+    console.error('❌ Failed to log fee transaction:', error);
+    return null;
+  }
+}
+
+/**
+ * Get fee transaction history
+ * @param {string} walletAddress - Optional filter by wallet address
+ * @returns {object} Fee history data
+ */
+function getFeeHistory(walletAddress = null) {
+  try {
+    const logData = JSON.parse(fs.readFileSync(FEE_LOG_PATH, 'utf8'));
+
+    if (walletAddress) {
+      const filtered = logData.transactions.filter(
+        tx => tx.walletAddress?.toLowerCase() === walletAddress.toLowerCase() ||
+              tx.safeAddress?.toLowerCase() === walletAddress.toLowerCase()
+      );
+
+      const userTotal = filtered.reduce((sum, tx) => sum + tx.feeAmount, 0);
+
+      return {
+        transactions: filtered,
+        totalPaid: userTotal.toFixed(6),
+        count: filtered.length
+      };
+    }
+
+    return {
+      transactions: logData.transactions,
+      totalCollected: logData.totalCollected,
+      count: logData.transactions.length
+    };
+  } catch (error) {
+    console.error('❌ Failed to get fee history:', error);
+    return { transactions: [], totalCollected: '0', count: 0 };
+  }
+}
+
+/**
+ * Transfer USDC fee from user Safe to treasury
+ * Uses RelayClient to execute gasless transfer from user's Safe
+ * @param {string} userPrivateKey - User's private key
+ * @param {string} safeAddress - User's Safe address
+ * @param {number} feeAmount - Fee amount in USDC
+ * @returns {object} Transfer result
+ */
+async function transferFeeToTreasury(userPrivateKey, safeAddress, feeAmount) {
+  try {
+    if (!PRECEDENCE_TREASURY_ADDRESS) {
+      throw new Error('Treasury address not configured');
+    }
+
+    if (feeAmount <= 0) {
+      return { success: true, skipped: true, reason: 'No fee to transfer' };
+    }
+
+    console.log(`💸 Transferring $${feeAmount} USDC fee to treasury...`);
+    console.log(`   From Safe: ${safeAddress}`);
+    console.log(`   To Treasury: ${PRECEDENCE_TREASURY_ADDRESS}`);
+
+    // Create viem wallet client for RelayClient
+    const walletClient = createViemWalletClient(userPrivateKey);
+    const builderConfig = getBuilderConfig();
+
+    const relayClient = new RelayClient(
+      RELAYER_URL,
+      POLYGON_CHAIN_ID,
+      walletClient,
+      builderConfig
+    );
+
+    // Convert fee to USDC units (6 decimals)
+    const feeAmountUnits = ethers.parseUnits(feeAmount.toFixed(6), USDC_DECIMALS);
+
+    // Create USDC transfer transaction
+    const erc20Interface = new ethers.Interface([
+      'function transfer(address to, uint256 amount)'
+    ]);
+
+    const transferData = erc20Interface.encodeFunctionData('transfer', [
+      PRECEDENCE_TREASURY_ADDRESS,
+      feeAmountUnits
+    ]);
+
+    const transferTx = {
+      to: USDC_ADDRESS,
+      value: '0',
+      data: transferData,
+      operation: 0 // CALL
+    };
+
+    // Execute transfer via RelayClient
+    const response = await relayClient.execute([transferTx], safeAddress);
+    const result = await response.wait();
+
+    const txHash = result?.hash || result?.transactionHash;
+
+    console.log(`✅ Fee transferred successfully: ${txHash}`);
+
+    return {
+      success: true,
+      transactionHash: txHash,
+      feeAmount: feeAmount,
+      treasuryAddress: PRECEDENCE_TREASURY_ADDRESS
+    };
+
+  } catch (error) {
+    console.error('❌ Fee transfer failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 }
 
 /**
@@ -489,13 +703,14 @@ app.post('/set-approvals', async (req, res) => {
 
 /**
  * STEP 5: Place Order
- * 
+ *
  * Uses authenticated ClobClient with User API credentials + builder config.
+ * For SELL orders: Charges 1% fee transferred to Precedence treasury.
  */
 app.post('/place-order', async (req, res) => {
   try {
-    const { userPrivateKey, tokenId, price, size, side } = req.body;
-    
+    const { userPrivateKey, tokenId, price, size, side, marketId, userId } = req.body;
+
     if (!userPrivateKey || !tokenId || price === undefined || !size || !side) {
       return res.status(400).json({
         success: false,
@@ -505,7 +720,7 @@ app.post('/place-order', async (req, res) => {
 
     const signer = createEthersSigner(userPrivateKey);
     const eoaAddress = await signer.getAddress();
-    
+
     const session = userSessions.get(eoaAddress);
     if (!session) {
       return res.status(400).json({
@@ -521,7 +736,14 @@ app.post('/place-order', async (req, res) => {
       });
     }
 
+    // Calculate trade value and fee
+    const tradeValue = parseFloat(price) * parseFloat(size);
+    const feeCalc = calculateFee(tradeValue, side);
+
     console.log(`📊 Placing ${side} order: ${size} @ ${price} for token ${tokenId}`);
+    if (feeCalc.hasFee) {
+      console.log(`💰 Fee: $${feeCalc.feeAmount} (${feeCalc.feePercent}%)`);
+    }
 
     // Create authenticated ClobClient with User API credentials + builder config
     const builderConfig = getBuilderConfig();
@@ -550,14 +772,50 @@ app.post('/place-order', async (req, res) => {
     };
 
     // Create and post order
-    const response = await clobClient.createAndPostOrder(order);
+    const orderResponse = await clobClient.createAndPostOrder(order);
 
-    console.log('✅ Order placed successfully:', response);
+    console.log('✅ Order placed successfully:', orderResponse);
+
+    // For SELL orders: Transfer fee to treasury
+    let feeTransferResult = null;
+    if (feeCalc.hasFee && feeCalc.feeAmount > 0) {
+      console.log(`💸 Processing ${feeCalc.feePercent}% platform fee...`);
+
+      feeTransferResult = await transferFeeToTreasury(
+        userPrivateKey,
+        session.safeAddress,
+        feeCalc.feeAmount
+      );
+
+      // Log fee transaction
+      logFeeTransaction({
+        userId: userId || null,
+        walletAddress: eoaAddress,
+        safeAddress: session.safeAddress,
+        marketId: marketId || null,
+        tokenId: tokenId,
+        side: side.toUpperCase(),
+        tradeValue: tradeValue,
+        feePercent: feeCalc.feePercent,
+        feeAmount: feeCalc.feeAmount,
+        treasuryTxHash: feeTransferResult?.transactionHash || null,
+        orderTxHash: orderResponse?.orderID || orderResponse?.id,
+        status: feeTransferResult?.success ? 'completed' : 'fee_transfer_failed'
+      });
+    }
 
     res.json({
       success: true,
-      orderId: response?.orderID || response?.id,
-      order: response
+      orderId: orderResponse?.orderID || orderResponse?.id,
+      order: orderResponse,
+      fee: feeCalc.hasFee ? {
+        feePercent: feeCalc.feePercent,
+        feeAmount: feeCalc.feeAmount,
+        tradeValue: tradeValue,
+        netAmount: feeCalc.netAmount,
+        treasuryTxHash: feeTransferResult?.transactionHash || null,
+        feeTransferSuccess: feeTransferResult?.success || false
+      } : null
     });
 
   } catch (error) {
@@ -752,6 +1010,98 @@ app.get('/session/:eoaAddress', (req, res) => {
   });
 });
 
+// ===========================================
+// FEE API ENDPOINTS
+// ===========================================
+
+/**
+ * Estimate fee for a trade
+ * GET /fees/estimate?amount={value}&side={buy|sell}
+ */
+app.get('/fees/estimate', (req, res) => {
+  try {
+    const { amount, side } = req.query;
+
+    if (!amount || !side) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: amount, side'
+      });
+    }
+
+    const tradeValue = parseFloat(amount);
+    if (isNaN(tradeValue) || tradeValue <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid amount: must be a positive number'
+      });
+    }
+
+    const feeCalc = calculateFee(tradeValue, side);
+
+    res.json({
+      success: true,
+      ...feeCalc,
+      treasuryAddress: PRECEDENCE_TREASURY_ADDRESS
+    });
+
+  } catch (error) {
+    console.error('❌ Fee estimation failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get fee transaction history
+ * GET /fees/history?walletAddress={address}
+ */
+app.get('/fees/history', (req, res) => {
+  try {
+    const { walletAddress } = req.query;
+    const history = getFeeHistory(walletAddress || null);
+
+    res.json({
+      success: true,
+      ...history
+    });
+
+  } catch (error) {
+    console.error('❌ Fee history fetch failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Get treasury stats (admin)
+ * GET /fees/treasury
+ */
+app.get('/fees/treasury', (req, res) => {
+  try {
+    const history = getFeeHistory();
+
+    res.json({
+      success: true,
+      treasuryAddress: PRECEDENCE_TREASURY_ADDRESS,
+      feePercent: PRECEDENCE_FEE_PERCENT,
+      totalCollected: history.totalCollected,
+      transactionCount: history.count
+    });
+
+  } catch (error) {
+    console.error('❌ Treasury stats fetch failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 /**
  * Health check
  */
@@ -759,8 +1109,10 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'Polymarket Builder Trading Service v2',
-    version: '2.0.0',
+    version: '2.1.0',
     signingServerUrl: SIGNING_SERVER_URL,
+    treasuryAddress: PRECEDENCE_TREASURY_ADDRESS,
+    feePercent: PRECEDENCE_FEE_PERCENT,
     endpoints: {
       initSession: 'POST /init-session',
       deploySafe: 'POST /deploy-safe',
@@ -768,7 +1120,10 @@ app.get('/health', (req, res) => {
       setApprovals: 'POST /set-approvals',
       resolveMarket: 'POST /resolve-market',
       placeOrder: 'POST /place-order',
-      getSession: 'GET /session/:eoaAddress'
+      getSession: 'GET /session/:eoaAddress',
+      feeEstimate: 'GET /fees/estimate?amount={value}&side={buy|sell}',
+      feeHistory: 'GET /fees/history?walletAddress={address}',
+      treasuryStats: 'GET /fees/treasury'
     }
   });
 });
@@ -778,13 +1133,18 @@ app.listen(PORT, () => {
   console.log('');
   console.log(`🚀 Service running on port ${PORT}`);
   console.log('');
-  console.log('📋 CORRECT FLOW:');
+  console.log('📋 TRADING FLOW:');
   console.log('   1. POST /init-session    - Initialize trading session');
   console.log('   2. POST /deploy-safe     - Deploy Safe wallet');
   console.log('   3. POST /derive-credentials - Derive User API credentials');
   console.log('   4. POST /set-approvals   - Set token approvals');
   console.log('   5. POST /resolve-market  - Get tokenIds for a market');
-  console.log('   6. POST /place-order     - Place orders');
+  console.log('   6. POST /place-order     - Place orders (SELL orders include 1% fee)');
+  console.log('');
+  console.log('💰 FEE ENDPOINTS:');
+  console.log('   GET /fees/estimate       - Estimate fee for a trade');
+  console.log('   GET /fees/history        - Get fee transaction history');
+  console.log('   GET /fees/treasury       - Get treasury stats');
   console.log('');
   console.log('📊 Health check: http://localhost:' + PORT + '/health');
 });

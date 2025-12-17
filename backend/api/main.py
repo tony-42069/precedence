@@ -18,7 +18,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 import time
 
-from .routes import cases, markets, predictions, users
+from .routes import cases, markets, predictions, users, fees
 from .db.connection import init_db
 
 # Configure logging
@@ -140,6 +140,12 @@ app.include_router(
     tags=["users"]
 )
 
+app.include_router(
+    fees.router,
+    prefix="/api/fees",
+    tags=["fees"]
+)
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
@@ -165,7 +171,8 @@ async def root():
             "cases": "/api/cases",
             "markets": "/api/markets",
             "predictions": "/api/predictions",
-            "users": "/api/users"
+            "users": "/api/users",
+            "fees": "/api/fees"
         }
     }
 

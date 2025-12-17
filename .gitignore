@@ -148,8 +148,15 @@ backend/ml/__pycache__/
 STATUS.md
 polymarket-transition-plan.md
 
+# Claude Code context file (local AI assistant use)
+CLAUDE.md
+
 # Implementation plans (tracked in git)
 # implementation-plan.md
 
 # Polymarket Builder Signing Server (cloned dependency)
 backend/builder-signing-server/
+
+# Fee transaction data (contains sensitive trading information)
+backend/data/
+backend/data/fee_transactions.json

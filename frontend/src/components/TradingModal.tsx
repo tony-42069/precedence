@@ -14,7 +14,7 @@ import { usePolymarketSession } from '../hooks/usePolymarketSession';
 import { usePolymarketOrder } from '../hooks/usePolymarketOrder';
 import { useGeoRestriction } from '../hooks/useGeoRestriction';
 import { apiService } from '../services/api';
-import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info } from 'lucide-react';
+import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info, ArrowUpCircle, ArrowDownCircle, Receipt } from 'lucide-react';
 
 interface TradingModalProps {
   market: any;
@@ -66,6 +66,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
   // Local state
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
+  const [tradeType, setTradeType] = useState<'BUY' | 'SELL'>('BUY');
   const [amount, setAmount] = useState('');
   const [marketData, setMarketData] = useState<MarketData>({
     current_yes_price: 0.5,
@@ -73,6 +74,17 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     best_bid: 0.45,
     best_ask: 0.55,
   });
+
+  // Fee configuration (1% on sells only)
+  const FEE_PERCENT = 1;
+  const calculateFee = (tradeValue: number, type: 'BUY' | 'SELL') => {
+    if (type !== 'SELL') {
+      return { feeAmount: 0, netAmount: tradeValue, hasFee: false };
+    }
+    const feeAmount = tradeValue * (FEE_PERCENT / 100);
+    const netAmount = tradeValue - feeAmount;
+    return { feeAmount, netAmount, hasFee: true };
+  };
 
   // Market type detection
   const marketType = useMemo(() => {
@@ -165,14 +177,19 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       resetOrder();
       setAmount('');
       setSide('YES');
+      setTradeType('BUY');
     }
   }, [isOpen, resetOrder]);
 
   if (!isOpen) return null;
 
   const price = side === 'YES' ? marketData.current_yes_price : marketData.current_no_price;
-  const payout = parseFloat(amount || '0') * (1 / price);
+  const tradeValue = parseFloat(amount || '0');
+  const payout = tradeValue * (1 / price);
   const spread = ((marketData.best_ask - marketData.best_bid) * 100).toFixed(2);
+
+  // Calculate fee for current trade
+  const feeInfo = calculateFee(tradeValue, tradeType);
 
   /**
    * Get the correct token ID based on side
@@ -270,8 +287,9 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       tokenId,
       price,
       size: parseFloat(amount),
-      side: 'BUY',
+      side: tradeType,
       negRisk: market.negRisk || market.neg_risk || false,
+      fee: feeInfo,
     });
 
     // Place the order
@@ -279,7 +297,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       tokenId,
       price,
       size: parseFloat(amount),
-      side: 'BUY',
+      side: tradeType,
       negRisk: market.negRisk || market.neg_risk || false,
     });
 
@@ -293,16 +311,19 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     if (!authenticated) return 'CONNECT WALLET';
     if (isInitializing) return 'INITIALIZING...';
     if (!isReady) return 'INITIALIZE TRADING';
-    if (isOrderLoading) return 'PLACING ORDER...';
+    if (isOrderLoading) return `PLACING ${tradeType} ORDER...`;
     if (isOrderSuccess) return '✅ ORDER PLACED!';
-    return 'CONFIRM TRADE';
+    return `CONFIRM ${tradeType}`;
   };
 
   const getActionButtonColor = () => {
     if (isOrderError) return 'bg-red-600 hover:bg-red-700';
     if (isOrderSuccess) return 'bg-green-600 hover:bg-green-700';
     if (!authenticated) return 'bg-purple-600 hover:bg-purple-500';
-    return 'bg-blue-600 hover:bg-blue-500';
+    // BUY = green/blue, SELL = amber
+    return tradeType === 'SELL'
+      ? 'bg-amber-600 hover:bg-amber-500'
+      : 'bg-blue-600 hover:bg-blue-500';
   };
 
   const isButtonDisabled = () => {
@@ -420,6 +441,63 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
             </div>
           )}
 
+          {/* Trade Type Selector (BUY/SELL) */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">
+                Trade Type
+              </span>
+              {tradeType === 'SELL' && (
+                <span className="text-xs text-amber-400 font-mono flex items-center gap-1">
+                  <Receipt size={12} />
+                  1% Platform Fee
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setTradeType('BUY')}
+                className={`p-3 rounded-lg border transition-all text-left ${
+                  tradeType === 'BUY'
+                    ? 'border-green-500/50 bg-green-500/10'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">BUY</span>
+                  <ArrowUpCircle size={14} className="text-green-400" />
+                </div>
+                <div className="text-sm font-mono text-green-400 mt-1">
+                  Enter Position
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  No platform fee
+                </div>
+              </button>
+
+              <button
+                onClick={() => setTradeType('SELL')}
+                className={`p-3 rounded-lg border transition-all text-left ${
+                  tradeType === 'SELL'
+                    ? 'border-amber-500/50 bg-amber-500/10'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400">SELL</span>
+                  <ArrowDownCircle size={14} className="text-amber-400" />
+                </div>
+                <div className="text-sm font-mono text-amber-400 mt-1">
+                  Exit Position
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  1% platform fee
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* Live Price Display */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -504,18 +582,52 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
             {amount && parseFloat(amount) > 0 && (
               <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Estimated Return:</span>
-                  <span className="text-green-400 font-mono font-bold">
-                    {payout.toFixed(2)} shares @ ${price.toFixed(3)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-1">
-                  <span className="text-slate-500">Potential Payout:</span>
-                  <span className="text-slate-400 font-mono">
-                    ${payout.toFixed(2)} if {side} wins
-                  </span>
-                </div>
+                {/* BUY order display */}
+                {tradeType === 'BUY' && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Estimated Return:</span>
+                      <span className="text-green-400 font-mono font-bold">
+                        {payout.toFixed(2)} shares @ ${price.toFixed(3)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-1">
+                      <span className="text-slate-500">Potential Payout:</span>
+                      <span className="text-slate-400 font-mono">
+                        ${payout.toFixed(2)} if {side} wins
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {/* SELL order display with fee breakdown */}
+                {tradeType === 'SELL' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-400">Trade Value:</span>
+                      <span className="text-white font-mono">
+                        ${tradeValue.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-amber-400 flex items-center gap-1">
+                        <Receipt size={12} />
+                        Platform Fee ({FEE_PERCENT}%):
+                      </span>
+                      <span className="text-amber-400 font-mono">
+                        -${feeInfo.feeAmount.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="border-t border-white/10 pt-2 mt-2">
+                      <div className="flex items-center justify-between text-sm font-bold">
+                        <span className="text-green-400">You Receive:</span>
+                        <span className="text-green-400 font-mono">
+                          ${feeInfo.netAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
