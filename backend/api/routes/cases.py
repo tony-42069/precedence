@@ -187,36 +187,41 @@ def enrich_case_data(case: Dict[str, Any]) -> Dict[str, Any]:
 async def get_cases(
     query: Optional[str] = Query(None, description="Search query for cases"),
     court: str = Query("scotus", description="Court identifier - 'all' searches all federal courts"),
-    limit: int = Query(20, description="Maximum number of results", ge=1, le=100)
+    limit: int = Query(30, description="Maximum number of results", ge=1, le=100),
+    sort: str = Query("date", description="Sort order: 'date' for recent first, 'relevance' for best matches")
 ):
     """
     Search for legal cases using CourtListener API.
-    
+
     When court='all', searches across all federal courts (SCOTUS + circuits).
+    Sort by 'date' to get most recent cases, or 'relevance' for best query matches.
     """
     try:
-        logger.info(f"Searching cases: query='{query}', court='{court}', limit={limit}")
+        logger.info(f"Searching cases: query='{query}', court='{court}', limit={limit}, sort='{sort}'")
 
         # Import the WORKING sync client
         from backend.integrations.court_listener import search_cases
-        
+
+        # Map sort parameter to CourtListener order_by
+        order_by = "dateFiled desc" if sort == "date" else "score desc"
+
         # Define federal courts
         federal_courts = ['scotus', 'ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8', 'ca9', 'ca10', 'ca11', 'cadc', 'cafc']
-        
+
         raw_cases = []
-        
+
         if court == "all":
             # Search multiple federal courts and combine results
             for fed_court in federal_courts:
                 try:
-                    results = search_cases(query=query, court=fed_court, limit=10)
+                    results = search_cases(query=query, court=fed_court, limit=15, order_by=order_by)
                     raw_cases.extend(results.get('results', []))
                 except Exception as e:
                     logger.warning(f"Failed to search {fed_court}: {e}")
                     continue
         else:
-            # Search specific court
-            results = search_cases(query=query, court=court, limit=limit * 2)
+            # Search specific court - request extra to account for deduplication
+            results = search_cases(query=query, court=court, limit=limit * 2, order_by=order_by)
             raw_cases = results.get('results', [])
 
         logger.info(f"Raw API returned {len(raw_cases)} cases")
