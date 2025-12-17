@@ -95,6 +95,7 @@ export default function CasesPage() {
   const [searchResults, setSearchResults] = useState<CourtCase[]>([]);
   const [loading, setLoading] = useState(false);
   const [judgeFilter, setJudgeFilter] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'date' | 'relevance'>('date');
 
   // Prediction State
   const [predictions, setPredictions] = useState<Record<number, Prediction>>({});
@@ -126,7 +127,7 @@ export default function CasesPage() {
         setLoading(true);
         setPredictions({});
         try {
-          const response = await fetch(`${API_URL}/api/cases/?query=${encodeURIComponent(judgeParam)}&court=scotus&limit=20`);
+          const response = await fetch(`${API_URL}/api/cases/?query=${encodeURIComponent(judgeParam)}&court=scotus&limit=30&sort=date`);
           if (response.ok) {
             const data = await response.json();
             // Filter results to only show cases with this judge
@@ -155,7 +156,7 @@ export default function CasesPage() {
     setPredictions({});
 
     try {
-      const response = await fetch(`${API_URL}/api/cases/?query=${encodeURIComponent(searchQuery)}&court=${selectedCourt}&limit=10`);
+      const response = await fetch(`${API_URL}/api/cases/?query=${encodeURIComponent(searchQuery)}&court=${selectedCourt}&limit=30&sort=${sortOrder}`);
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
@@ -375,30 +376,59 @@ export default function CasesPage() {
             {/* Search Bar */}
             <div className="bg-[#0A0A0C]/60 backdrop-blur-md rounded-xl border border-white/10 p-4 mb-10 shadow-2xl max-w-4xl mx-auto">
               <form onSubmit={handleSearch} className="space-y-4">
-                {/* Court Selector */}
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Select Court:</span>
-                  <select
-                    value={selectedCourt}
-                    onChange={(e) => setSelectedCourt(e.target.value)}
-                    className="bg-[#030304] border border-white/10 rounded-lg px-3 py-1 text-white font-mono text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  >
-                    <option value="all">All Courts</option>
-                    <option value="scotus">Supreme Court</option>
-                    <option value="ca1">1st Circuit (MA)</option>
-                    <option value="ca2">2nd Circuit (NY)</option>
-                    <option value="ca3">3rd Circuit (PA)</option>
-                    <option value="ca4">4th Circuit (VA)</option>
-                    <option value="ca5">5th Circuit (TX)</option>
-                    <option value="ca6">6th Circuit (OH)</option>
-                    <option value="ca7">7th Circuit (IL)</option>
-                    <option value="ca8">8th Circuit (MO)</option>
-                    <option value="ca9">9th Circuit (CA)</option>
-                    <option value="ca10">10th Circuit (CO)</option>
-                    <option value="ca11">11th Circuit (FL)</option>
-                    <option value="cadc">DC Circuit</option>
-                    <option value="cafc">Federal Circuit</option>
-                  </select>
+                {/* Court Selector + Sort */}
+                <div className="flex items-center gap-6 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Court:</span>
+                    <select
+                      value={selectedCourt}
+                      onChange={(e) => setSelectedCourt(e.target.value)}
+                      className="bg-[#030304] border border-white/10 rounded-lg px-3 py-1 text-white font-mono text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    >
+                      <option value="all">All Courts</option>
+                      <option value="scotus">Supreme Court</option>
+                      <option value="ca1">1st Circuit (MA)</option>
+                      <option value="ca2">2nd Circuit (NY)</option>
+                      <option value="ca3">3rd Circuit (PA)</option>
+                      <option value="ca4">4th Circuit (VA)</option>
+                      <option value="ca5">5th Circuit (TX)</option>
+                      <option value="ca6">6th Circuit (OH)</option>
+                      <option value="ca7">7th Circuit (IL)</option>
+                      <option value="ca8">8th Circuit (MO)</option>
+                      <option value="ca9">9th Circuit (CA)</option>
+                      <option value="ca10">10th Circuit (CO)</option>
+                      <option value="ca11">11th Circuit (FL)</option>
+                      <option value="cadc">DC Circuit</option>
+                      <option value="cafc">Federal Circuit</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">Sort:</span>
+                    <div className="flex bg-[#030304] rounded-lg border border-white/10 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder('date')}
+                        className={`px-3 py-1 text-xs font-mono transition-colors ${
+                          sortOrder === 'date'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Recent
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortOrder('relevance')}
+                        className={`px-3 py-1 text-xs font-mono transition-colors ${
+                          sortOrder === 'relevance'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Relevant
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-3">

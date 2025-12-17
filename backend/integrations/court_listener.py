@@ -73,7 +73,8 @@ class CourtListenerClient:
                     filed_after: Optional[str] = None,
                     filed_before: Optional[str] = None,
                     semantic: bool = False,
-                    limit: int = 20) -> Dict:
+                    limit: int = 20,
+                    order_by: str = "dateFiled desc") -> Dict:
         """
         Search for cases using CourtListener v4 Search API.
 
@@ -84,6 +85,7 @@ class CourtListenerClient:
             filed_before: ISO date string (YYYY-MM-DD)
             semantic: Use semantic search (new Nov 5th 2025 feature)
             limit: Maximum results to return
+            order_by: Sort order - "dateFiled desc" for recent first, "score desc" for relevance
 
         Returns:
             Dict containing search results
@@ -93,7 +95,7 @@ class CourtListenerClient:
 
         params = {
             "type": "o",  # 'o' for opinions (case law)
-            "order_by": "score desc",  # Relevance-based ordering
+            "order_by": order_by,  # Default: recent cases first (dateFiled desc)
         }
 
         # Add query
