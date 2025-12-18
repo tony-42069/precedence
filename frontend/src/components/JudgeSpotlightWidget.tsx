@@ -15,23 +15,41 @@ interface JudgeProfile {
   cases_handled?: number;
   political_affiliation?: string;
   image?: string;
+  wikipediaTitle?: string; // Wikipedia page title for API lookup
 }
 
-// SCOTUS Justice images from official Supreme Court or Wikipedia (public domain)
+// Fetch judge photo from Wikipedia API with proper CORS support
+async function getWikipediaImage(wikipediaTitle: string): Promise<string | null> {
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(wikipediaTitle)}&prop=pageimages&format=json&pithumbsize=300&origin=*`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const pages = data.query?.pages;
+    if (!pages) return null;
+    const pageId = Object.keys(pages)[0];
+    return pages[pageId]?.thumbnail?.source || null;
+  } catch (error) {
+    console.error('Failed to fetch Wikipedia image:', error);
+    return null;
+  }
+}
+
+// SCOTUS Justices with Wikipedia page titles for dynamic image loading
 const SCOTUS_JUSTICES: JudgeProfile[] = [
-  { id: 'john-roberts', name: 'John G. Roberts Jr.', court: 'Supreme Court', nomination_year: 2005, appointing_president: 'George W. Bush', cases_handled: 1847, political_affiliation: 'Conservative', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Official_roberts_CJ.jpg/220px-Official_roberts_CJ.jpg' },
-  { id: 'clarence-thomas', name: 'Clarence Thomas', court: 'Supreme Court', nomination_year: 1991, appointing_president: 'George H.W. Bush', cases_handled: 2156, political_affiliation: 'Conservative', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fe/Clarence_Thomas_official_SCOTUS_portrait_%28cropped%29.jpg/220px-Clarence_Thomas_official_SCOTUS_portrait_%28cropped%29.jpg' },
-  { id: 'sonia-sotomayor', name: 'Sonia Sotomayor', court: 'Supreme Court', nomination_year: 2009, appointing_president: 'Barack Obama', cases_handled: 1432, political_affiliation: 'Liberal', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Sonia_Sotomayor_in_SCOTUS_robe_%28cropped%29.jpg/220px-Sonia_Sotomayor_in_SCOTUS_robe_%28cropped%29.jpg' },
-  { id: 'elena-kagan', name: 'Elena Kagan', court: 'Supreme Court', nomination_year: 2010, appointing_president: 'Barack Obama', cases_handled: 1298, political_affiliation: 'Liberal', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Elena_Kagan_Official_SCOTUS_Portrait_%282013%29.jpg/220px-Elena_Kagan_Official_SCOTUS_Portrait_%282013%29.jpg' },
-  { id: 'neil-gorsuch', name: 'Neil M. Gorsuch', court: 'Supreme Court', nomination_year: 2017, appointing_president: 'Donald Trump', cases_handled: 687, political_affiliation: 'Conservative', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Associate_Justice_Neil_Gorsuch_Official_Portrait_%28cropped%29.jpg/220px-Associate_Justice_Neil_Gorsuch_Official_Portrait_%28cropped%29.jpg' },
-  { id: 'brett-kavanaugh', name: 'Brett M. Kavanaugh', court: 'Supreme Court', nomination_year: 2018, appointing_president: 'Donald Trump', cases_handled: 598, political_affiliation: 'Conservative', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Associate_Justice_Brett_Kavanaugh_Official_Portrait.jpg/220px-Associate_Justice_Brett_Kavanaugh_Official_Portrait.jpg' },
-  { id: 'amy-coney-barrett', name: 'Amy Coney Barrett', court: 'Supreme Court', nomination_year: 2020, appointing_president: 'Donald Trump', cases_handled: 387, political_affiliation: 'Conservative', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Amy_Coney_Barrett_official_portrait.jpg/220px-Amy_Coney_Barrett_official_portrait.jpg' },
-  { id: 'ketanji-brown-jackson', name: 'Ketanji Brown Jackson', court: 'Supreme Court', nomination_year: 2022, appointing_president: 'Joe Biden', cases_handled: 156, political_affiliation: 'Liberal', image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Ketanji_Brown_Jackson_official_SCOTUS_portrait_%28cropped%29.jpg/220px-Ketanji_Brown_Jackson_official_SCOTUS_portrait_%28cropped%29.jpg' }
+  { id: 'john-roberts', name: 'John G. Roberts Jr.', court: 'Supreme Court', nomination_year: 2005, appointing_president: 'George W. Bush', cases_handled: 1847, political_affiliation: 'Conservative', wikipediaTitle: 'John_Roberts' },
+  { id: 'clarence-thomas', name: 'Clarence Thomas', court: 'Supreme Court', nomination_year: 1991, appointing_president: 'George H.W. Bush', cases_handled: 2156, political_affiliation: 'Conservative', wikipediaTitle: 'Clarence_Thomas' },
+  { id: 'sonia-sotomayor', name: 'Sonia Sotomayor', court: 'Supreme Court', nomination_year: 2009, appointing_president: 'Barack Obama', cases_handled: 1432, political_affiliation: 'Liberal', wikipediaTitle: 'Sonia_Sotomayor' },
+  { id: 'elena-kagan', name: 'Elena Kagan', court: 'Supreme Court', nomination_year: 2010, appointing_president: 'Barack Obama', cases_handled: 1298, political_affiliation: 'Liberal', wikipediaTitle: 'Elena_Kagan' },
+  { id: 'neil-gorsuch', name: 'Neil M. Gorsuch', court: 'Supreme Court', nomination_year: 2017, appointing_president: 'Donald Trump', cases_handled: 687, political_affiliation: 'Conservative', wikipediaTitle: 'Neil_Gorsuch' },
+  { id: 'brett-kavanaugh', name: 'Brett M. Kavanaugh', court: 'Supreme Court', nomination_year: 2018, appointing_president: 'Donald Trump', cases_handled: 598, political_affiliation: 'Conservative', wikipediaTitle: 'Brett_Kavanaugh' },
+  { id: 'amy-coney-barrett', name: 'Amy Coney Barrett', court: 'Supreme Court', nomination_year: 2020, appointing_president: 'Donald Trump', cases_handled: 387, political_affiliation: 'Conservative', wikipediaTitle: 'Amy_Coney_Barrett' },
+  { id: 'ketanji-brown-jackson', name: 'Ketanji Brown Jackson', court: 'Supreme Court', nomination_year: 2022, appointing_president: 'Joe Biden', cases_handled: 156, political_affiliation: 'Liberal', wikipediaTitle: 'Ketanji_Brown_Jackson' }
 ];
 
 export function JudgeSpotlightWidget() {
   const router = useRouter();
   const [featuredJudge, setFeaturedJudge] = useState<JudgeProfile | null>(null);
+  const [judgeImage, setJudgeImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +60,16 @@ export function JudgeSpotlightWidget() {
           const data = await response.json();
           if (data && data.name) {
             setFeaturedJudge(data);
+            // Try to fetch Wikipedia image for API-provided judge
+            if (data.wikipediaTitle) {
+              const wikiImage = await getWikipediaImage(data.wikipediaTitle);
+              setJudgeImage(wikiImage || data.image || null);
+            } else {
+              // Try using the judge's name as Wikipedia title
+              const wikiTitle = data.name.replace(/ /g, '_');
+              const wikiImage = await getWikipediaImage(wikiTitle);
+              setJudgeImage(wikiImage || data.image || null);
+            }
             setLoading(false);
             return;
           }
@@ -49,9 +77,18 @@ export function JudgeSpotlightWidget() {
       } catch (error) {
         console.log('Using fallback judge data');
       }
-      
+
+      // Use fallback SCOTUS data
       const randomIndex = Math.floor(Math.random() * SCOTUS_JUSTICES.length);
-      setFeaturedJudge(SCOTUS_JUSTICES[randomIndex]);
+      const selectedJudge = SCOTUS_JUSTICES[randomIndex];
+      setFeaturedJudge(selectedJudge);
+
+      // Fetch Wikipedia image for the selected SCOTUS justice
+      if (selectedJudge.wikipediaTitle) {
+        const wikiImage = await getWikipediaImage(selectedJudge.wikipediaTitle);
+        setJudgeImage(wikiImage);
+      }
+
       setLoading(false);
     };
 
@@ -90,9 +127,9 @@ export function JudgeSpotlightWidget() {
         {/* Left: Icon + Judge Info */}
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full overflow-hidden border border-cyan-500/30 group-hover:scale-110 transition-transform">
-            {featuredJudge.image ? (
-              <img 
-                src={featuredJudge.image} 
+            {judgeImage ? (
+              <img
+                src={judgeImage}
                 alt={featuredJudge.name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
