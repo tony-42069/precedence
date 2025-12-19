@@ -12,7 +12,7 @@ interface TradingPanelProps {
     current_yes_price: number;
     current_no_price: number;
     clobTokenIds?: string[];
-    [key: string]: any; // Allow other market properties to pass through
+    [key: string]: any;
   };
   currentPrice: number;
   orderBook: {
@@ -23,11 +23,17 @@ interface TradingPanelProps {
 
 export default function TradingPanel({ market, currentPrice, orderBook }: TradingPanelProps) {
   const [showTradingModal, setShowTradingModal] = useState(false);
+  const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
   const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no'>('yes');
+  const [shares, setShares] = useState<string>('');
 
   // Get best prices from order book
   const bestBid = orderBook.bids[0] ? parseFloat(orderBook.bids[0].price) : null;
   const bestAsk = orderBook.asks[0] ? parseFloat(orderBook.asks[0].price) : null;
+
+  // Convert price to cents for display
+  const yesCents = (currentPrice * 100).toFixed(1);
+  const noCents = ((1 - currentPrice) * 100).toFixed(1);
 
   // Prepare market data for TradingModal with current prices
   const getMarketForTrading = () => {
@@ -38,9 +44,26 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
     };
   };
 
-  const handleTradeClick = (outcome: 'yes' | 'no') => {
-    setSelectedOutcome(outcome);
+  const handleTradeClick = () => {
     setShowTradingModal(true);
+  };
+
+  // Handle sell percentage buttons
+  const handleSellPercent = (percent: number) => {
+    // For now, just set a placeholder value
+    // Portfolio integration will come later
+    if (percent === 100) {
+      setShares('MAX');
+    } else {
+      setShares(`${percent}%`);
+    }
+  };
+
+  // Get action button text
+  const getActionButtonText = () => {
+    const action = tradeMode === 'buy' ? 'Buy' : 'Sell';
+    const outcome = selectedOutcome === 'yes' ? 'Yes' : 'No';
+    return `${action} ${outcome}`;
   };
 
   return (
@@ -52,46 +75,124 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
           <span className="text-xs text-gray-500 font-mono">Polymarket</span>
         </div>
 
-        {/* Current Prices */}
+        {/* Buy/Sell Toggle */}
+        <div className="flex rounded-lg bg-gray-800/50 p-1">
+          <button
+            onClick={() => setTradeMode('buy')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+              tradeMode === 'buy'
+                ? 'bg-green-600 text-white shadow-lg'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Buy
+          </button>
+          <button
+            onClick={() => setTradeMode('sell')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+              tradeMode === 'sell'
+                ? 'bg-red-600 text-white shadow-lg'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Sell
+          </button>
+        </div>
+
+        {/* Yes/No Outcome Selection */}
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => handleTradeClick('yes')}
-            className="p-4 rounded-xl bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 hover:border-green-500/50 transition-all group"
+            onClick={() => setSelectedOutcome('yes')}
+            className={`p-4 rounded-xl border transition-all ${
+              selectedOutcome === 'yes'
+                ? 'bg-green-500/20 border-green-500/50'
+                : 'bg-gray-800/30 border-gray-700 hover:border-gray-600'
+            }`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 uppercase">Yes</span>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-white">Yes</span>
               <TrendingUp size={14} className="text-green-400" />
             </div>
-            <div className="text-2xl font-bold text-green-400 font-mono">
-              {(currentPrice * 100).toFixed(1)}%
+            <div className={`text-xl font-bold font-mono ${
+              selectedOutcome === 'yes' ? 'text-green-400' : 'text-gray-300'
+            }`}>
+              {yesCents}¢
             </div>
-            <div className="text-xs text-gray-500 font-mono mt-1">
+            <div className="text-xs text-gray-500 font-mono mt-0.5">
               ${currentPrice.toFixed(3)}
-            </div>
-            <div className="mt-3 py-2 px-3 bg-green-600/20 rounded-lg text-green-400 text-xs font-medium text-center group-hover:bg-green-600/30 transition-colors">
-              BUY YES
             </div>
           </button>
 
           <button
-            onClick={() => handleTradeClick('no')}
-            className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50 transition-all group"
+            onClick={() => setSelectedOutcome('no')}
+            className={`p-4 rounded-xl border transition-all ${
+              selectedOutcome === 'no'
+                ? 'bg-red-500/20 border-red-500/50'
+                : 'bg-gray-800/30 border-gray-700 hover:border-gray-600'
+            }`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 uppercase">No</span>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-white">No</span>
               <TrendingDown size={14} className="text-red-400" />
             </div>
-            <div className="text-2xl font-bold text-red-400 font-mono">
-              {((1 - currentPrice) * 100).toFixed(1)}%
+            <div className={`text-xl font-bold font-mono ${
+              selectedOutcome === 'no' ? 'text-red-400' : 'text-gray-300'
+            }`}>
+              {noCents}¢
             </div>
-            <div className="text-xs text-gray-500 font-mono mt-1">
+            <div className="text-xs text-gray-500 font-mono mt-0.5">
               ${(1 - currentPrice).toFixed(3)}
-            </div>
-            <div className="mt-3 py-2 px-3 bg-red-600/20 rounded-lg text-red-400 text-xs font-medium text-center group-hover:bg-red-600/30 transition-colors">
-              BUY NO
             </div>
           </button>
         </div>
+
+        {/* Shares Input - For Sell Mode */}
+        {tradeMode === 'sell' && (
+          <div className="space-y-2">
+            <label className="text-xs text-gray-400 uppercase">Shares</label>
+            <input
+              type="text"
+              value={shares}
+              onChange={(e) => setShares(e.target.value)}
+              placeholder="0"
+              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white font-mono text-lg focus:outline-none focus:border-gray-500 transition-colors"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleSellPercent(25)}
+                className="flex-1 py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+              >
+                25%
+              </button>
+              <button
+                onClick={() => handleSellPercent(50)}
+                className="flex-1 py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+              >
+                50%
+              </button>
+              <button
+                onClick={() => handleSellPercent(100)}
+                className="flex-1 py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+              >
+                Max
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Action Button */}
+        <button
+          onClick={handleTradeClick}
+          className={`w-full py-3 px-4 rounded-lg font-bold text-white transition-all ${
+            tradeMode === 'buy'
+              ? selectedOutcome === 'yes'
+                ? 'bg-green-600 hover:bg-green-500 shadow-lg shadow-green-600/20'
+                : 'bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20'
+              : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/20'
+          }`}
+        >
+          {getActionButtonText()}
+        </button>
 
         {/* Best Prices from Order Book */}
         {(bestBid || bestAsk) && (
