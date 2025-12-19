@@ -101,20 +101,6 @@ export default function MarketHeader({ market, currentPrice }: MarketHeaderProps
           </div>
         </div>
       </div>
-
-      {/* Current Prices */}
-      <div className="mt-6 grid grid-cols-2 gap-4">
-        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center hover:bg-green-500/15 transition-colors">
-          <div className="text-sm text-gray-400 mb-1 uppercase tracking-wider">Yes</div>
-          <div className="text-3xl font-bold text-green-500 font-mono">{yesPercent}%</div>
-          <div className="text-sm text-gray-500 mt-1 font-mono">${currentPrice.toFixed(3)}</div>
-        </div>
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center hover:bg-red-500/15 transition-colors">
-          <div className="text-sm text-gray-400 mb-1 uppercase tracking-wider">No</div>
-          <div className="text-3xl font-bold text-red-500 font-mono">{noPercent}%</div>
-          <div className="text-sm text-gray-500 mt-1 font-mono">${(1 - currentPrice).toFixed(3)}</div>
-        </div>
-      </div>
     </div>
   );
 }
