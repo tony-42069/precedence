@@ -719,6 +719,115 @@ async def get_market_orderbook(market_id: str):
         logger.error(f"Error getting market orderbook: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get market orderbook: {str(e)}")
 
+@router.get("/{market_id}/prices")
+async def get_market_price_history(
+    market_id: str,
+    interval: str = Query("1d", description="Time interval: 1h, 6h, 1d, 1w, 1m, max")
+):
+    """
+    Get historical price data for a market from Polymarket CLOB.
+
+    First fetches the market to get its clobTokenIds, then calls Polymarket's
+    prices-history endpoint for the YES token.
+    """
+    try:
+        import httpx
+        import json
+
+        logger.info(f"Getting price history for market {market_id}, interval={interval}")
+
+        # First, get the market details to find the clobTokenIds
+        gamma_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
+
+        async with httpx.AsyncClient() as client:
+            # Get market details
+            market_response = await client.get(gamma_url, timeout=10.0)
+
+            if market_response.status_code != 200:
+                raise HTTPException(status_code=404, detail="Market not found")
+
+            market = market_response.json()
+
+            # Get the clobTokenIds (YES token is index 0)
+            clob_token_ids = market.get('clobTokenIds', [])
+
+            if not clob_token_ids:
+                # Try to get from outcomes if available
+                outcomes = market.get('outcomes', '[]')
+                if isinstance(outcomes, str):
+                    outcomes = json.loads(outcomes)
+
+                logger.warning(f"No clobTokenIds found for market {market_id}")
+                return {
+                    "history": [],
+                    "market_id": market_id,
+                    "interval": interval,
+                    "error": "No CLOB token IDs available for this market"
+                }
+
+            # Parse clobTokenIds if it's a string
+            if isinstance(clob_token_ids, str):
+                clob_token_ids = json.loads(clob_token_ids)
+
+            yes_token_id = clob_token_ids[0] if clob_token_ids else None
+
+            if not yes_token_id:
+                return {
+                    "history": [],
+                    "market_id": market_id,
+                    "interval": interval,
+                    "error": "No YES token ID available"
+                }
+
+            # Map interval to fidelity (resolution in minutes)
+            fidelity_map = {
+                "1h": 1,      # 1 minute resolution for 1 hour
+                "6h": 5,      # 5 minute resolution for 6 hours
+                "1d": 60,     # 1 hour resolution for 1 day
+                "1w": 360,    # 6 hour resolution for 1 week
+                "1m": 1440,   # 1 day resolution for 1 month
+                "max": 1440   # 1 day resolution for all time
+            }
+
+            fidelity = fidelity_map.get(interval, 60)
+
+            # Call Polymarket's prices-history endpoint
+            prices_url = "https://clob.polymarket.com/prices-history"
+            params = {
+                "market": yes_token_id,
+                "interval": interval,
+                "fidelity": fidelity
+            }
+
+            prices_response = await client.get(prices_url, params=params, timeout=10.0)
+
+            if prices_response.status_code != 200:
+                logger.warning(f"Prices API returned {prices_response.status_code}")
+                return {
+                    "history": [],
+                    "market_id": market_id,
+                    "token_id": yes_token_id,
+                    "interval": interval,
+                    "error": f"Prices API error: {prices_response.status_code}"
+                }
+
+            prices_data = prices_response.json()
+
+            logger.info(f"Retrieved {len(prices_data.get('history', []))} price points for market {market_id}")
+
+            return {
+                "history": prices_data.get("history", []),
+                "market_id": market_id,
+                "token_id": yes_token_id,
+                "interval": interval
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting price history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get price history: {str(e)}")
+
 @router.post("/{market_id}/order")
 async def create_market_order(
     market_id: str,

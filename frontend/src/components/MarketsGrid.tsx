@@ -13,10 +13,11 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { TradingModal } from './TradingModal';
 import { usePredictions } from '../hooks/usePredictions';
-import { Users, ChevronRight } from 'lucide-react';
+import { Users, ChevronRight, ExternalLink } from 'lucide-react';
 
 interface MarketOutcome {
   name: string;           // Display name from groupItemTitle: "2 (50 bps)"
@@ -53,6 +54,7 @@ interface MarketsGridProps {
 }
 
 export function MarketsGrid({ highlightId }: MarketsGridProps) {
+  const router = useRouter();
   const { authenticated, login } = usePrivy();
 
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -64,9 +66,16 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   const [showMarketModal, setShowMarketModal] = useState(false);
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [highlightedMarketId, setHighlightedMarketId] = useState<string | null>(highlightId || null);
-  
+
   const { enhanceMarketsWithAI } = usePredictions();
   const marketRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  // Navigate to market detail page
+  const handleMarketClick = (market: Market) => {
+    if (market.id) {
+      router.push(`/markets/${market.id}`);
+    }
+  };
 
   useEffect(() => {
     const fetchMarkets = async () => {
@@ -307,11 +316,8 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                   </div>
 
                   {/* Question */}
-                  <h3 
-                    onClick={() => {
-                      setSelectedMarket(market);
-                      setShowMarketModal(true);
-                    }}
+                  <h3
+                    onClick={() => handleMarketClick(market)}
                     className="text-lg font-medium text-white mb-4 leading-snug min-h-[3.5rem] cursor-pointer hover:text-blue-400 transition-colors"
                   >
                     {market.question || 'Market Question'}
@@ -415,15 +421,13 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                     </div>
                   )}
 
-                  {/* View Analytics Button */}
+                  {/* View Details Button */}
                   <button
-                    onClick={() => {
-                      setSelectedMarket(market);
-                      setShowMarketModal(true);
-                    }}
-                    className="w-full mt-2 text-slate-500 hover:text-white font-medium py-2 px-4 rounded-lg transition-colors text-xs uppercase tracking-wider"
+                    onClick={() => handleMarketClick(market)}
+                    className="w-full mt-2 text-slate-500 hover:text-white font-medium py-2 px-4 rounded-lg transition-colors text-xs uppercase tracking-wider flex items-center justify-center gap-1"
                   >
-                    View Analytics &gt;
+                    View Details
+                    <ExternalLink size={12} />
                   </button>
                 </div>
               </div>
