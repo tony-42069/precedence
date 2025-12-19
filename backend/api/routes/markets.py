@@ -828,6 +828,68 @@ async def get_market_price_history(
         logger.error(f"Error getting price history: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get price history: {str(e)}")
 
+@router.get("/{market_id}/comments")
+async def get_market_comments(
+    market_id: str,
+    limit: int = Query(50, description="Maximum number of comments to return", ge=1, le=100),
+    offset: int = Query(0, description="Offset for pagination", ge=0)
+):
+    """
+    Get comments for a market from Polymarket.
+
+    Returns comments with username, text, timestamp, and likes.
+    """
+    try:
+        import httpx
+
+        logger.info(f"Getting comments for market {market_id}, limit={limit}, offset={offset}")
+
+        # Call Polymarket's comments API
+        comments_url = "https://gamma-api.polymarket.com/comments"
+        params = {
+            "market": market_id,
+            "limit": limit,
+            "offset": offset
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(comments_url, params=params, timeout=10.0)
+
+            if response.status_code != 200:
+                logger.warning(f"Comments API returned {response.status_code}")
+                return {
+                    "comments": [],
+                    "market_id": market_id,
+                    "total": 0,
+                    "error": f"Comments API error: {response.status_code}"
+                }
+
+            comments = response.json()
+
+            # The API returns an array of comments
+            if isinstance(comments, list):
+                return {
+                    "comments": comments,
+                    "market_id": market_id,
+                    "count": len(comments),
+                    "limit": limit,
+                    "offset": offset
+                }
+            else:
+                # If it's an object with comments array
+                return {
+                    "comments": comments.get("comments", []),
+                    "market_id": market_id,
+                    "total": comments.get("total", 0),
+                    "count": len(comments.get("comments", [])),
+                    "limit": limit,
+                    "offset": offset
+                }
+
+    except Exception as e:
+        logger.error(f"Error getting comments: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get comments: {str(e)}")
+
 @router.post("/{market_id}/order")
 async def create_market_order(
     market_id: str,

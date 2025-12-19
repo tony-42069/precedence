@@ -11,6 +11,7 @@ const PriceChart = dynamic(() => import('@/components/market/PriceChart'), { ssr
 import OrderBook from '@/components/market/OrderBook';
 import TradingPanel from '@/components/market/TradingPanel';
 import MarketHeader from '@/components/market/MarketHeader';
+import CommentsSection from '@/components/market/CommentsSection';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5003';
@@ -401,6 +402,11 @@ export default function MarketDetailPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Comments Section - Full Width */}
+        <div className="mt-6">
+          <CommentsSection marketId={marketId} />
         </div>
       </div>
     </div>
