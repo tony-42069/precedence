@@ -86,24 +86,88 @@ class PolymarketClient:
         """
         Get detailed information about a specific market from Gamma API.
 
+        Supports both event IDs and market IDs:
+        - First tries to fetch as a market
+        - If not found, tries to fetch as an event and return the first market
+
         Args:
-            market_id: Polymarket market ID
+            market_id: Polymarket market ID or event ID
 
         Returns:
-            Dict containing market details
+            Dict containing market details with parsed prices
         """
         try:
             import httpx
+            import json
 
+            # Try as market first
             gamma_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
-            response = httpx.get(gamma_url)
+            response = httpx.get(gamma_url, timeout=10.0)
+
+            market = None
 
             if response.status_code == 200:
                 market = response.json()
                 logger.info(f"Retrieved details for market {market_id}")
-                return market
             else:
-                raise Exception(f"Gamma API returned status {response.status_code}")
+                # Try as event ID
+                logger.info(f"Market not found, trying as event ID: {market_id}")
+                event_url = f"https://gamma-api.polymarket.com/events/{market_id}"
+                event_response = httpx.get(event_url, timeout=10.0)
+
+                if event_response.status_code == 200:
+                    event = event_response.json()
+                    # Get the first active market from the event
+                    nested_markets = event.get('markets', [])
+
+                    # Find the first non-closed market
+                    for nm in nested_markets:
+                        if not nm.get('closed', False):
+                            market = nm
+                            # Add event-level fields
+                            market['event_title'] = event.get('title', '')
+                            market['event_image'] = event.get('image', '')
+                            market['event_icon'] = event.get('icon', '')
+                            break
+
+                    if not market and nested_markets:
+                        # Fallback to first market even if closed
+                        market = nested_markets[0]
+                        market['event_title'] = event.get('title', '')
+                        market['event_image'] = event.get('image', '')
+                        market['event_icon'] = event.get('icon', '')
+
+                    logger.info(f"Found market via event: {market.get('id') if market else 'None'}")
+                else:
+                    raise Exception(f"Neither market nor event found for ID: {market_id}")
+
+            if not market:
+                raise Exception(f"No market data found for ID: {market_id}")
+
+            # Parse outcomePrices to add current_yes_price and current_no_price
+            try:
+                outcome_prices = market.get('outcomePrices', '["0.5", "0.5"]')
+                if isinstance(outcome_prices, str):
+                    outcome_prices = json.loads(outcome_prices)
+
+                market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+
+                logger.info(f"Parsed prices: YES={market['current_yes_price']}, NO={market['current_no_price']}")
+            except Exception as e:
+                logger.warning(f"Failed to parse outcomePrices: {e}")
+                market['current_yes_price'] = 0.5
+                market['current_no_price'] = 0.5
+
+            # Parse clobTokenIds if string
+            clob_token_ids = market.get('clobTokenIds', [])
+            if isinstance(clob_token_ids, str):
+                try:
+                    market['clobTokenIds'] = json.loads(clob_token_ids)
+                except:
+                    market['clobTokenIds'] = []
+
+            return market
 
         except Exception as e:
             logger.error(f"Failed to get market details for {market_id}: {e}")
@@ -111,26 +175,93 @@ class PolymarketClient:
 
     def get_market_orderbook(self, market_id: str) -> Dict:
         """
-        Get the order book for a specific market using Node.js service.
+        Get the order book for a specific market.
+
+        Strategy:
+        1. First try Node.js trading service (if available)
+        2. Fall back to direct Polymarket CLOB REST API
 
         Args:
-            market_id: Polymarket market ID
+            market_id: Polymarket market ID or clobTokenId
 
         Returns:
             Dict containing bid/ask order book
         """
         try:
+            # Try trading service first
             result = self._call_trading_service('getOrderBook', [market_id])
 
             if result.get('success'):
-                logger.info(f"Retrieved orderbook for market {market_id}")
-                return result.get('orderBook', {})
-            else:
-                raise Exception(result.get('error', 'Unknown error'))
+                logger.info(f"Retrieved orderbook from trading service for {market_id}")
+                return result.get('orderBook', {'bids': [], 'asks': []})
+
+            # Trading service failed, fall back to REST API
+            logger.info(f"Trading service unavailable, using REST fallback for {market_id}")
+            return self._get_orderbook_rest(market_id)
 
         except Exception as e:
-            logger.error(f"Failed to get orderbook for {market_id}: {e}")
-            raise
+            logger.warning(f"Trading service error: {e}, trying REST fallback")
+            try:
+                return self._get_orderbook_rest(market_id)
+            except Exception as e2:
+                logger.error(f"Both orderbook methods failed for {market_id}: {e2}")
+                return {'bids': [], 'asks': []}
+
+    def _get_orderbook_rest(self, market_id: str) -> Dict:
+        """
+        Get order book directly from Polymarket CLOB REST API.
+
+        Args:
+            market_id: Market ID or clobTokenId
+
+        Returns:
+            Dict with bids and asks arrays
+        """
+        import httpx
+        import json
+
+        try:
+            # First, we need to get the clobTokenIds for this market
+            # The market_id might be a gamma market ID, so we need to look it up
+            token_id = market_id
+
+            # If it doesn't look like a token ID (they're typically long hex strings),
+            # try to fetch the market first
+            if len(market_id) < 50:
+                try:
+                    market = self.get_market_details(market_id)
+                    clob_token_ids = market.get('clobTokenIds', [])
+                    if clob_token_ids:
+                        token_id = clob_token_ids[0]  # YES token
+                        logger.info(f"Resolved market {market_id} to token {token_id}")
+                except Exception as e:
+                    logger.warning(f"Could not resolve market to token ID: {e}")
+
+            # Call Polymarket CLOB book endpoint
+            clob_url = f"https://clob.polymarket.com/book"
+            params = {"token_id": token_id}
+
+            response = httpx.get(clob_url, params=params, timeout=10.0)
+
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Retrieved orderbook from CLOB REST for token {token_id}")
+
+                # Transform to standard format if needed
+                bids = data.get('bids', [])
+                asks = data.get('asks', [])
+
+                return {
+                    'bids': bids,
+                    'asks': asks
+                }
+            else:
+                logger.warning(f"CLOB REST API returned {response.status_code}")
+                return {'bids': [], 'asks': []}
+
+        except Exception as e:
+            logger.error(f"REST orderbook fetch failed: {e}")
+            return {'bids': [], 'asks': []}
 
     def search_markets_by_query(self, query: str, limit: int = 20) -> List[Dict]:
         """

@@ -114,7 +114,7 @@ export default function MarketDetailPage() {
     fetchPriceHistory();
   }, [market, marketId, selectedInterval]);
 
-  // Fetch order book initially
+  // Fetch order book initially and refresh periodically
   useEffect(() => {
     async function fetchOrderBook() {
       if (!market) return;
@@ -128,14 +128,25 @@ export default function MarketDetailPage() {
             bids: data.bids || [],
             asks: data.asks || []
           });
+          console.log('Order book loaded:', data.bids?.length || 0, 'bids,', data.asks?.length || 0, 'asks');
         }
       } catch (err) {
         console.error('Failed to fetch order book:', err);
       }
     }
 
+    // Fetch immediately
     fetchOrderBook();
-  }, [market, marketId]);
+
+    // Refresh every 30 seconds if WebSocket isn't connected
+    const interval = setInterval(() => {
+      if (!wsConnected) {
+        fetchOrderBook();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [market, marketId, wsConnected]);
 
   // Connect to WebSocket for live updates
   useEffect(() => {
