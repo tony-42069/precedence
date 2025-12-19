@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { TrendingUp, TrendingDown, Info } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { TrendingUp, TrendingDown, Info, Wallet } from 'lucide-react';
 import { TradingModal } from '../TradingModal';
+import { useUser } from '@/contexts/UserContext';
 
 interface TradingPanelProps {
   market: {
@@ -27,6 +28,38 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
   const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no'>('yes');
   const [shares, setShares] = useState<string>('');
 
+  // Get user positions from context
+  const { positions, fetchPositions, user } = useUser();
+
+  // Fetch positions when component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      fetchPositions();
+    }
+  }, [user, fetchPositions]);
+
+  // Find user's positions for this market
+  const userPositions = useMemo(() => {
+    if (!positions || !market?.id) return { yes: 0, no: 0 };
+
+    const yesPosition = positions.find(
+      p => p.market_id === market.id && p.outcome === 'YES'
+    );
+    const noPosition = positions.find(
+      p => p.market_id === market.id && p.outcome === 'NO'
+    );
+
+    return {
+      yes: yesPosition?.total_shares || 0,
+      no: noPosition?.total_shares || 0
+    };
+  }, [positions, market?.id]);
+
+  // Get shares for currently selected outcome
+  const selectedShares = selectedOutcome === 'yes' ? userPositions.yes : userPositions.no;
+  const hasPosition = selectedShares > 0;
+  const hasAnyPosition = userPositions.yes > 0 || userPositions.no > 0;
+
   // Get best prices from order book
   const bestBid = orderBook.bids[0] ? parseFloat(orderBook.bids[0].price) : null;
   const bestAsk = orderBook.asks[0] ? parseFloat(orderBook.asks[0].price) : null;
@@ -48,15 +81,12 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
     setShowTradingModal(true);
   };
 
-  // Handle sell percentage buttons
+  // Handle sell percentage buttons - now connected to actual holdings
   const handleSellPercent = (percent: number) => {
-    // For now, just set a placeholder value
-    // Portfolio integration will come later
-    if (percent === 100) {
-      setShares('MAX');
-    } else {
-      setShares(`${percent}%`);
-    }
+    if (!hasPosition) return;
+
+    const shareAmount = Math.floor(selectedShares * (percent / 100));
+    setShares(shareAmount.toString());
   };
 
   // Get action button text
@@ -65,6 +95,9 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
     const outcome = selectedOutcome === 'yes' ? 'Yes' : 'No';
     return `${action} ${outcome}`;
   };
+
+  // Check if sell is disabled (no shares to sell)
+  const isSellDisabled = tradeMode === 'sell' && !hasPosition;
 
   return (
     <>
@@ -146,49 +179,108 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
           </button>
         </div>
 
+        {/* User Position Display - Show when user has position */}
+        {user && hasAnyPosition && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-xs text-blue-400 uppercase mb-2">
+              <Wallet size={12} />
+              Your Position
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">
+                YES: <span className={`font-mono ${userPositions.yes > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                  {userPositions.yes.toLocaleString()} shares
+                </span>
+              </span>
+              <span className="text-gray-400">
+                NO: <span className={`font-mono ${userPositions.no > 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                  {userPositions.no.toLocaleString()} shares
+                </span>
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Shares Input - For Sell Mode */}
         {tradeMode === 'sell' && (
           <div className="space-y-2">
-            <label className="text-xs text-gray-400 uppercase">Shares</label>
+            <div className="flex justify-between items-center">
+              <label className="text-xs text-gray-400 uppercase">Shares to Sell</label>
+              {user && (
+                <span className="text-xs text-gray-500">
+                  Available: <span className={`font-mono ${hasPosition ? 'text-white' : 'text-gray-600'}`}>
+                    {selectedShares.toLocaleString()}
+                  </span>
+                </span>
+              )}
+            </div>
             <input
-              type="text"
+              type="number"
               value={shares}
               onChange={(e) => setShares(e.target.value)}
               placeholder="0"
-              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white font-mono text-lg focus:outline-none focus:border-gray-500 transition-colors"
+              disabled={!hasPosition && user !== null}
+              className={`w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white font-mono text-lg focus:outline-none focus:border-gray-500 transition-colors ${
+                !hasPosition && user ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
             />
             <div className="flex gap-2">
               <button
                 onClick={() => handleSellPercent(25)}
-                className="flex-1 py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+                disabled={!hasPosition}
+                className={`flex-1 py-2 px-3 bg-gray-800 border border-gray-700 rounded-lg text-sm transition-colors ${
+                  hasPosition
+                    ? 'hover:bg-gray-700 text-gray-300'
+                    : 'opacity-50 cursor-not-allowed text-gray-600'
+                }`}
               >
                 25%
               </button>
               <button
                 onClick={() => handleSellPercent(50)}
-                className="flex-1 py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+                disabled={!hasPosition}
+                className={`flex-1 py-2 px-3 bg-gray-800 border border-gray-700 rounded-lg text-sm transition-colors ${
+                  hasPosition
+                    ? 'hover:bg-gray-700 text-gray-300'
+                    : 'opacity-50 cursor-not-allowed text-gray-600'
+                }`}
               >
                 50%
               </button>
               <button
                 onClick={() => handleSellPercent(100)}
-                className="flex-1 py-2 px-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+                disabled={!hasPosition}
+                className={`flex-1 py-2 px-3 bg-gray-800 border border-gray-700 rounded-lg text-sm transition-colors ${
+                  hasPosition
+                    ? 'hover:bg-gray-700 text-gray-300'
+                    : 'opacity-50 cursor-not-allowed text-gray-600'
+                }`}
               >
                 Max
               </button>
             </div>
+
+            {/* No shares message */}
+            {user && !hasPosition && (
+              <div className="text-center text-amber-400/80 text-xs py-2">
+                You don't have any {selectedOutcome.toUpperCase()} shares to sell
+              </div>
+            )}
           </div>
         )}
 
         {/* Action Button */}
         <button
           onClick={handleTradeClick}
+          disabled={isSellDisabled && user !== null}
           className={`w-full py-3 px-4 rounded-lg font-bold text-white transition-all ${
-            tradeMode === 'buy'
-              ? selectedOutcome === 'yes'
-                ? 'bg-green-600 hover:bg-green-500 shadow-lg shadow-green-600/20'
-                : 'bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20'
-              : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/20'
+            isSellDisabled && user
+              ? 'bg-gray-700 cursor-not-allowed opacity-50'
+              : tradeMode === 'buy'
+                ? selectedOutcome === 'yes'
+                  ? 'bg-green-600 hover:bg-green-500 shadow-lg shadow-green-600/20'
+                  : 'bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20'
+                : 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/20'
           }`}
         >
           {getActionButtonText()}
