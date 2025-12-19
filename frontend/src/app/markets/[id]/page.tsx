@@ -47,6 +47,11 @@ interface OrderBookData {
   asks: Array<{ price: string; size: string }>;
 }
 
+interface OrderBooks {
+  yes: OrderBookData;
+  no: OrderBookData;
+}
+
 export default function MarketDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -54,7 +59,10 @@ export default function MarketDetailPage() {
 
   const [market, setMarket] = useState<Market | null>(null);
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
-  const [orderBook, setOrderBook] = useState<OrderBookData>({ bids: [], asks: [] });
+  const [orderBooks, setOrderBooks] = useState<OrderBooks>({
+    yes: { bids: [], asks: [] },
+    no: { bids: [], asks: [] }
+  });
   const [currentPrice, setCurrentPrice] = useState<number>(0.5);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,34 +122,57 @@ export default function MarketDetailPage() {
     fetchPriceHistory();
   }, [market, marketId, selectedInterval]);
 
-  // Fetch order book initially and refresh periodically
+  // Fetch order books for both YES and NO tokens
   useEffect(() => {
-    async function fetchOrderBook() {
-      if (!market) return;
+    async function fetchOrderBooks() {
+      if (!market?.clobTokenIds || market.clobTokenIds.length < 2) {
+        // Fallback: fetch single order book if no token IDs
+        try {
+          const res = await fetch(`${API_URL}/api/markets/${marketId}/orderbook`);
+          if (res.ok) {
+            const data = await res.json();
+            setOrderBooks({
+              yes: { bids: data.bids || [], asks: data.asks || [] },
+              no: { bids: [], asks: [] }
+            });
+          }
+        } catch (err) {
+          console.error('Failed to fetch order book:', err);
+        }
+        return;
+      }
+
+      const yesTokenId = market.clobTokenIds[0];
+      const noTokenId = market.clobTokenIds[1];
 
       try {
-        const res = await fetch(`${API_URL}/api/markets/${marketId}/orderbook`);
+        // Fetch both order books in parallel
+        const [yesRes, noRes] = await Promise.all([
+          fetch(`https://clob.polymarket.com/book?token_id=${yesTokenId}`),
+          fetch(`https://clob.polymarket.com/book?token_id=${noTokenId}`)
+        ]);
 
-        if (res.ok) {
-          const data = await res.json();
-          setOrderBook({
-            bids: data.bids || [],
-            asks: data.asks || []
-          });
-          console.log('Order book loaded:', data.bids?.length || 0, 'bids,', data.asks?.length || 0, 'asks');
-        }
+        const yesData = yesRes.ok ? await yesRes.json() : { bids: [], asks: [] };
+        const noData = noRes.ok ? await noRes.json() : { bids: [], asks: [] };
+
+        setOrderBooks({
+          yes: { bids: yesData.bids || [], asks: yesData.asks || [] },
+          no: { bids: noData.bids || [], asks: noData.asks || [] }
+        });
+
+        console.log('Order books loaded - YES:', yesData.bids?.length || 0, 'bids, NO:', noData.bids?.length || 0, 'bids');
       } catch (err) {
-        console.error('Failed to fetch order book:', err);
+        console.error('Failed to fetch order books:', err);
       }
     }
 
     // Fetch immediately
-    fetchOrderBook();
+    fetchOrderBooks();
 
     // Refresh every 30 seconds if WebSocket isn't connected
     const interval = setInterval(() => {
       if (!wsConnected) {
-        fetchOrderBook();
+        fetchOrderBooks();
       }
     }, 30000);
 
@@ -190,10 +221,14 @@ export default function MarketDetailPage() {
           }
 
           if (data.type === 'book') {
-            setOrderBook({
-              bids: data.payload?.bids || [],
-              asks: data.payload?.asks || []
-            });
+            // Update YES order book from WebSocket (NO would need separate subscription)
+            setOrderBooks(prev => ({
+              ...prev,
+              yes: {
+                bids: data.payload?.bids || [],
+                asks: data.payload?.asks || []
+              }
+            }));
           }
         } catch (err) {
           console.error('Error parsing WebSocket message:', err);
@@ -342,8 +377,8 @@ export default function MarketDetailPage() {
             <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">
               <h2 className="text-lg font-semibold mb-4">Order Book</h2>
               <OrderBook
-                bids={orderBook.bids}
-                asks={orderBook.asks}
+                yesOrderBook={orderBooks.yes}
+                noOrderBook={orderBooks.no}
               />
             </div>
 
@@ -362,7 +397,7 @@ export default function MarketDetailPage() {
               <TradingPanel
                 market={market}
                 currentPrice={currentPrice}
-                orderBook={orderBook}
+                orderBook={orderBooks.yes}
               />
             </div>
           </div>
