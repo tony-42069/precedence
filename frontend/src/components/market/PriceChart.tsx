@@ -119,7 +119,7 @@ export default function PriceChart({ data, currentPrice }: PriceChartProps) {
                 color: '#fff',
                 boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
               }}
-              formatter={(value: number) => [`${(value * 100).toFixed(2)}%`, 'YES Price']}
+              formatter={(value) => [`${((value as number) * 100).toFixed(2)}%`, 'YES Price']}
               labelFormatter={(label) => label}
             />
             <Area
