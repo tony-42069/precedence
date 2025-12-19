@@ -46,6 +46,33 @@ export default function PriceChart({ data, currentPrice }: PriceChartProps) {
     };
   }, [chartData]);
 
+  // Calculate dynamic Y-axis domain based on data range
+  const yAxisDomain = useMemo(() => {
+    if (chartData.length === 0) return [0, 1];
+
+    const prices = chartData.map(d => d.price);
+    const dataMin = Math.min(...prices);
+    const dataMax = Math.max(...prices);
+    const range = dataMax - dataMin;
+
+    // Add 15% padding on each side
+    let padding = range * 0.15;
+
+    // Ensure minimum range of 10% for readability when range is very tight
+    if (range < 0.1) {
+      padding = Math.max(padding, 0.05);
+    }
+
+    const yMin = Math.max(0, dataMin - padding);
+    const yMax = Math.min(1, dataMax + padding);
+
+    // Round to nice values for cleaner tick marks
+    const roundedMin = Math.floor(yMin * 20) / 20; // Round down to nearest 5%
+    const roundedMax = Math.ceil(yMax * 20) / 20;  // Round up to nearest 5%
+
+    return [Math.max(0, roundedMin), Math.min(1, roundedMax)];
+  }, [chartData]);
+
   // Determine color based on price trend
   const isPositive = priceChange.isPositive;
   const strokeColor = isPositive ? '#10B981' : '#EF4444';
@@ -104,7 +131,7 @@ export default function PriceChart({ data, currentPrice }: PriceChartProps) {
               minTickGap={50}
             />
             <YAxis
-              domain={[0, 1]}
+              domain={yAxisDomain}
               axisLine={false}
               tickLine={false}
               tick={{ fill: '#64748B', fontSize: 11 }}
