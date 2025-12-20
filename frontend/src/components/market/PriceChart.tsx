@@ -314,10 +314,12 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
       </div>
 
       {/* Price Range */}
-      <div className="mt-4 flex justify-between text-sm text-gray-500 font-mono">
-        <span>Low: {(Math.min(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
-        <span>High: {(Math.max(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
-      </div>
+      {data.length > 0 && (
+        <div className="mt-4 flex justify-between text-sm text-gray-500 font-mono">
+          <span>Low: {(Math.min(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
+          <span>High: {(Math.max(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
+        </div>
+      )}
     </div>
   );
 }

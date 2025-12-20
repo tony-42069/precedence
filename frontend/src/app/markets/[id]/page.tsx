@@ -16,6 +16,9 @@ import CommentsSection from '@/components/market/CommentsSection';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5003';
 
+// Chart colors for multi-outcome markets (top 4) - defined outside component to avoid recreating on each render
+const OUTCOME_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+
 interface MarketOutcome {
   name: string;
   price: number;
@@ -88,9 +91,6 @@ export default function MarketDetailPage() {
   const [selectedOutcome, setSelectedOutcome] = useState<MarketOutcome | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-
-  // Chart colors for multi-outcome markets (top 4)
-  const OUTCOME_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
 
   // Check if this is a multi-outcome market
   const isMultiOutcome = market?.outcomes && market.outcomes.length > 2;
@@ -198,7 +198,7 @@ export default function MarketDetailPage() {
     }
 
     fetchPriceHistory();
-  }, [market, marketId, selectedInterval, isMultiOutcome, OUTCOME_COLORS]);
+  }, [market, marketId, selectedInterval, isMultiOutcome]);
 
   // Fetch order books for both YES and NO tokens
   useEffect(() => {
