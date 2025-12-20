@@ -92,8 +92,8 @@ export default function MarketDetailPage() {
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Check if this is a multi-outcome market
-  const isMultiOutcome = market?.outcomes && market.outcomes.length > 2;
+  // Check if this is a multi-outcome market (must be an array with more than 2 outcomes)
+  const isMultiOutcome = market?.outcomes && Array.isArray(market.outcomes) && market.outcomes.length > 2;
 
   // Fetch market data
   useEffect(() => {
@@ -453,7 +453,7 @@ export default function MarketDetailPage() {
             </div>
 
             {/* All Outcomes - For Multi-Outcome Markets */}
-            {isMultiOutcome && market.outcomes && market.outcomes.length > 0 && (
+            {isMultiOutcome && Array.isArray(market.outcomes) && market.outcomes.length > 0 && (
               <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">All Outcomes</h2>
@@ -462,7 +462,7 @@ export default function MarketDetailPage() {
                   </span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2">
-                  {market.outcomes
+                  {[...market.outcomes]
                     .sort((a, b) => (b.price || b.yes_price || 0) - (a.price || a.yes_price || 0))
                     .map((outcome, index) => {
                       const yesPrice = outcome.price || outcome.yes_price || 0;
