@@ -126,7 +126,7 @@ export function TopMarketsWidget() {
           <span className="text-sm font-mono text-slate-400">TRENDING MARKETS</span>
           <span className="text-xs text-slate-600">(7d vol)</span>
         </div>
-        <a href="/app/markets" className="text-xs font-mono text-purple-400 hover:text-purple-300">
+        <a href="/markets" className="text-xs font-mono text-purple-400 hover:text-purple-300">
           View All →
         </a>
       </div>
@@ -136,7 +136,7 @@ export function TopMarketsWidget() {
         {trendingMarkets.map((market, index) => (
           <a
             key={market.id}
-            href={`/app/markets?highlight=${market.id}`}
+            href={`/markets/${market.id}`}
             className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors group"
           >
             {/* Rank */}

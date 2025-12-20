@@ -128,7 +128,7 @@ export function LegalMarketsSpotlight() {
           {legalMarkets.map((market) => (
             <a
               key={market.id}
-              href={`/app/markets?highlight=${market.id}`}
+              href={`/markets/${market.id}`}
               className="flex gap-3 p-3 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-blue-500/30 transition-all group"
             >
               {/* Market Image */}

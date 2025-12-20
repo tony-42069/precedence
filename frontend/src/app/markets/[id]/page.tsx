@@ -16,6 +16,16 @@ import CommentsSection from '@/components/market/CommentsSection';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5003';
 
+interface MarketOutcome {
+  name: string;
+  price: number;
+  yes_price?: number;
+  no_price?: number;
+  market_id?: string;
+  clobTokenIds?: string[];
+  question?: string;
+}
+
 interface Market {
   id: string;
   question: string;
@@ -30,12 +40,16 @@ interface Market {
   endDate?: string;
   slug?: string;
   clobTokenIds?: string[];
-  outcomes?: Array<{
-    name: string;
-    yes_price: number;
-    no_price: number;
-    market_id?: string;
-  }>;
+  is_binary?: boolean;
+  num_outcomes?: number;
+  outcomes?: MarketOutcome[];
+}
+
+interface MultiOutcomeChartData {
+  outcomeName: string;
+  color: string;
+  data: PricePoint[];
+  currentPrice: number;
 }
 
 interface PricePoint {
@@ -60,6 +74,7 @@ export default function MarketDetailPage() {
 
   const [market, setMarket] = useState<Market | null>(null);
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+  const [multiOutcomeData, setMultiOutcomeData] = useState<MultiOutcomeChartData[]>([]);
   const [orderBooks, setOrderBooks] = useState<OrderBooks>({
     yes: { bids: [], asks: [] },
     no: { bids: [], asks: [] }
@@ -70,8 +85,15 @@ export default function MarketDetailPage() {
   const [selectedInterval, setSelectedInterval] = useState('1d');
   const [wsConnected, setWsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [selectedOutcome, setSelectedOutcome] = useState<MarketOutcome | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Chart colors for multi-outcome markets (top 4)
+  const OUTCOME_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+
+  // Check if this is a multi-outcome market
+  const isMultiOutcome = market?.outcomes && market.outcomes.length > 2;
 
   // Fetch market data
   useEffect(() => {
@@ -106,22 +128,77 @@ export default function MarketDetailPage() {
     async function fetchPriceHistory() {
       if (!market) return;
 
-      try {
-        const res = await fetch(
-          `${API_URL}/api/markets/${marketId}/prices?interval=${selectedInterval}`
+      // For multi-outcome markets, fetch price history for top 4 outcomes
+      if (isMultiOutcome && market.outcomes && market.outcomes.length > 2) {
+        const sortedOutcomes = [...market.outcomes].sort((a, b) =>
+          (b.price || b.yes_price || 0) - (a.price || a.yes_price || 0)
         );
+        const top4 = sortedOutcomes.slice(0, 4);
 
-        if (res.ok) {
-          const data = await res.json();
-          setPriceHistory(data.history || []);
+        try {
+          const multiData = await Promise.all(
+            top4.map(async (outcome, index) => {
+              // Try to fetch price history for this outcome
+              const tokenId = outcome.clobTokenIds?.[0] || outcome.market_id;
+              if (!tokenId) {
+                // If no token ID, return empty data with current price
+                return {
+                  outcomeName: outcome.name,
+                  color: OUTCOME_COLORS[index],
+                  data: [],
+                  currentPrice: outcome.price || outcome.yes_price || 0
+                };
+              }
+
+              try {
+                const res = await fetch(
+                  `${API_URL}/api/markets/${tokenId}/prices?interval=${selectedInterval}`
+                );
+                if (res.ok) {
+                  const data = await res.json();
+                  return {
+                    outcomeName: outcome.name,
+                    color: OUTCOME_COLORS[index],
+                    data: data.history || [],
+                    currentPrice: outcome.price || outcome.yes_price || 0
+                  };
+                }
+              } catch (err) {
+                console.error(`Failed to fetch history for ${outcome.name}:`, err);
+              }
+
+              return {
+                outcomeName: outcome.name,
+                color: OUTCOME_COLORS[index],
+                data: [],
+                currentPrice: outcome.price || outcome.yes_price || 0
+              };
+            })
+          );
+
+          setMultiOutcomeData(multiData);
+        } catch (err) {
+          console.error('Failed to fetch multi-outcome price history:', err);
         }
-      } catch (err) {
-        console.error('Failed to fetch price history:', err);
+      } else {
+        // Binary market - fetch single price history
+        try {
+          const res = await fetch(
+            `${API_URL}/api/markets/${marketId}/prices?interval=${selectedInterval}`
+          );
+
+          if (res.ok) {
+            const data = await res.json();
+            setPriceHistory(data.history || []);
+          }
+        } catch (err) {
+          console.error('Failed to fetch price history:', err);
+        }
       }
     }
 
     fetchPriceHistory();
-  }, [market, marketId, selectedInterval]);
+  }, [market, marketId, selectedInterval, isMultiOutcome, OUTCOME_COLORS]);
 
   // Fetch order books for both YES and NO tokens
   useEffect(() => {
@@ -371,8 +448,68 @@ export default function MarketDetailPage() {
               <PriceChart
                 data={priceHistory}
                 currentPrice={currentPrice}
+                multiOutcomeData={isMultiOutcome ? multiOutcomeData : undefined}
               />
             </div>
+
+            {/* All Outcomes - For Multi-Outcome Markets */}
+            {isMultiOutcome && market.outcomes && market.outcomes.length > 0 && (
+              <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">All Outcomes</h2>
+                  <span className="text-sm text-gray-500">
+                    {market.outcomes.length} outcomes
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2">
+                  {market.outcomes
+                    .sort((a, b) => (b.price || b.yes_price || 0) - (a.price || a.yes_price || 0))
+                    .map((outcome, index) => {
+                      const yesPrice = outcome.price || outcome.yes_price || 0;
+                      const noPrice = outcome.no_price || (1 - yesPrice);
+                      const isTopOutcome = index < 4;
+
+                      return (
+                        <div
+                          key={outcome.name}
+                          className={`p-3 rounded-lg border transition-all cursor-pointer hover:border-blue-500/50 ${
+                            selectedOutcome?.name === outcome.name
+                              ? 'bg-blue-500/20 border-blue-500/50'
+                              : 'bg-gray-800/30 border-gray-700'
+                          }`}
+                          onClick={() => setSelectedOutcome(outcome)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-white truncate flex-1">
+                              {outcome.name}
+                            </span>
+                            {isTopOutcome && (
+                              <span
+                                className="w-2 h-2 rounded-full ml-2"
+                                style={{ backgroundColor: OUTCOME_COLORS[index] }}
+                              />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/20 rounded px-2 py-0.5">
+                              <span className="text-[10px] text-green-400">YES</span>
+                              <span className="text-xs font-mono text-green-400 font-bold">
+                                {(yesPrice * 100).toFixed(0)}¢
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/20 rounded px-2 py-0.5">
+                              <span className="text-[10px] text-red-400">NO</span>
+                              <span className="text-xs font-mono text-red-400 font-bold">
+                                {(noPrice * 100).toFixed(0)}¢
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
 
             {/* Order Book */}
             <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">
