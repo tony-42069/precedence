@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -11,7 +11,9 @@ import {
   TrendingUp,
   Wallet,
   User,
-  LogOut
+  LogOut,
+  Copy,
+  Check
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useWallet } from '../hooks/useWallet';
@@ -28,6 +30,20 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const { logout: privyLogout } = usePrivy();
   const { user, clearUser } = useUser();
   const { walletState, disconnect } = useWallet();
+  const [copiedAddress, setCopiedAddress] = useState(false);
+
+  // Handle copy wallet address
+  const handleCopyAddress = async () => {
+    if (user?.wallet_address) {
+      try {
+        await navigator.clipboard.writeText(user.wallet_address);
+        setCopiedAddress(true);
+        setTimeout(() => setCopiedAddress(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy address:', err);
+      }
+    }
+  };
 
 const handleDisconnect = async () => {
   try {
@@ -166,8 +182,21 @@ const handleDisconnect = async () => {
                 <div className="text-sm font-semibold text-white truncate">
                   {user.display_name || user.username || formatAddress(user.wallet_address)}
                 </div>
-                <div className="text-xs text-slate-400 font-mono">
-                  {formatAddress(user.wallet_address)}
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-slate-400 font-mono">
+                    {formatAddress(user.wallet_address)}
+                  </span>
+                  <button
+                    onClick={handleCopyAddress}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                    title="Copy full wallet address"
+                  >
+                    {copiedAddress ? (
+                      <Check size={12} className="text-green-400" />
+                    ) : (
+                      <Copy size={12} className="text-slate-400 hover:text-white" />
+                    )}
+                  </button>
                 </div>
               </div>
               <button

@@ -7,20 +7,22 @@ import { useWallet } from '../../hooks/useWallet';
 import { useUser } from '../../contexts/UserContext';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { WalletConnectModal } from '../../components/WalletConnectModal';
-import { 
-  User, 
-  Settings, 
-  Shield, 
-  Key, 
-  LogOut, 
-  Download, 
-  Bell, 
+import {
+  User,
+  Settings,
+  Shield,
+  Key,
+  LogOut,
+  Download,
+  Bell,
   Activity,
   Terminal,
   Wallet,
   Edit3,
   Save,
-  X
+  X,
+  Copy,
+  Check
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -41,6 +43,20 @@ export default function ProfilePage() {
   });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
+
+  // Handle copy wallet address
+  const handleCopyAddress = async () => {
+    if (user?.wallet_address) {
+      try {
+        await navigator.clipboard.writeText(user.wallet_address);
+        setCopiedAddress(true);
+        setTimeout(() => setCopiedAddress(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy address:', err);
+      }
+    }
+  };
 
   // Load stats when user is available
   useEffect(() => {
@@ -287,9 +303,22 @@ export default function ProfilePage() {
                                   {user.username && (
                                     <p className="text-slate-400 text-sm mb-1">@{user.username}</p>
                                   )}
-                                  <p className="text-slate-500 font-mono text-sm bg-black/30 px-2 py-1 rounded inline-block border border-white/5">
-                                    {formatAddress(user.wallet_address)}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-slate-500 font-mono text-sm bg-black/30 px-2 py-1 rounded inline-block border border-white/5">
+                                      {formatAddress(user.wallet_address)}
+                                    </p>
+                                    <button
+                                      onClick={handleCopyAddress}
+                                      className="p-1.5 hover:bg-white/10 rounded transition-colors"
+                                      title="Copy full wallet address"
+                                    >
+                                      {copiedAddress ? (
+                                        <Check size={14} className="text-green-400" />
+                                      ) : (
+                                        <Copy size={14} className="text-slate-400 hover:text-white" />
+                                      )}
+                                    </button>
+                                  </div>
                                 </>
                               )}
                             </div>
