@@ -117,27 +117,95 @@ class PolymarketClient:
 
                 if event_response.status_code == 200:
                     event = event_response.json()
-                    # Get the first active market from the event
                     nested_markets = event.get('markets', [])
-
-                    # Find the first non-closed market
-                    for nm in nested_markets:
-                        if not nm.get('closed', False):
-                            market = nm
-                            # Add event-level fields
+                    
+                    # Check if this is a multi-outcome event (more than 2 markets)
+                    active_markets = [nm for nm in nested_markets if not nm.get('closed', False)]
+                    
+                    if len(active_markets) > 2:
+                        # MULTI-OUTCOME EVENT: Return event with all outcomes
+                        logger.info(f"Multi-outcome event detected with {len(active_markets)} active outcomes")
+                        
+                        market = {
+                            'id': event.get('id'),
+                            'question': event.get('title'),  # Use event title as main question
+                            'description': event.get('description'),
+                            'image': event.get('image'),
+                            'icon': event.get('icon'),
+                            'volume': event.get('volume'),
+                            'volume24hr': event.get('volume24hr'),
+                            'endDate': event.get('endDate'),
+                            'slug': event.get('slug'),
+                            'is_binary': False,
+                            'num_outcomes': len(active_markets),
+                            'outcomes': []
+                        }
+                        
+                        # Parse all active outcomes
+                        for nm in active_markets:
+                            try:
+                                outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
+                                if isinstance(outcome_prices, str):
+                                    outcome_prices = json.loads(outcome_prices)
+                                
+                                yes_price = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+                                no_price = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+                                
+                                # Skip fully resolved outcomes (YES >= 99%)
+                                if yes_price >= 0.99:
+                                    continue
+                                
+                                # Parse clobTokenIds
+                                clob_ids = nm.get('clobTokenIds', [])
+                                if isinstance(clob_ids, str):
+                                    clob_ids = json.loads(clob_ids)
+                                
+                                market['outcomes'].append({
+                                    'name': nm.get('groupItemTitle') or nm.get('question', 'Unknown'),
+                                    'question': nm.get('question'),
+                                    'yes_price': yes_price,
+                                    'no_price': no_price,
+                                    'price': yes_price,
+                                    'market_id': nm.get('id'),
+                                    'clobTokenIds': clob_ids
+                                })
+                            except Exception as e:
+                                logger.warning(f"Failed to parse outcome: {e}")
+                        
+                        # Sort outcomes by price (highest probability first)
+                        market['outcomes'].sort(key=lambda x: x['price'], reverse=True)
+                        
+                        # Set current price to top outcome for display
+                        if market['outcomes']:
+                            market['current_yes_price'] = market['outcomes'][0]['price']
+                            market['current_no_price'] = 1 - market['current_yes_price']
+                            market['top_outcome'] = market['outcomes'][0]['name']
+                        else:
+                            market['current_yes_price'] = 0.5
+                            market['current_no_price'] = 0.5
+                        
+                        logger.info(f"Returning multi-outcome event with {len(market['outcomes'])} outcomes")
+                    
+                    else:
+                        # BINARY EVENT: Return first active market (existing behavior)
+                        for nm in nested_markets:
+                            if not nm.get('closed', False):
+                                market = nm
+                                market['event_title'] = event.get('title', '')
+                                market['event_image'] = event.get('image', '')
+                                market['event_icon'] = event.get('icon', '')
+                                market['is_binary'] = True
+                                break
+                        
+                        if not market and nested_markets:
+                            # Fallback to first market even if closed
+                            market = nested_markets[0]
                             market['event_title'] = event.get('title', '')
                             market['event_image'] = event.get('image', '')
                             market['event_icon'] = event.get('icon', '')
-                            break
-
-                    if not market and nested_markets:
-                        # Fallback to first market even if closed
-                        market = nested_markets[0]
-                        market['event_title'] = event.get('title', '')
-                        market['event_image'] = event.get('image', '')
-                        market['event_icon'] = event.get('icon', '')
-
-                    logger.info(f"Found market via event: {market.get('id') if market else 'None'}")
+                            market['is_binary'] = True
+                        
+                        logger.info(f"Found binary market via event: {market.get('id') if market else 'None'}")
                 else:
                     raise Exception(f"Neither market nor event found for ID: {market_id}")
 
