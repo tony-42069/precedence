@@ -115,7 +115,7 @@ export function LegalMarketsSpotlight() {
           <span className="text-sm font-mono text-slate-400">LEGAL & POLICY MARKETS</span>
         </div>
         <a 
-          href="/cases"
+          href="/app/cases"
           className="flex items-center gap-1 text-xs font-mono text-yellow-400 hover:text-yellow-300"
         >
           <Plus size={12} />
@@ -128,7 +128,7 @@ export function LegalMarketsSpotlight() {
           {legalMarkets.map((market) => (
             <a
               key={market.id}
-              href={`/markets/${market.id}`}
+              href={`/app/markets/${market.id}`}
               className="flex gap-3 p-3 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/5 hover:border-blue-500/30 transition-all group"
             >
               {/* Market Image */}
@@ -175,7 +175,7 @@ export function LegalMarketsSpotlight() {
         <div className="text-center py-6 border border-dashed border-white/10 rounded-lg">
           <Scale size={20} className="text-slate-600 mx-auto mb-2" />
           <p className="text-sm text-slate-500">No legal markets found</p>
-          <a href="/cases" className="text-xs font-mono text-blue-400 hover:text-blue-300">
+          <a href="/app/cases" className="text-xs font-mono text-blue-400 hover:text-blue-300">
             Request a market →
           </a>
         </div>

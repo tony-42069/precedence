@@ -228,10 +228,10 @@ export default function PortfolioPage() {
 
                     {/* Quick Actions */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <a href="/markets" className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                      <a href="/app/markets" className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
                         <TrendingUp size={18} className="group-hover:scale-110 transition-transform" /> View Markets
                       </a>
-                      <a href="/cases" className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                      <a href="/app/cases" className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
                         <Gavel size={18} className="group-hover:scale-110 transition-transform" /> View Cases
                       </a>
                       <button className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">

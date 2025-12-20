@@ -360,7 +360,7 @@ export default function MarketDetailPage() {
               Try Again
             </button>
             <Link
-              href="/markets"
+              href="/app/markets"
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors"
             >
               <ArrowLeft size={16} />
@@ -391,7 +391,7 @@ export default function MarketDetailPage() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <Link
-              href="/markets"
+              href="/app/markets"
               className="text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
             >
               <ArrowLeft size={18} />
