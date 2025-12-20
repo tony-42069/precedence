@@ -27,9 +27,17 @@ import {
 
 export default function ProfilePage() {
   const pathname = usePathname();
-  const { logout: privyLogout } = usePrivy();
+  const { logout: privyLogout, authenticated, user: privyUser, exportWallet } = usePrivy();
   const { walletState, disconnect } = useWallet();
   const { user, clearUser, updateProfile, stats, fetchStats } = useUser();
+
+  // Check if user has an embedded Privy wallet (not external like MetaMask)
+  const hasEmbeddedWallet = privyUser?.linkedAccounts?.find(
+    (account: any) =>
+      account.type === 'wallet' &&
+      account.walletClientType === 'privy' &&
+      account.chainType === 'ethereum'
+  );
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'settings'>('profile');
@@ -415,17 +423,29 @@ export default function ProfilePage() {
                     {/* Account Actions */}
                     <div className="bg-[#0A0A0C]/60 backdrop-blur-md border border-white/10 rounded-xl p-8">
                       <h2 className="text-lg font-semibold text-white mb-6">Session Controls</h2>
-                      <div className="flex gap-4">
+                      <div className="flex flex-wrap gap-4">
                         <button
                           onClick={handleDisconnect}
                           className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2"
                         >
                           <LogOut size={18} /> Disconnect Wallet
                         </button>
+                        <button
+                          onClick={exportWallet}
+                          disabled={!authenticated || !hasEmbeddedWallet}
+                          className="bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Key size={18} /> Export Private Key
+                        </button>
                         <button className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2">
                           <Download size={18} /> Export History
                         </button>
                       </div>
+                      {hasEmbeddedWallet && (
+                        <p className="text-xs text-slate-500 mt-3">
+                          Export your private key to use your wallet in MetaMask or other wallet apps.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
