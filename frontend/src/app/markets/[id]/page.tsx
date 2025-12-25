@@ -85,7 +85,7 @@ export default function MarketDetailPage() {
   const [currentPrice, setCurrentPrice] = useState<number>(0.5);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedInterval, setSelectedInterval] = useState('1d');
+  const [selectedInterval, setSelectedInterval] = useState('max');
   const [wsConnected, setWsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<MarketOutcome | null>(null);
