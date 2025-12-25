@@ -95,6 +95,17 @@ export default function MarketDetailPage() {
   // Check if this is a multi-outcome market (must be an array with more than 2 outcomes)
   const isMultiOutcome = market?.outcomes && Array.isArray(market.outcomes) && market.outcomes.length > 2;
 
+  // Auto-select the first (highest probability) outcome for multi-outcome markets
+  useEffect(() => {
+    if (isMultiOutcome && market?.outcomes && market.outcomes.length > 0 && !selectedOutcome) {
+      // Sort by price and select the first one
+      const sortedOutcomes = [...market.outcomes].sort(
+        (a, b) => (b.price || b.yes_price || 0) - (a.price || a.yes_price || 0)
+      );
+      setSelectedOutcome(sortedOutcomes[0]);
+    }
+  }, [isMultiOutcome, market?.outcomes, selectedOutcome]);
+
   // Fetch market data
   useEffect(() => {
     async function fetchMarket() {
@@ -201,27 +212,52 @@ export default function MarketDetailPage() {
   }, [market, marketId, selectedInterval, isMultiOutcome]);
 
   // Fetch order books for both YES and NO tokens
+  // For multi-outcome markets, uses the selected outcome's clobTokenIds
   useEffect(() => {
     async function fetchOrderBooks() {
-      if (!market?.clobTokenIds || market.clobTokenIds.length < 2) {
-        // Fallback: fetch single order book if no token IDs
-        try {
-          const res = await fetch(`${API_URL}/api/markets/${marketId}/orderbook`);
-          if (res.ok) {
-            const data = await res.json();
-            setOrderBooks({
-              yes: { bids: data.bids || [], asks: data.asks || [] },
-              no: { bids: [], asks: [] }
-            });
-          }
-        } catch (err) {
-          console.error('Failed to fetch order book:', err);
+      let yesTokenId: string | undefined;
+      let noTokenId: string | undefined;
+
+      // For multi-outcome markets, use the selected outcome's clobTokenIds
+      if (isMultiOutcome) {
+        if (selectedOutcome?.clobTokenIds && selectedOutcome.clobTokenIds.length >= 2) {
+          yesTokenId = selectedOutcome.clobTokenIds[0];
+          noTokenId = selectedOutcome.clobTokenIds[1];
+        } else {
+          // No outcome selected yet - show empty order book
+          console.log('Multi-outcome market: waiting for outcome selection');
+          setOrderBooks({
+            yes: { bids: [], asks: [] },
+            no: { bids: [], asks: [] }
+          });
+          return;
         }
-        return;
+      } else {
+        // Binary market - use market's clobTokenIds
+        if (!market?.clobTokenIds || market.clobTokenIds.length < 2) {
+          // Fallback: fetch single order book if no token IDs
+          try {
+            const res = await fetch(`${API_URL}/api/markets/${marketId}/orderbook`);
+            if (res.ok) {
+              const data = await res.json();
+              setOrderBooks({
+                yes: { bids: data.bids || [], asks: data.asks || [] },
+                no: { bids: [], asks: [] }
+              });
+            }
+          } catch (err) {
+            console.error('Failed to fetch order book:', err);
+          }
+          return;
+        }
+        yesTokenId = market.clobTokenIds[0];
+        noTokenId = market.clobTokenIds[1];
       }
 
-      const yesTokenId = market.clobTokenIds[0];
-      const noTokenId = market.clobTokenIds[1];
+      if (!yesTokenId || !noTokenId) {
+        console.warn('Missing token IDs for order book fetch');
+        return;
+      }
 
       try {
         // Fetch both order books in parallel
@@ -255,7 +291,7 @@ export default function MarketDetailPage() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [market, marketId, wsConnected]);
+  }, [market, marketId, wsConnected, isMultiOutcome, selectedOutcome]);
 
   // Connect to WebSocket for live updates
   useEffect(() => {
@@ -513,11 +549,25 @@ export default function MarketDetailPage() {
 
             {/* Order Book */}
             <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">
-              <h2 className="text-lg font-semibold mb-4">Order Book</h2>
-              <OrderBook
-                yesOrderBook={orderBooks.yes}
-                noOrderBook={orderBooks.no}
-              />
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Order Book</h2>
+                {isMultiOutcome && selectedOutcome && (
+                  <span className="text-sm text-gray-400">
+                    {selectedOutcome.name}
+                  </span>
+                )}
+              </div>
+              {isMultiOutcome && !selectedOutcome ? (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="text-3xl mb-2">📊</div>
+                  <p>Select an outcome above to view its order book</p>
+                </div>
+              ) : (
+                <OrderBook
+                  yesOrderBook={orderBooks.yes}
+                  noOrderBook={orderBooks.no}
+                />
+              )}
             </div>
 
             {/* Market Rules */}
@@ -536,6 +586,8 @@ export default function MarketDetailPage() {
                 market={market}
                 currentPrice={currentPrice}
                 orderBook={orderBooks.yes}
+                selectedMarketOutcome={selectedOutcome}
+                isMultiOutcome={isMultiOutcome}
               />
             </div>
           </div>

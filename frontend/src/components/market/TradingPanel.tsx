@@ -5,6 +5,16 @@ import { TrendingUp, TrendingDown, Info, Wallet } from 'lucide-react';
 import { TradingModal } from '../TradingModal';
 import { useUser } from '@/contexts/UserContext';
 
+interface MarketOutcome {
+  name: string;
+  price: number;
+  yes_price?: number;
+  no_price?: number;
+  market_id?: string;
+  clobTokenIds?: string[];
+  question?: string;
+}
+
 interface TradingPanelProps {
   market: {
     id: string;
@@ -20,9 +30,12 @@ interface TradingPanelProps {
     bids: Array<{ price: string; size: string }>;
     asks: Array<{ price: string; size: string }>;
   };
+  // For multi-outcome markets: the currently selected outcome
+  selectedMarketOutcome?: MarketOutcome | null;
+  isMultiOutcome?: boolean;
 }
 
-export default function TradingPanel({ market, currentPrice, orderBook }: TradingPanelProps) {
+export default function TradingPanel({ market, currentPrice, orderBook, selectedMarketOutcome, isMultiOutcome }: TradingPanelProps) {
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
   const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no'>('yes');
@@ -64,16 +77,38 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
   const bestBid = orderBook.bids[0] ? parseFloat(orderBook.bids[0].price) : null;
   const bestAsk = orderBook.asks[0] ? parseFloat(orderBook.asks[0].price) : null;
 
+  // For multi-outcome markets, use the selected outcome's prices
+  // Otherwise, use the passed currentPrice
+  const effectiveYesPrice = isMultiOutcome && selectedMarketOutcome
+    ? (selectedMarketOutcome.yes_price ?? selectedMarketOutcome.price ?? 0.5)
+    : currentPrice;
+  const effectiveNoPrice = isMultiOutcome && selectedMarketOutcome
+    ? (selectedMarketOutcome.no_price ?? (1 - (selectedMarketOutcome.price ?? 0.5)))
+    : (1 - currentPrice);
+
   // Convert price to cents for display
-  const yesCents = (currentPrice * 100).toFixed(1);
-  const noCents = ((1 - currentPrice) * 100).toFixed(1);
+  const yesCents = (effectiveYesPrice * 100).toFixed(1);
+  const noCents = (effectiveNoPrice * 100).toFixed(1);
 
   // Prepare market data for TradingModal with current prices
   const getMarketForTrading = () => {
+    // For multi-outcome markets, use the selected outcome's market_id and prices
+    if (isMultiOutcome && selectedMarketOutcome) {
+      return {
+        ...market,
+        id: selectedMarketOutcome.market_id || market.id,
+        question: selectedMarketOutcome.question || `${market.question}: ${selectedMarketOutcome.name}`,
+        current_yes_price: effectiveYesPrice,
+        current_no_price: effectiveNoPrice,
+        clobTokenIds: selectedMarketOutcome.clobTokenIds || market.clobTokenIds,
+        outcomeName: selectedMarketOutcome.name,
+      };
+    }
+
     return {
       ...market,
-      current_yes_price: currentPrice,
-      current_no_price: 1 - currentPrice,
+      current_yes_price: effectiveYesPrice,
+      current_no_price: effectiveNoPrice,
     };
   };
 
@@ -107,6 +142,25 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
           <h3 className="text-lg font-bold text-white">Trade</h3>
           <span className="text-xs text-gray-500 font-mono">Polymarket</span>
         </div>
+
+        {/* Multi-outcome: Show selected outcome or prompt */}
+        {isMultiOutcome && (
+          <div className={`rounded-lg p-3 text-center text-sm ${
+            selectedMarketOutcome
+              ? 'bg-blue-500/10 border border-blue-500/30'
+              : 'bg-amber-500/10 border border-amber-500/30'
+          }`}>
+            {selectedMarketOutcome ? (
+              <span className="text-blue-400">
+                Trading: <span className="font-medium text-white">{selectedMarketOutcome.name}</span>
+              </span>
+            ) : (
+              <span className="text-amber-400">
+                Select an outcome above to trade
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Buy/Sell Toggle */}
         <div className="flex rounded-lg bg-gray-800/50 p-1">
@@ -152,7 +206,7 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
               {yesCents}¢
             </div>
             <div className="text-xs text-gray-500 font-mono mt-0.5">
-              ${currentPrice.toFixed(3)}
+              ${effectiveYesPrice.toFixed(3)}
             </div>
           </button>
 
@@ -174,7 +228,7 @@ export default function TradingPanel({ market, currentPrice, orderBook }: Tradin
               {noCents}¢
             </div>
             <div className="text-xs text-gray-500 font-mono mt-0.5">
-              ${(1 - currentPrice).toFixed(3)}
+              ${effectiveNoPrice.toFixed(3)}
             </div>
           </button>
         </div>

@@ -727,8 +727,12 @@ async def get_market_price_history(
     """
     Get historical price data for a market from Polymarket CLOB.
 
-    First fetches the market to get its clobTokenIds, then calls Polymarket's
-    prices-history endpoint for the YES token.
+    Accepts either:
+    - A market ID (short alphanumeric) - will lookup clobTokenIds from Gamma API
+    - A clobTokenId directly (long numeric string) - will use directly for CLOB API
+
+    This flexibility allows the frontend to pass outcome clobTokenIds directly
+    for multi-outcome markets.
     """
     try:
         import httpx
@@ -736,40 +740,61 @@ async def get_market_price_history(
 
         logger.info(f"Getting price history for market {market_id}, interval={interval}")
 
-        # First, get the market details to find the clobTokenIds
-        gamma_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
+        yes_token_id = None
+
+        # Check if market_id is already a clobTokenId (long numeric string, typically 70+ chars)
+        # clobTokenIds are very long numeric strings like "95128293840293847..."
+        is_clob_token = len(market_id) > 50 and market_id.isdigit()
 
         async with httpx.AsyncClient() as client:
-            # Get market details
-            market_response = await client.get(gamma_url, timeout=10.0)
+            if is_clob_token:
+                # market_id is already a clobTokenId, use it directly
+                yes_token_id = market_id
+                logger.info(f"Using market_id as clobTokenId directly: {market_id[:20]}...")
+            else:
+                # It's a market ID, need to look up clobTokenIds from Gamma API
+                gamma_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
+                market_response = await client.get(gamma_url, timeout=10.0)
 
-            if market_response.status_code != 200:
-                raise HTTPException(status_code=404, detail="Market not found")
+                if market_response.status_code != 200:
+                    # Try as event ID
+                    event_url = f"https://gamma-api.polymarket.com/events/{market_id}"
+                    event_response = await client.get(event_url, timeout=10.0)
 
-            market = market_response.json()
+                    if event_response.status_code == 200:
+                        event = event_response.json()
+                        nested_markets = event.get('markets', [])
+                        # Get first active market's clobTokenIds
+                        for nm in nested_markets:
+                            if not nm.get('closed', False):
+                                clob_ids = nm.get('clobTokenIds', [])
+                                if isinstance(clob_ids, str):
+                                    clob_ids = json.loads(clob_ids)
+                                if clob_ids:
+                                    yes_token_id = clob_ids[0]
+                                    break
 
-            # Get the clobTokenIds (YES token is index 0)
-            clob_token_ids = market.get('clobTokenIds', [])
+                    if not yes_token_id:
+                        raise HTTPException(status_code=404, detail="Market not found")
+                else:
+                    market = market_response.json()
+                    # Get the clobTokenIds (YES token is index 0)
+                    clob_token_ids = market.get('clobTokenIds', [])
 
-            if not clob_token_ids:
-                # Try to get from outcomes if available
-                outcomes = market.get('outcomes', '[]')
-                if isinstance(outcomes, str):
-                    outcomes = json.loads(outcomes)
+                    if not clob_token_ids:
+                        logger.warning(f"No clobTokenIds found for market {market_id}")
+                        return {
+                            "history": [],
+                            "market_id": market_id,
+                            "interval": interval,
+                            "error": "No CLOB token IDs available for this market"
+                        }
 
-                logger.warning(f"No clobTokenIds found for market {market_id}")
-                return {
-                    "history": [],
-                    "market_id": market_id,
-                    "interval": interval,
-                    "error": "No CLOB token IDs available for this market"
-                }
+                    # Parse clobTokenIds if it's a string
+                    if isinstance(clob_token_ids, str):
+                        clob_token_ids = json.loads(clob_token_ids)
 
-            # Parse clobTokenIds if it's a string
-            if isinstance(clob_token_ids, str):
-                clob_token_ids = json.loads(clob_token_ids)
-
-            yes_token_id = clob_token_ids[0] if clob_token_ids else None
+                    yes_token_id = clob_token_ids[0] if clob_token_ids else None
 
             if not yes_token_id:
                 return {
