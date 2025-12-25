@@ -148,14 +148,14 @@ export default function MarketDetailPage() {
 
         try {
           const multiData = await Promise.all(
-            top4.map(async (outcome, index) => {
+            top4.map(async (outcome) => {
               // Try to fetch price history for this outcome
               const tokenId = outcome.clobTokenIds?.[0] || outcome.market_id;
               if (!tokenId) {
                 // If no token ID, return empty data with current price
                 return {
                   outcomeName: outcome.name,
-                  color: OUTCOME_COLORS[index],
+                  color: '', // Will be assigned after filtering
                   data: [],
                   currentPrice: outcome.price || outcome.yes_price || 0
                 };
@@ -169,7 +169,7 @@ export default function MarketDetailPage() {
                   const data = await res.json();
                   return {
                     outcomeName: outcome.name,
-                    color: OUTCOME_COLORS[index],
+                    color: '', // Will be assigned after filtering
                     data: data.history || [],
                     currentPrice: outcome.price || outcome.yes_price || 0
                   };
@@ -180,14 +180,22 @@ export default function MarketDetailPage() {
 
               return {
                 outcomeName: outcome.name,
-                color: OUTCOME_COLORS[index],
+                color: '', // Will be assigned after filtering
                 data: [],
                 currentPrice: outcome.price || outcome.yes_price || 0
               };
             })
           );
 
-          setMultiOutcomeData(multiData);
+          // Filter out outcomes with no price history and assign colors to remaining
+          const filteredData = multiData
+            .filter(outcome => outcome.data.length > 0)
+            .map((outcome, index) => ({
+              ...outcome,
+              color: OUTCOME_COLORS[index] || OUTCOME_COLORS[0]
+            }));
+
+          setMultiOutcomeData(filteredData);
         } catch (err) {
           console.error('Failed to fetch multi-outcome price history:', err);
         }
