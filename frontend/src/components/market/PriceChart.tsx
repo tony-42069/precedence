@@ -26,11 +26,13 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
   // Check if we have multi-outcome data
   const isMultiOutcome = multiOutcomeData && multiOutcomeData.length > 0;
 
-  // Transform data for Recharts (single outcome)
+  // Transform data for Recharts (binary market - includes both YES and NO)
   const chartData = useMemo(() => {
     return data.map(point => ({
       time: point.t * 1000, // Convert to milliseconds
       price: point.p,
+      yesPrice: point.p,
+      noPrice: 1 - point.p, // NO is inverse of YES
       // Format time for display
       timeLabel: new Date(point.t * 1000).toLocaleString('en-US', {
         month: 'short',
@@ -94,15 +96,17 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
 
   // Calculate dynamic Y-axis domain based on data range
   const yAxisDomain = useMemo(() => {
-    let prices: number[] = [];
+    // For binary markets showing YES/NO, always use full 0-1 range
+    if (!isMultiOutcome) {
+      return [0, 1];
+    }
 
-    if (isMultiOutcome && multiOutcomeData) {
-      // Collect all prices from all outcomes
+    // For multi-outcome markets, calculate dynamic range
+    let prices: number[] = [];
+    if (multiOutcomeData) {
       multiOutcomeData.forEach(outcome => {
         outcome.data.forEach(point => prices.push(point.p));
       });
-    } else {
-      prices = chartData.map(d => d.price);
     }
 
     if (prices.length === 0) return [0, 1];
@@ -241,39 +245,43 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
     );
   }
 
-  // Single outcome (binary market) chart rendering
+  // Binary market chart rendering - shows both YES and NO lines
   return (
     <div>
-      {/* Price Change Header */}
+      {/* Legend showing YES and NO with current prices */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl font-bold font-mono text-white">
-            {(currentPrice * 100).toFixed(1)}%
-          </span>
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-sm font-medium ${
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500" />
+            <span className="text-sm text-gray-300">YES</span>
+            <span className="text-sm font-mono text-green-400 font-bold">
+              {(currentPrice * 100).toFixed(1)}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500" />
+            <span className="text-sm text-gray-300">NO</span>
+            <span className="text-sm font-mono text-red-400 font-bold">
+              {((1 - currentPrice) * 100).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
             isPositive
               ? 'bg-green-500/20 text-green-400'
               : 'bg-red-500/20 text-red-400'
           }`}>
-            {isPositive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
             {isPositive ? '+' : ''}{priceChange.percent.toFixed(2)}%
           </div>
         </div>
-        <div className="text-sm text-gray-400">
-          {chartData.length} data points
-        </div>
       </div>
 
-      {/* Chart */}
+      {/* Chart with both YES and NO lines */}
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={strokeColor} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={strokeColor} stopOpacity={0} />
-              </linearGradient>
-            </defs>
+          <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="timeLabel"
               axisLine={false}
@@ -298,26 +306,43 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                 color: '#fff',
                 boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
               }}
-              formatter={(value) => [`${((value as number) * 100).toFixed(2)}%`, 'YES Price']}
+              formatter={(value: number, name: string) => {
+                const label = name === 'yesPrice' ? 'YES' : 'NO';
+                const color = name === 'yesPrice' ? '#10B981' : '#EF4444';
+                return [
+                  <span style={{ color }}>{(value * 100).toFixed(2)}%</span>,
+                  label
+                ];
+              }}
               labelFormatter={(label) => label}
             />
-            <Area
+            {/* YES Line - Green */}
+            <Line
               type="monotone"
-              dataKey="price"
-              stroke={strokeColor}
+              dataKey="yesPrice"
+              stroke="#10B981"
               strokeWidth={2}
-              fill={`url(#${gradientId})`}
+              dot={false}
               animationDuration={1000}
             />
-          </AreaChart>
+            {/* NO Line - Red */}
+            <Line
+              type="monotone"
+              dataKey="noPrice"
+              stroke="#EF4444"
+              strokeWidth={2}
+              dot={false}
+              animationDuration={1000}
+            />
+          </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Price Range */}
+      {/* Price Range for YES */}
       {data.length > 0 && (
         <div className="mt-4 flex justify-between text-sm text-gray-500 font-mono">
-          <span>Low: {(Math.min(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
-          <span>High: {(Math.max(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
+          <span>YES Low: {(Math.min(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
+          <span>YES High: {(Math.max(...data.map(d => d.p)) * 100).toFixed(1)}%</span>
         </div>
       )}
     </div>
