@@ -306,11 +306,11 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                 color: '#fff',
                 boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
               }}
-              formatter={(value: number, name: string) => {
+              formatter={(value, name) => {
                 const label = name === 'yesPrice' ? 'YES' : 'NO';
                 const color = name === 'yesPrice' ? '#10B981' : '#EF4444';
                 return [
-                  <span style={{ color }}>{(value * 100).toFixed(2)}%</span>,
+                  `${((value as number) * 100).toFixed(2)}%`,
                   label
                 ];
               }}
