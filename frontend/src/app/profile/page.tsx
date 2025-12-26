@@ -8,7 +8,6 @@ import { useUser } from '../../contexts/UserContext';
 import { useSafeAddress } from '../../hooks/useSafeAddress';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { WalletConnectModal } from '../../components/WalletConnectModal';
-import { ethers } from 'ethers';
 import {
   User,
   Settings,
@@ -28,23 +27,16 @@ import {
   ArrowDownCircle,
   Info,
   ExternalLink,
-  DollarSign
+  DollarSign,
+  RefreshCw
 } from 'lucide-react';
-
-// USDC contract address on Polygon
-const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
 export default function ProfilePage() {
   const pathname = usePathname();
   const { logout: privyLogout, authenticated, user: privyUser, exportWallet } = usePrivy();
   const { walletState, disconnect } = useWallet();
   const { user, clearUser, updateProfile, stats, fetchStats } = useUser();
-  const { safeAddress, eoaAddress, isLoading: safeLoading } = useSafeAddress();
-
-  // Balance state
-  const [balance, setBalance] = useState<string | null>(null);
-  const [balanceLoading, setBalanceLoading] = useState(false);
+  const { safeAddress, eoaAddress, isLoading: safeLoading, balance, balanceLoading, refreshBalance } = useSafeAddress();
 
   // Check if user has an embedded Privy wallet (not external like MetaMask)
   const hasEmbeddedWallet = privyUser?.linkedAccounts?.find(
@@ -68,40 +60,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [copiedDepositAddress, setCopiedDepositAddress] = useState(false);
   const [copiedSigningAddress, setCopiedSigningAddress] = useState(false);
-
-  // Fetch USDC balance from Safe wallet
-  useEffect(() => {
-    const fetchBalance = async () => {
-      if (!safeAddress) {
-        setBalance(null);
-        return;
-      }
-
-      setBalanceLoading(true);
-      try {
-        const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
-        const usdcContract = new ethers.Contract(
-          USDC_ADDRESS,
-          ['function balanceOf(address) view returns (uint256)'],
-          provider
-        );
-        const balanceRaw = await usdcContract.balanceOf(safeAddress);
-        // USDC has 6 decimals
-        const balanceFormatted = ethers.utils.formatUnits(balanceRaw, 6);
-        setBalance(balanceFormatted);
-      } catch (err) {
-        console.error('Failed to fetch USDC balance:', err);
-        setBalance('0');
-      } finally {
-        setBalanceLoading(false);
-      }
-    };
-
-    fetchBalance();
-    // Refresh balance every 30 seconds
-    const interval = setInterval(fetchBalance, 30000);
-    return () => clearInterval(interval);
-  }, [safeAddress]);
 
   // Handle copy deposit (Safe) address
   const handleCopyDepositAddress = async () => {
@@ -509,7 +467,15 @@ export default function ProfilePage() {
                           </h4>
                           <div className="grid grid-cols-2 gap-4">
                             {/* Balance - NEW */}
-                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 relative">
+                              <button
+                                onClick={refreshBalance}
+                                disabled={balanceLoading}
+                                className="absolute top-2 right-2 p-1 hover:bg-white/10 rounded transition-colors"
+                                title="Refresh balance"
+                              >
+                                <RefreshCw size={12} className={`text-slate-400 hover:text-white ${balanceLoading ? 'animate-spin' : ''}`} />
+                              </button>
                               <div className="text-2xl font-bold font-mono text-green-400">
                                 {formatBalance(balance)}
                               </div>

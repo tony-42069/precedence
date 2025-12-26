@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -15,16 +15,11 @@ import {
   Copy,
   Check,
   ArrowDownCircle,
-  Info
+  RefreshCw
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useWallet } from '../hooks/useWallet';
 import { useSafeAddress } from '../hooks/useSafeAddress';
-import { ethers } from 'ethers';
-
-// USDC contract address on Polygon
-const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
-const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -38,44 +33,8 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const { logout: privyLogout } = usePrivy();
   const { user, clearUser } = useUser();
   const { walletState, disconnect } = useWallet();
-  const { safeAddress, eoaAddress, isLoading: safeLoading } = useSafeAddress();
+  const { safeAddress, isLoading: safeLoading, balance, balanceLoading, refreshBalance } = useSafeAddress();
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [balance, setBalance] = useState<string | null>(null);
-  const [balanceLoading, setBalanceLoading] = useState(false);
-
-  // Fetch USDC balance from Safe wallet
-  useEffect(() => {
-    const fetchBalance = async () => {
-      if (!safeAddress) {
-        setBalance(null);
-        return;
-      }
-
-      setBalanceLoading(true);
-      try {
-        const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
-        const usdcContract = new ethers.Contract(
-          USDC_ADDRESS,
-          ['function balanceOf(address) view returns (uint256)'],
-          provider
-        );
-        const balanceRaw = await usdcContract.balanceOf(safeAddress);
-        // USDC has 6 decimals
-        const balanceFormatted = ethers.utils.formatUnits(balanceRaw, 6);
-        setBalance(balanceFormatted);
-      } catch (err) {
-        console.error('Failed to fetch USDC balance:', err);
-        setBalance('0');
-      } finally {
-        setBalanceLoading(false);
-      }
-    };
-
-    fetchBalance();
-    // Refresh balance every 30 seconds
-    const interval = setInterval(fetchBalance, 30000);
-    return () => clearInterval(interval);
-  }, [safeAddress]);
 
   // Handle copy deposit (Safe) address
   const handleCopyAddress = async () => {
@@ -261,11 +220,20 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
             
             {/* Balance and P&L Stats */}
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="bg-white/5 rounded-lg p-2 text-center">
+              <div className="bg-white/5 rounded-lg p-2 text-center relative">
                 <div className="text-xs text-slate-400">Balance</div>
                 <div className="text-sm font-mono text-green-400">
                   {formatBalance(balance)}
                 </div>
+                {/* Refresh button */}
+                <button
+                  onClick={refreshBalance}
+                  disabled={balanceLoading}
+                  className="absolute top-1 right-1 p-0.5 hover:bg-white/10 rounded transition-colors"
+                  title="Refresh balance"
+                >
+                  <RefreshCw size={10} className={`text-slate-500 hover:text-white ${balanceLoading ? 'animate-spin' : ''}`} />
+                </button>
               </div>
               <div className="bg-white/5 rounded-lg p-2 text-center">
                 <div className="text-xs text-slate-400">P&L</div>
