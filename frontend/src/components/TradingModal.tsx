@@ -630,68 +630,48 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
         </div>
 
         {/* Footer */}
-        <div className="relative p-6 border-t border-white/10 bg-[#151518]">
-          <div className="flex items-center gap-3">
-            {/* Session Status */}
+        <div className="relative p-4 border-t border-white/10 bg-[#151518]">
+          {/* Status badges - compact row */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             {authenticated && walletsReady && wallets.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                <Wallet size={14} className={isReady ? 'text-green-400' : 'text-yellow-400'} />
-                <span className="text-xs text-slate-400 font-mono">
-                  {isReady ? 'READY' : 'SETUP'}
-                </span>
+              <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-[10px]">
+                <Wallet size={10} className={isReady ? 'text-green-400' : 'text-yellow-400'} />
+                <span className="text-slate-400 font-mono">{isReady ? 'READY' : 'SETUP'}</span>
               </div>
             )}
-
-            {/* Safe Address */}
             {session?.safeAddress && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                <Shield size={14} className="text-blue-400" />
-                <span className="text-xs text-slate-400 font-mono">
-                  {session.safeAddress.slice(0, 6)}...{session.safeAddress.slice(-4)}
-                </span>
+              <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-[10px]">
+                <Shield size={10} className="text-blue-400" />
+                <span className="text-slate-400 font-mono">{session.safeAddress.slice(0, 6)}...{session.safeAddress.slice(-4)}</span>
               </div>
             )}
-
-            {/* Balance Display */}
             {balance && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                <DollarSign size={14} className="text-green-400" />
-                <span className="text-xs text-green-400 font-mono">
-                  ${parseFloat(balance).toFixed(2)}
-                </span>
-                <button
-                  onClick={refreshBalance}
-                  disabled={balanceLoading}
-                  className="p-0.5 hover:bg-white/10 rounded"
-                >
-                  <RefreshCw size={10} className={`text-slate-400 ${balanceLoading ? 'animate-spin' : ''}`} />
-                </button>
+              <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded text-[10px]">
+                <DollarSign size={10} className="text-green-400" />
+                <span className="text-green-400 font-mono">${parseFloat(balance).toFixed(2)}</span>
               </div>
             )}
+          </div>
 
-            {/* Actions */}
-            <div className="flex gap-3 ml-auto">
-              <button
-                onClick={onClose}
-                disabled={isOrderLoading || isInitializing || isCheckingBalance}
-                className="px-6 py-3 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-mono text-sm font-medium rounded-xl transition-all duration-200"
-              >
-                CANCEL
-              </button>
-
-              <button
-                onClick={handleTrade}
-                disabled={isButtonDisabled()}
-                className={`px-8 py-3 border ${getActionButtonColor()} text-white font-mono text-sm font-bold rounded-xl transition-all duration-200 transform ${
-                  isOrderLoading || isInitializing || isCheckingBalance ? '' : 'hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.3)]'
-                } disabled:opacity-50 disabled:transform-none disabled:shadow-none flex items-center gap-2`}
-              >
-                {(isOrderLoading || isInitializing || isCheckingBalance) && (
-                  <Loader2 size={16} className="animate-spin" />
-                )}
-                {getActionButtonText()}
-              </button>
-            </div>
+          {/* Action Buttons - full width */}
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              disabled={isOrderLoading || isInitializing || isCheckingBalance}
+              className="flex-1 py-3 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-mono text-sm font-medium rounded-xl"
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleTrade}
+              disabled={isButtonDisabled()}
+              className={`flex-1 py-3 border ${getActionButtonColor()} text-white font-mono text-sm font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2`}
+            >
+              {(isOrderLoading || isInitializing || isCheckingBalance) && (
+                <Loader2 size={16} className="animate-spin" />
+              )}
+              {getActionButtonText()}
+            </button>
           </div>
         </div>
 
