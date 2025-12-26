@@ -27,7 +27,27 @@ interface CommentsSectionProps {
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5003';
+
+// Derive WebSocket URL from API URL or use explicit WS_URL env var
+const getWebSocketUrl = () => {
+  // If explicit WS_URL is set, use it
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+
+  // Derive from API URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+  // For production Railway deployment
+  if (apiUrl.includes('railway.app') || apiUrl.includes('precedence-production')) {
+    return apiUrl.replace('https://', 'wss://').replace('http://', 'ws://');
+  }
+
+  // For localhost, use the WebSocket service port
+  return 'ws://localhost:5003';
+};
+
+const WS_URL = getWebSocketUrl();
 
 export default function CommentsSection({ marketId, eventId }: CommentsSectionProps) {
   const [activeTab, setActiveTab] = useState<'comments' | 'holders' | 'activity'>('comments');
