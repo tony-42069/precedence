@@ -3,6 +3,7 @@
  * 
  * Derives the Safe wallet address from an EOA address.
  * Also fetches USDC balance (BOTH native and bridged combined).
+ * Also fetches positions from Polymarket for the Safe address.
  */
 
 'use client';
@@ -14,10 +15,14 @@ import { deriveSafe } from '@polymarket/builder-relayer-client/dist/builder/deri
 import { ethers } from 'ethers';
 import { POLYGON_CHAIN_ID } from '../constants/polymarket';
 
-// USDC addresses on Polygon - users can deposit either, we accept both
-const USDC_BRIDGED = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'; // USDC.e
-const USDC_NATIVE = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';  // Native USDC
+// USDC addresses on Polygon
+const USDC_BRIDGED = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const USDC_NATIVE = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
 const POLYGON_RPC_URL = 'https://polygon-rpc.com';
+
+// Polymarket APIs
+const GAMMA_API_URL = 'https://gamma-api.polymarket.com';
+const CLOB_API_URL = 'https://clob.polymarket.com';
 
 interface SafeAddressState {
   eoaAddress: string | null;
@@ -27,9 +32,22 @@ interface SafeAddressState {
 }
 
 interface UsdcBalances {
-  native: string;   // Native USDC (needs swap for trading)
-  bridged: string;  // USDC.e (ready for trading)
-  total: string;    // Combined display
+  native: string;
+  bridged: string;
+  total: string;
+}
+
+// Polymarket position type
+export interface PolymarketPosition {
+  asset: string;
+  conditionId: string;
+  size: string;
+  avgPrice: string;
+  currentPrice?: number;
+  marketSlug?: string;
+  marketQuestion?: string;
+  outcome?: string;
+  pnl?: number;
 }
 
 export const useSafeAddress = () => {
@@ -45,6 +63,10 @@ export const useSafeAddress = () => {
   const [balance, setBalance] = useState<string | null>(null);
   const [balances, setBalances] = useState<UsdcBalances | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  
+  // Positions from Polymarket
+  const [positions, setPositions] = useState<PolymarketPosition[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
 
   const deriveSafeAddress = useCallback((eoaAddress: string): string | null => {
     try {
@@ -84,12 +106,6 @@ export const useSafeAddress = () => {
       const totalBalance = bridgedBalance.add(nativeBalance);
       const totalFormatted = ethers.utils.formatUnits(totalBalance, 6);
       
-      console.log('💰 USDC Balances:', {
-        'USDC.e (ready)': bridgedFormatted,
-        'Native USDC (needs swap)': nativeFormatted,
-        'Total': totalFormatted
-      });
-      
       setBalances({
         native: nativeFormatted,
         bridged: bridgedFormatted,
@@ -102,6 +118,46 @@ export const useSafeAddress = () => {
       setBalances({ native: '0', bridged: '0', total: '0' });
     } finally {
       setBalanceLoading(false);
+    }
+  }, []);
+
+  /**
+   * Fetch positions from Polymarket for Safe address
+   */
+  const fetchPositions = useCallback(async (safeAddr: string) => {
+    if (!safeAddr) {
+      setPositions([]);
+      return;
+    }
+
+    setPositionsLoading(true);
+    try {
+      // Fetch from Polymarket Gamma API - user positions endpoint
+      const response = await fetch(
+        `${GAMMA_API_URL}/positions?user=${safeAddr.toLowerCase()}`
+      );
+      
+      if (!response.ok) {
+        console.warn('Positions API returned:', response.status);
+        setPositions([]);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('📊 Polymarket positions for Safe:', data);
+      
+      if (Array.isArray(data)) {
+        setPositions(data);
+      } else if (data.positions && Array.isArray(data.positions)) {
+        setPositions(data.positions);
+      } else {
+        setPositions([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch positions:', err);
+      setPositions([]);
+    } finally {
+      setPositionsLoading(false);
     }
   }, []);
 
@@ -133,6 +189,7 @@ export const useSafeAddress = () => {
         error: null,
       });
       fetchBalance(safeAddress);
+      fetchPositions(safeAddress); // Also fetch positions
     } else {
       setState({
         eoaAddress,
@@ -141,7 +198,7 @@ export const useSafeAddress = () => {
         error: 'Failed to derive deposit address',
       });
     }
-  }, [wallets, walletsReady, deriveSafeAddress, fetchBalance]);
+  }, [wallets, walletsReady, deriveSafeAddress, fetchBalance, fetchPositions]);
 
   // Refresh balance every 30 seconds
   useEffect(() => {
@@ -164,6 +221,12 @@ export const useSafeAddress = () => {
     }
   }, [state.safeAddress, fetchBalance]);
 
+  const refreshPositions = useCallback(() => {
+    if (state.safeAddress) {
+      fetchPositions(state.safeAddress);
+    }
+  }, [state.safeAddress, fetchPositions]);
+
   return {
     eoaAddress: state.eoaAddress,
     safeAddress: state.safeAddress,
@@ -171,10 +234,15 @@ export const useSafeAddress = () => {
     signingAddress: state.eoaAddress,
     
     // Balance info
-    balance,           // Total (for display)
-    balances,          // Detailed breakdown
+    balance,
+    balances,
     balanceLoading,
     refreshBalance,
+    
+    // Positions from Polymarket
+    positions,
+    positionsLoading,
+    refreshPositions,
     
     isLoading: state.isLoading,
     error: state.error,
