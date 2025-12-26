@@ -8,6 +8,7 @@ import { useUser } from '../../contexts/UserContext';
 import { useSafeAddress } from '../../hooks/useSafeAddress';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { WalletConnectModal } from '../../components/WalletConnectModal';
+import { ethers } from 'ethers';
 import {
   User,
   Settings,
@@ -26,8 +27,13 @@ import {
   Check,
   ArrowDownCircle,
   Info,
-  ExternalLink
+  ExternalLink,
+  DollarSign
 } from 'lucide-react';
+
+// USDC contract address on Polygon
+const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
 export default function ProfilePage() {
   const pathname = usePathname();
@@ -35,6 +41,10 @@ export default function ProfilePage() {
   const { walletState, disconnect } = useWallet();
   const { user, clearUser, updateProfile, stats, fetchStats } = useUser();
   const { safeAddress, eoaAddress, isLoading: safeLoading } = useSafeAddress();
+
+  // Balance state
+  const [balance, setBalance] = useState<string | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   // Check if user has an embedded Privy wallet (not external like MetaMask)
   const hasEmbeddedWallet = privyUser?.linkedAccounts?.find(
@@ -58,6 +68,40 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [copiedDepositAddress, setCopiedDepositAddress] = useState(false);
   const [copiedSigningAddress, setCopiedSigningAddress] = useState(false);
+
+  // Fetch USDC balance from Safe wallet
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!safeAddress) {
+        setBalance(null);
+        return;
+      }
+
+      setBalanceLoading(true);
+      try {
+        const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+        const usdcContract = new ethers.Contract(
+          USDC_ADDRESS,
+          ['function balanceOf(address) view returns (uint256)'],
+          provider
+        );
+        const balanceRaw = await usdcContract.balanceOf(safeAddress);
+        // USDC has 6 decimals
+        const balanceFormatted = ethers.utils.formatUnits(balanceRaw, 6);
+        setBalance(balanceFormatted);
+      } catch (err) {
+        console.error('Failed to fetch USDC balance:', err);
+        setBalance('0');
+      } finally {
+        setBalanceLoading(false);
+      }
+    };
+
+    fetchBalance();
+    // Refresh balance every 30 seconds
+    const interval = setInterval(fetchBalance, 30000);
+    return () => clearInterval(interval);
+  }, [safeAddress]);
 
   // Handle copy deposit (Safe) address
   const handleCopyDepositAddress = async () => {
@@ -153,6 +197,13 @@ export default function ProfilePage() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
+  // Format balance for display
+  const formatBalance = (bal: string | null) => {
+    if (bal === null || balanceLoading) return '...';
+    const num = parseFloat(bal);
+    return `$${num.toFixed(2)}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#030304] text-slate-200 font-sans selection:bg-blue-500/30 relative overflow-hidden">
       
@@ -188,7 +239,7 @@ export default function ProfilePage() {
                 <div className="flex items-center space-x-4 ml-auto">
                   {!user ? (
                     <button
-                      onClick={() => window.location.href = '/wallet-connect.html'} // Redirect to polished page
+                      onClick={() => window.location.href = '/wallet-connect.html'}
                       className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-all"
                     >
                       Connect Wallet
@@ -457,23 +508,36 @@ export default function ProfilePage() {
                             <Activity size={16} /> Performance Metrics
                           </h4>
                           <div className="grid grid-cols-2 gap-4">
+                            {/* Balance - NEW */}
+                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                              <div className="text-2xl font-bold font-mono text-green-400">
+                                {formatBalance(balance)}
+                              </div>
+                              <div className="text-xs text-slate-400 uppercase flex items-center gap-1">
+                                <DollarSign size={12} /> Balance
+                              </div>
+                            </div>
+                            {/* Total Trades */}
                             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                               <div className="text-2xl font-bold font-mono text-blue-400">{user.total_trades}</div>
                               <div className="text-xs text-slate-400 uppercase">Total Trades</div>
                             </div>
-                            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                              <div className="text-2xl font-bold font-mono text-green-400">
+                            {/* Win Rate */}
+                            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
+                              <div className="text-2xl font-bold font-mono text-purple-400">
                                 {user.win_rate ? `${(user.win_rate * 100).toFixed(0)}%` : '0%'}
                               </div>
                               <div className="text-xs text-slate-400 uppercase">Win Rate</div>
                             </div>
-                            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
-                              <div className="text-2xl font-bold font-mono text-purple-400">
+                            {/* Volume */}
+                            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+                              <div className="text-2xl font-bold font-mono text-amber-400">
                                 ${user.total_volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                               </div>
                               <div className="text-xs text-slate-400 uppercase">Volume</div>
                             </div>
-                            <div className={`rounded-lg p-4 border ${
+                            {/* Net P&L - Full width */}
+                            <div className={`col-span-2 rounded-lg p-4 border ${
                               user.total_profit_loss >= 0 
                                 ? 'bg-green-500/10 border-green-500/20' 
                                 : 'bg-red-500/10 border-red-500/20'
@@ -527,7 +591,7 @@ export default function ProfilePage() {
                       </div>
                       {hasEmbeddedWallet && (
                         <p className="text-xs text-slate-500 mt-3">
-                          Export your private key to use your signing wallet in MetaMask or other wallet apps.
+                          Export your private key to backup your account. This key controls your signing wallet and deposit address.
                         </p>
                       )}
                     </div>

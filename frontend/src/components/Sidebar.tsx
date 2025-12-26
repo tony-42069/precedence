@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -20,6 +20,11 @@ import {
 import { useUser } from '../contexts/UserContext';
 import { useWallet } from '../hooks/useWallet';
 import { useSafeAddress } from '../hooks/useSafeAddress';
+import { ethers } from 'ethers';
+
+// USDC contract address on Polygon
+const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -35,14 +40,48 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const { walletState, disconnect } = useWallet();
   const { safeAddress, eoaAddress, isLoading: safeLoading } = useSafeAddress();
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [showAddressInfo, setShowAddressInfo] = useState(false);
+  const [balance, setBalance] = useState<string | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  // Fetch USDC balance from Safe wallet
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (!safeAddress) {
+        setBalance(null);
+        return;
+      }
+
+      setBalanceLoading(true);
+      try {
+        const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+        const usdcContract = new ethers.Contract(
+          USDC_ADDRESS,
+          ['function balanceOf(address) view returns (uint256)'],
+          provider
+        );
+        const balanceRaw = await usdcContract.balanceOf(safeAddress);
+        // USDC has 6 decimals
+        const balanceFormatted = ethers.utils.formatUnits(balanceRaw, 6);
+        setBalance(balanceFormatted);
+      } catch (err) {
+        console.error('Failed to fetch USDC balance:', err);
+        setBalance('0');
+      } finally {
+        setBalanceLoading(false);
+      }
+    };
+
+    fetchBalance();
+    // Refresh balance every 30 seconds
+    const interval = setInterval(fetchBalance, 30000);
+    return () => clearInterval(interval);
+  }, [safeAddress]);
 
   // Handle copy deposit (Safe) address
   const handleCopyAddress = async () => {
-    const addressToCopy = safeAddress || user?.wallet_address;
-    if (addressToCopy) {
+    if (safeAddress) {
       try {
-        await navigator.clipboard.writeText(addressToCopy);
+        await navigator.clipboard.writeText(safeAddress);
         setCopiedAddress(true);
         setTimeout(() => setCopiedAddress(false), 2000);
       } catch (err) {
@@ -51,39 +90,36 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
     }
   };
 
-const handleDisconnect = async () => {
-  try {
-    // 1. Logout from Privy
-    await privyLogout();
-    
-    // 2. Clear ALL localStorage keys
-    localStorage.clear();
-    
-    // 3. Clear sessionStorage 
-    sessionStorage.clear();
-    
-    // 4. Clear user context
-    disconnect();
-    clearUser();
-    
-    // 5. Set logout flag
-    sessionStorage.setItem('just_logged_out', 'true');
-    
-    // 6. Force redirect with delay to ensure cleanup
-    setTimeout(() => {
+  const handleDisconnect = async () => {
+    try {
+      await privyLogout();
+      localStorage.clear();
+      sessionStorage.clear();
+      disconnect();
+      clearUser();
+      sessionStorage.setItem('just_logged_out', 'true');
+      setTimeout(() => {
+        window.location.href = 'https://www.precedence.fun';
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
       window.location.href = 'https://www.precedence.fun';
-    }, 100);
-    
-  } catch (error) {
-    console.error('Logout error:', error);
-    // Force redirect anyway
-    window.location.href = 'https://www.precedence.fun';
-  }
-};
+    }
+  };
 
   // Format wallet address for display
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  // Format balance for display
+  const formatBalance = (bal: string | null) => {
+    if (bal === null || balanceLoading) return '...';
+    const num = parseFloat(bal);
+    if (num >= 1000) {
+      return `$${(num / 1000).toFixed(1)}k`;
+    }
+    return `$${num.toFixed(2)}`;
   };
 
   const navigationItems = [
@@ -186,12 +222,12 @@ const handleDisconnect = async () => {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-white truncate">
-                  {user.display_name || user.username || formatAddress(user.wallet_address)}
+                  {user.display_name || user.username || 'Connected Trader'}
                 </div>
-                {/* Show Deposit Address (Safe) */}
+                {/* Show Deposit Address (Safe) only */}
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-slate-400 font-mono">
-                    {safeLoading ? '...' : safeAddress ? formatAddress(safeAddress) : formatAddress(user.wallet_address)}
+                    {safeLoading ? '...' : safeAddress ? formatAddress(safeAddress) : '...'}
                   </span>
                   <button
                     onClick={handleCopyAddress}
@@ -215,35 +251,20 @@ const handleDisconnect = async () => {
               </button>
             </div>
             
-            {/* Deposit Address Highlight */}
-            {safeAddress && (
-              <div className="mt-3 bg-green-500/10 border border-green-500/20 rounded-lg p-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <ArrowDownCircle size={12} className="text-green-400" />
-                    <span className="text-[10px] text-green-400 uppercase font-mono">Deposit Address</span>
-                  </div>
-                  <button
-                    onClick={() => setShowAddressInfo(!showAddressInfo)}
-                    className="p-0.5 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <Info size={10} className="text-slate-400" />
-                  </button>
-                </div>
-                {showAddressInfo && (
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Send USDC (Polygon) to this address to fund your trading account.
-                  </p>
-                )}
+            {/* Deposit Address Label */}
+            <div className="mt-3 bg-green-500/10 border border-green-500/20 rounded-lg px-2 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <ArrowDownCircle size={12} className="text-green-400" />
+                <span className="text-[10px] text-green-400 uppercase font-mono">Deposit Address (Polygon USDC)</span>
               </div>
-            )}
+            </div>
             
-            {/* User Stats */}
+            {/* Balance and P&L Stats */}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div className="bg-white/5 rounded-lg p-2 text-center">
-                <div className="text-xs text-slate-400">Volume</div>
-                <div className="text-sm font-mono text-white">
-                  ${user.total_volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                <div className="text-xs text-slate-400">Balance</div>
+                <div className="text-sm font-mono text-green-400">
+                  {formatBalance(balance)}
                 </div>
               </div>
               <div className="bg-white/5 rounded-lg p-2 text-center">
@@ -257,7 +278,7 @@ const handleDisconnect = async () => {
         ) : (
           <div className="p-4 border-b border-white/10">
             <button
-              onClick={() => window.location.href = '/wallet-connect.html'} // Redirect to polished page
+              onClick={() => window.location.href = '/wallet-connect.html'}
               className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
             >
               <Wallet size={18} />
