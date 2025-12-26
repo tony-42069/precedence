@@ -1,20 +1,24 @@
 /**
- * Trading Modal Component
+ * Trading Modal Component - OPTIMIZED
  * 
- * Displays market data and handles order placement using Polymarket CLOB.
- * Uses Privy wallet for signing via usePolymarketSession.
- * Includes geo-restriction detection and warnings.
+ * Key improvements:
+ * 1. Session is initialized ONCE and cached - no repeat signature requests
+ * 2. Auto-swaps native USDC to USDC.e if needed before trading
+ * 3. Clear balance checking with helpful error messages
+ * 4. Minimal user friction - ideally just ONE signature per trade
  */
 
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { ethers } from 'ethers';
 import { usePolymarketSession } from '../hooks/usePolymarketSession';
 import { usePolymarketOrder } from '../hooks/usePolymarketOrder';
 import { useGeoRestriction } from '../hooks/useGeoRestriction';
+import { useSafeAddress } from '../hooks/useSafeAddress';
 import { apiService } from '../services/api';
-import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info, ArrowUpCircle, ArrowDownCircle, Receipt } from 'lucide-react';
+import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info, ArrowUpCircle, ArrowDownCircle, Receipt, RefreshCw } from 'lucide-react';
 
 interface TradingModalProps {
   market: any;
@@ -30,11 +34,9 @@ interface MarketData {
 }
 
 export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => {
-  // Privy authentication
   const { authenticated, login } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
 
-  // Geo-restriction check
   const { 
     isLoading: isGeoLoading, 
     isRestricted, 
@@ -43,13 +45,13 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     restrictionMessage 
   } = useGeoRestriction();
 
-  // Polymarket session and order hooks
   const {
     session,
     currentStep,
     isReady,
     isInitializing,
     initializeSession,
+    ensureUsdcBalance,
     getClobClient,
     statusMessage: sessionStatus,
   } = usePolymarketSession();
@@ -64,10 +66,14 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     reset: resetOrder,
   } = usePolymarketOrder(getClobClient);
 
-  // Local state
+  // Get balance info
+  const { balance, balances, balanceLoading, refreshBalance } = useSafeAddress();
+
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [tradeType, setTradeType] = useState<'BUY' | 'SELL'>('BUY');
   const [amount, setAmount] = useState('');
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
   const [marketData, setMarketData] = useState<MarketData>({
     current_yes_price: 0.5,
     current_no_price: 0.5,
@@ -75,7 +81,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     best_ask: 0.55,
   });
 
-  // Fee configuration (1% on sells only)
   const FEE_PERCENT = 1;
   const calculateFee = (tradeValue: number, type: 'BUY' | 'SELL') => {
     if (type !== 'SELL') {
@@ -86,7 +91,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     return { feeAmount, netAmount, hasFee: true };
   };
 
-  // Market type detection
   const marketType = useMemo(() => {
     if (!market?.id) return 'invalid';
     if (market.id?.toString().startsWith('demo') || market.id?.toString().startsWith('fallback')) {
@@ -97,17 +101,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     }
     return 'unknown';
   }, [market]);
-
-  // Debug: Log market structure when modal opens
-  useEffect(() => {
-    if (isOpen && market) {
-      console.log('🔍 Market object:', market);
-      console.log('🔍 Market keys:', Object.keys(market));
-      console.log('🔍 clobTokenIds:', market.clobTokenIds);
-      console.log('🔍 clobTokenIds type:', typeof market.clobTokenIds);
-      console.log('🔍 tokens:', market.tokens);
-    }
-  }, [isOpen, market]);
 
   // Load market data
   useEffect(() => {
@@ -178,8 +171,37 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       setAmount('');
       setSide('YES');
       setTradeType('BUY');
+      setBalanceError(null);
     }
   }, [isOpen, resetOrder]);
+
+  // Check balance when amount changes
+  useEffect(() => {
+    const checkBalance = async () => {
+      if (!amount || parseFloat(amount) <= 0 || !balance) {
+        setBalanceError(null);
+        return;
+      }
+
+      const tradeAmount = parseFloat(amount);
+      const totalBalance = parseFloat(balance);
+      const bridgedBalance = balances ? parseFloat(balances.bridged) : 0;
+      const nativeBalance = balances ? parseFloat(balances.native) : 0;
+
+      if (tradeAmount > totalBalance) {
+        setBalanceError(`Insufficient balance. You have $${totalBalance.toFixed(2)} USDC total.`);
+      } else if (tradeAmount > bridgedBalance && nativeBalance > 0) {
+        // Has native USDC that needs swap
+        setBalanceError(null); // We'll auto-swap
+      } else if (tradeAmount > bridgedBalance) {
+        setBalanceError(`Insufficient USDC.e balance. You have $${bridgedBalance.toFixed(2)} ready for trading.`);
+      } else {
+        setBalanceError(null);
+      }
+    };
+
+    checkBalance();
+  }, [amount, balance, balances]);
 
   if (!isOpen) return null;
 
@@ -187,17 +209,9 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
   const tradeValue = parseFloat(amount || '0');
   const payout = tradeValue * (1 / price);
   const spread = ((marketData.best_ask - marketData.best_bid) * 100).toFixed(2);
-
-  // Calculate fee for current trade
   const feeInfo = calculateFee(tradeValue, tradeType);
 
-  /**
-   * Get the correct token ID based on side
-   * Polymarket markets have two tokens: YES (index 0) and NO (index 1)
-   * Token IDs can be arrays or JSON strings
-   */
   const getTokenId = (): string => {
-    // Try different possible field names for token IDs
     const possibleTokenFields = [
       market.clobTokenIds,
       market.clob_token_ids,
@@ -211,143 +225,136 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
       let tokens: any[] | null = null;
 
-      // If it's already an array
       if (Array.isArray(rawTokens)) {
         tokens = rawTokens;
-      }
-      // If it's a JSON string, parse it
-      else if (typeof rawTokens === 'string') {
+      } else if (typeof rawTokens === 'string') {
         try {
           const parsed = JSON.parse(rawTokens);
-          if (Array.isArray(parsed)) {
-            tokens = parsed;
-          }
+          if (Array.isArray(parsed)) tokens = parsed;
         } catch {
-          // Not valid JSON, skip
           continue;
         }
       }
 
       if (!tokens || tokens.length < 2) continue;
 
-      // Check if first element is a string (direct token IDs)
       if (typeof tokens[0] === 'string') {
-        const tokenId = side === 'YES' ? tokens[0] : tokens[1];
-        console.log(`✅ Found token ID: ${tokenId}`);
-        return tokenId;
+        return side === 'YES' ? tokens[0] : tokens[1];
       }
       
-      // Check if first element is an object with token_id
-      if (typeof tokens[0] === 'object' && tokens[0] !== null) {
-        if ('token_id' in tokens[0]) {
-          const tokenId = side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
-          if (tokenId) {
-            console.log(`✅ Found token ID from object: ${tokenId}`);
-            return tokenId;
-          }
-        }
+      if (typeof tokens[0] === 'object' && tokens[0] !== null && 'token_id' in tokens[0]) {
+        const tokenId = side === 'YES' ? tokens[0].token_id : tokens[1]?.token_id;
+        if (tokenId) return tokenId;
       }
     }
 
-    console.error('❌ Could not find token ID. Market structure:', {
-      id: market.id,
-      clobTokenIds: market.clobTokenIds,
-      clobTokenIdsType: typeof market.clobTokenIds,
-    });
-
+    console.error('❌ Could not find token ID');
     return '';
   };
 
-  // Handle trade execution
+  // Handle trade - streamlined flow
   const handleTrade = async () => {
+    // Step 1: Check authentication
     if (!authenticated) {
       login();
       return;
     }
 
+    // Step 2: Initialize session if needed (one-time, cached after)
     if (!isReady) {
-      // Initialize session first
       await initializeSession();
       return;
     }
 
+    // Step 3: Validate input
     if (!amount || parseFloat(amount) <= 0) {
-      alert('Please enter a valid amount!');
+      setBalanceError('Please enter a valid amount');
       return;
     }
 
     const tokenId = getTokenId();
     if (!tokenId) {
-      alert('Invalid market token ID. This market may not support trading yet.');
-      console.error('❌ No token ID found for market:', market);
+      setBalanceError('Invalid market - cannot trade');
       return;
     }
 
-    console.log('📤 Placing order:', {
-      tokenId,
-      price,
-      size: parseFloat(amount),
-      side: tradeType,
-      negRisk: market.negRisk || market.neg_risk || false,
-      fee: feeInfo,
-    });
+    // Step 4: Check balance and auto-swap if needed
+    setIsCheckingBalance(true);
+    setBalanceError(null);
 
-    // Place the order
-    const result = await placeOrder({
-      tokenId,
-      price,
-      size: parseFloat(amount),
-      side: tradeType,
-      negRisk: market.negRisk || market.neg_risk || false,
-    });
+    try {
+      const requiredAmount = ethers.utils.parseUnits(amount, 6);
+      const hasEnough = await ensureUsdcBalance(requiredAmount);
+      
+      if (!hasEnough) {
+        setBalanceError('Insufficient USDC balance. Please deposit more funds.');
+        setIsCheckingBalance(false);
+        return;
+      }
 
-    if (result.success) {
-      console.log('🎉 Trade successful:', result.orderId);
+      setIsCheckingBalance(false);
+
+      // Step 5: Place order (this is the ONLY signature user should see)
+      console.log('📤 Placing order...');
+      const result = await placeOrder({
+        tokenId,
+        price,
+        size: parseFloat(amount),
+        side: tradeType,
+        negRisk: market.negRisk || market.neg_risk || false,
+      });
+
+      if (result.success) {
+        console.log('🎉 Trade successful!');
+        // Refresh balance after trade
+        setTimeout(refreshBalance, 2000);
+      }
+    } catch (err: any) {
+      setBalanceError(err.message || 'Trade failed');
+      setIsCheckingBalance(false);
     }
   };
 
-  // Determine button state and text
   const getActionButtonText = () => {
     if (!authenticated) return 'CONNECT WALLET';
-    if (isInitializing) return 'INITIALIZING...';
-    if (!isReady) return 'INITIALIZE TRADING';
-    if (isOrderLoading) return `PLACING ${tradeType} ORDER...`;
+    if (isInitializing) return 'SETTING UP...';
+    if (!isReady) return 'START TRADING';
+    if (isCheckingBalance) return 'CHECKING BALANCE...';
+    if (isOrderLoading) return 'SIGNING ORDER...';
     if (isOrderSuccess) return '✅ ORDER PLACED!';
     return `CONFIRM ${tradeType}`;
   };
 
   const getActionButtonColor = () => {
-    if (isOrderError) return 'bg-red-600 hover:bg-red-700';
+    if (isOrderError || balanceError) return 'bg-red-600 hover:bg-red-700';
     if (isOrderSuccess) return 'bg-green-600 hover:bg-green-700';
     if (!authenticated) return 'bg-purple-600 hover:bg-purple-500';
-    // BUY = green/blue, SELL = amber
     return tradeType === 'SELL'
       ? 'bg-amber-600 hover:bg-amber-500'
       : 'bg-blue-600 hover:bg-blue-500';
   };
 
   const isButtonDisabled = () => {
-    if (!authenticated) return false; // Can always click to connect
-    if (isInitializing || isOrderLoading) return true;
-    if (!isReady && !isInitializing) return false; // Can click to initialize
+    if (!authenticated) return false;
+    if (isInitializing || isOrderLoading || isCheckingBalance) return true;
+    if (!isReady && !isInitializing) return false;
     if (!amount || parseFloat(amount) <= 0) return true;
     return false;
   };
 
-  // Status message to display
   const displayStatus = isInitializing ? sessionStatus : orderStatus;
+
+  // Calculate if user has enough balance
+  const hasInsufficientBalance = balance && amount && parseFloat(amount) > parseFloat(balance);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md"
         onClick={onClose}
       />
 
-      {/* Modal */}
       <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
-        {/* Cyber Grid Background */}
         <div className="absolute inset-0 opacity-10 pointer-events-none">
           <div className="cyber-grid-bg w-full h-full"></div>
         </div>
@@ -398,17 +405,6 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                   <p className="text-xs text-slate-400 leading-relaxed">
                     {restrictionMessage}
                   </p>
-                  {isUSUser && (
-                    <p className="text-xs text-amber-400/80 mt-2 flex items-center gap-1">
-                      <Globe size={12} />
-                      Polymarket has received CFTC approval and US access is expected soon.
-                    </p>
-                  )}
-                  {geoData && (
-                    <p className="text-xs text-slate-500 mt-2">
-                      Detected location: {geoData.region ? `${geoData.region}, ` : ''}{geoData.country}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -419,29 +415,12 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
               <div className="flex items-center gap-2 text-amber-400 text-xs font-mono">
                 <Settings2 size={14} />
-                TEST MODE: Demo market for trading pipeline testing
+                TEST MODE: Demo market
               </div>
             </div>
           )}
 
-          {/* Session Status Indicator */}
-          {authenticated && !isReady && !isRestricted && (
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-              <div className="flex items-center gap-2 text-blue-400 text-xs font-mono">
-                <Shield size={14} />
-                {isInitializing ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    {sessionStatus}
-                  </>
-                ) : (
-                  'Click "Initialize Trading" to set up your secure wallet'
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Trade Type Selector (BUY/SELL) */}
+          {/* Trade Type Selector */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-slate-400 uppercase tracking-wider font-mono">
@@ -573,16 +552,16 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 className="w-full pl-12 pr-4 py-4 bg-[#030304] border border-white/10 rounded-xl text-white font-mono text-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-slate-600"
-                disabled={isOrderLoading || isInitializing}
+                disabled={isOrderLoading || isInitializing || isCheckingBalance}
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-mono">
                 USDC
               </span>
             </div>
 
+            {/* Estimated Return */}
             {amount && parseFloat(amount) > 0 && (
               <div className="mt-3 p-3 bg-white/5 rounded-lg border border-white/10">
-                {/* BUY order display */}
                 {tradeType === 'BUY' && (
                   <>
                     <div className="flex items-center justify-between text-sm">
@@ -600,30 +579,23 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                   </>
                 )}
 
-                {/* SELL order display with fee breakdown */}
                 {tradeType === 'SELL' && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-slate-400">Trade Value:</span>
-                      <span className="text-white font-mono">
-                        ${tradeValue.toFixed(2)}
-                      </span>
+                      <span className="text-white font-mono">${tradeValue.toFixed(2)}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-amber-400 flex items-center gap-1">
                         <Receipt size={12} />
                         Platform Fee ({FEE_PERCENT}%):
                       </span>
-                      <span className="text-amber-400 font-mono">
-                        -${feeInfo.feeAmount.toFixed(2)}
-                      </span>
+                      <span className="text-amber-400 font-mono">-${feeInfo.feeAmount.toFixed(2)}</span>
                     </div>
                     <div className="border-t border-white/10 pt-2 mt-2">
                       <div className="flex items-center justify-between text-sm font-bold">
                         <span className="text-green-400">You Receive:</span>
-                        <span className="text-green-400 font-mono">
-                          ${feeInfo.netAmount.toFixed(2)}
-                        </span>
+                        <span className="text-green-400 font-mono">${feeInfo.netAmount.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -632,8 +604,18 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
             )}
           </div>
 
+          {/* Balance Error / Insufficient Balance Warning */}
+          {(balanceError || hasInsufficientBalance) && (
+            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-2 text-red-400 text-sm font-mono">
+                <X size={16} />
+                {balanceError || 'not enough balance / allowance'}
+              </div>
+            </div>
+          )}
+
           {/* Status Messages */}
-          {displayStatus && (
+          {displayStatus && !balanceError && (
             <div className={`p-4 rounded-xl font-mono text-sm ${
               isOrderError
                 ? 'bg-red-500/10 border border-red-500/20 text-red-400'
@@ -647,11 +629,10 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
         </div>
 
-        {/* Footer Actions */}
+        {/* Footer */}
         <div className="relative p-6 border-t border-white/10 bg-[#151518]">
           <div className="flex items-center gap-3">
-
-            {/* Wallet/Session Status */}
+            {/* Session Status */}
             {authenticated && walletsReady && wallets.length > 0 && (
               <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
                 <Wallet size={14} className={isReady ? 'text-green-400' : 'text-yellow-400'} />
@@ -661,7 +642,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               </div>
             )}
 
-            {/* Safe Address Badge */}
+            {/* Safe Address */}
             {session?.safeAddress && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
                 <Shield size={14} className="text-blue-400" />
@@ -671,11 +652,28 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
               </div>
             )}
 
-            {/* Action Buttons */}
+            {/* Balance Display */}
+            {balance && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
+                <DollarSign size={14} className="text-green-400" />
+                <span className="text-xs text-green-400 font-mono">
+                  ${parseFloat(balance).toFixed(2)}
+                </span>
+                <button
+                  onClick={refreshBalance}
+                  disabled={balanceLoading}
+                  className="p-0.5 hover:bg-white/10 rounded"
+                >
+                  <RefreshCw size={10} className={`text-slate-400 ${balanceLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            )}
+
+            {/* Actions */}
             <div className="flex gap-3 ml-auto">
               <button
                 onClick={onClose}
-                disabled={isOrderLoading || isInitializing}
+                disabled={isOrderLoading || isInitializing || isCheckingBalance}
                 className="px-6 py-3 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 text-slate-300 font-mono text-sm font-medium rounded-xl transition-all duration-200"
               >
                 CANCEL
@@ -685,10 +683,10 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 onClick={handleTrade}
                 disabled={isButtonDisabled()}
                 className={`px-8 py-3 border ${getActionButtonColor()} text-white font-mono text-sm font-bold rounded-xl transition-all duration-200 transform ${
-                  isOrderLoading || isInitializing ? '' : 'hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.3)]'
+                  isOrderLoading || isInitializing || isCheckingBalance ? '' : 'hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.3)]'
                 } disabled:opacity-50 disabled:transform-none disabled:shadow-none flex items-center gap-2`}
               >
-                {(isOrderLoading || isInitializing) && (
+                {(isOrderLoading || isInitializing || isCheckingBalance) && (
                   <Loader2 size={16} className="animate-spin" />
                 )}
                 {getActionButtonText()}

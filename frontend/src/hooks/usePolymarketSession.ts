@@ -1,15 +1,13 @@
 /**
- * usePolymarketSession Hook
+ * usePolymarketSession Hook - OPTIMIZED
  * 
- * Manages the Polymarket trading session lifecycle:
- * 1. Initialize RelayClient with builder config
- * 2. Derive Safe address from EOA
- * 3. Deploy Safe if needed (gasless)
- * 4. Derive User API credentials (requires signature)
- * 5. Set token approvals (gasless batch)
- * 6. Initialize authenticated ClobClient
+ * Key optimizations to reduce signature popups:
+ * 1. Credentials are derived ONCE and cached permanently
+ * 2. Approvals are checked on-chain before setting (no redundant txs)
+ * 3. Safe deployment is checked and cached
+ * 4. Auto-swap native USDC to USDC.e if needed
  * 
- * Uses Privy wallet as the EOA signer.
+ * GOAL: User should only sign ONCE per trade (the order itself)
  */
 
 'use client';
@@ -25,16 +23,20 @@ import { getContractConfig } from '@polymarket/builder-relayer-client/dist/confi
 
 import {
   POLYGON_CHAIN_ID,
+  POLYGON_RPC_URL,
   CLOB_API_URL,
   RELAYER_URL,
   getBuilderSignUrl,
   SIGNATURE_TYPES,
   STORAGE_KEYS,
   USDC_ADDRESS,
+  USDC_NATIVE_ADDRESS,
   CTF_ADDRESS,
   CTF_EXCHANGE,
   NEG_RISK_CTF_EXCHANGE,
   NEG_RISK_ADAPTER,
+  UNISWAP_SWAP_ROUTER,
+  USDC_SWAP_FEE,
 } from '../constants/polymarket';
 
 // Session state type
@@ -47,92 +49,92 @@ export interface TradingSession {
   isReady: boolean;
 }
 
-// Session step for UI feedback
 export type SessionStep = 
   | 'idle'
   | 'connecting'
   | 'initializing'
   | 'deploying_safe'
   | 'deriving_credentials'
+  | 'checking_approvals'
   | 'setting_approvals'
+  | 'checking_usdc'
+  | 'swapping_usdc'
   | 'ready'
   | 'error';
 
-// User API Credentials type
 export interface UserApiCredentials {
   key: string;
   secret: string;
   passphrase: string;
 }
 
-// Stored session data
 interface StoredSession {
   eoaAddress: string;
   safeAddress: string;
   credentials?: UserApiCredentials;
+  approvalsSet?: boolean;
+  safeDeployed?: boolean;
   timestamp: number;
 }
+
+// ERC20 ABI for balance and allowance checks
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+];
+
+// ERC1155 ABI for approval checks
+const ERC1155_ABI = [
+  'function isApprovedForAll(address owner, address operator) view returns (bool)',
+  'function setApprovalForAll(address operator, bool approved)',
+];
+
+// Uniswap V3 SwapRouter ABI (minimal)
+const SWAP_ROUTER_ABI = [
+  'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
+];
 
 export const usePolymarketSession = () => {
   const { authenticated, ready: privyReady } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
 
-  // State
   const [session, setSession] = useState<TradingSession | null>(null);
   const [currentStep, setCurrentStep] = useState<SessionStep>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
 
-  // Refs for clients (persist across renders)
   const relayClientRef = useRef<RelayClient | null>(null);
   const clobClientRef = useRef<ClobClient | null>(null);
   const signerRef = useRef<ethers.Signer | null>(null);
   const credentialsRef = useRef<UserApiCredentials | null>(null);
+  const providerRef = useRef<ethers.providers.Provider | null>(null);
 
   /**
    * Get ethers signer from Privy wallet
    */
   const getPrivySigner = useCallback(async (): Promise<ethers.Signer | null> => {
-    if (!wallets || wallets.length === 0) {
-      console.log('❌ No Privy wallets available');
-      return null;
-    }
+    if (!wallets || wallets.length === 0) return null;
 
-    const wallet = wallets[0];
-    
     try {
-      // Get Ethereum provider from Privy wallet
-      const ethereumProvider = await wallet.getEthereumProvider();
-      
-      // Wrap in ethers Web3Provider
+      const ethereumProvider = await wallets[0].getEthereumProvider();
       const provider = new ethers.providers.Web3Provider(ethereumProvider);
-      const signer = provider.getSigner();
-      
-      console.log('✅ Got signer from Privy wallet:', wallet.address);
-      return signer;
+      providerRef.current = provider;
+      return provider.getSigner();
     } catch (err) {
-      console.error('❌ Failed to get signer from Privy wallet:', err);
+      console.error('❌ Failed to get signer:', err);
       return null;
     }
   }, [wallets]);
 
-  /**
-   * Create BuilderConfig for remote signing
-   * Uses the full absolute URL for the signing endpoint
-   */
   const createBuilderConfig = useCallback(() => {
-    const signUrl = getBuilderSignUrl();
-    console.log('🔧 Builder sign URL:', signUrl);
-    
     return new BuilderConfig({
-      remoteBuilderConfig: {
-        url: signUrl,
-      },
+      remoteBuilderConfig: { url: getBuilderSignUrl() },
     });
   }, []);
 
   /**
-   * Load stored session from localStorage
+   * Load stored session - includes credentials cache
    */
   const loadStoredSession = useCallback((): StoredSession | null => {
     if (typeof window === 'undefined') return null;
@@ -143,8 +145,8 @@ export const usePolymarketSession = () => {
       
       const parsed: StoredSession = JSON.parse(stored);
       
-      // Check if session is still valid (24 hours)
-      const maxAge = 24 * 60 * 60 * 1000;
+      // Sessions are valid for 7 days (credentials don't expire)
+      const maxAge = 7 * 24 * 60 * 60 * 1000;
       if (Date.now() - parsed.timestamp > maxAge) {
         localStorage.removeItem(STORAGE_KEYS.TRADING_SESSION);
         return null;
@@ -156,31 +158,11 @@ export const usePolymarketSession = () => {
     }
   }, []);
 
-  /**
-   * Save session to localStorage
-   */
   const saveSession = useCallback((data: StoredSession) => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(STORAGE_KEYS.TRADING_SESSION, JSON.stringify(data));
   }, []);
 
-  /**
-   * Check if a Safe is deployed at the given address
-   * Uses ethers to check if there's bytecode at the address
-   */
-  const checkSafeDeployed = useCallback(async (safeAddress: string, provider: ethers.providers.Provider): Promise<boolean> => {
-    try {
-      const code = await provider.getCode(safeAddress);
-      // If there's bytecode (not just '0x'), the contract is deployed
-      return code !== '0x' && code.length > 2;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  /**
-   * Validate credentials have all required fields
-   */
   const isValidCredentials = (creds: any): creds is UserApiCredentials => {
     return creds && 
            typeof creds.key === 'string' && creds.key.length > 0 &&
@@ -189,14 +171,168 @@ export const usePolymarketSession = () => {
   };
 
   /**
-   * Initialize the trading session
+   * Check if Safe is deployed
    */
-  const initializeSession = useCallback(async () => {
-    if (isInitializing) {
-      console.log('⏳ Already initializing...');
-      return;
+  const checkSafeDeployed = useCallback(async (safeAddress: string): Promise<boolean> => {
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+      const code = await provider.getCode(safeAddress);
+      return code !== '0x' && code.length > 2;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  /**
+   * Check if all approvals are set on-chain
+   * Returns true if ALL approvals are already done (no signature needed)
+   */
+  const checkApprovalsOnChain = useCallback(async (safeAddress: string): Promise<boolean> => {
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+      const MAX_UINT = ethers.constants.MaxUint256;
+      const MIN_APPROVAL = ethers.utils.parseUnits('1000000', 6); // 1M USDC threshold
+      
+      // Check USDC.e approvals
+      const usdcContract = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider);
+      const spenders = [CTF_ADDRESS, CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER];
+      
+      for (const spender of spenders) {
+        const allowance = await usdcContract.allowance(safeAddress, spender);
+        if (allowance.lt(MIN_APPROVAL)) {
+          console.log(`⚠️ USDC.e allowance for ${spender} is low:`, allowance.toString());
+          return false;
+        }
+      }
+      
+      // Check CTF (ERC1155) approvals
+      const ctfContract = new ethers.Contract(CTF_ADDRESS, ERC1155_ABI, provider);
+      const operators = [CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER];
+      
+      for (const operator of operators) {
+        const isApproved = await ctfContract.isApprovedForAll(safeAddress, operator);
+        if (!isApproved) {
+          console.log(`⚠️ CTF not approved for ${operator}`);
+          return false;
+        }
+      }
+      
+      console.log('✅ All approvals already set on-chain');
+      return true;
+    } catch (err) {
+      console.error('Error checking approvals:', err);
+      return false;
+    }
+  }, []);
+
+  /**
+   * Check USDC balances (both native and bridged)
+   */
+  const checkUsdcBalances = useCallback(async (safeAddress: string): Promise<{native: ethers.BigNumber, bridged: ethers.BigNumber}> => {
+    try {
+      const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
+      
+      const nativeContract = new ethers.Contract(USDC_NATIVE_ADDRESS, ERC20_ABI, provider);
+      const bridgedContract = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, provider);
+      
+      const [native, bridged] = await Promise.all([
+        nativeContract.balanceOf(safeAddress),
+        bridgedContract.balanceOf(safeAddress),
+      ]);
+      
+      console.log('💰 USDC Balances:', {
+        native: ethers.utils.formatUnits(native, 6),
+        bridged: ethers.utils.formatUnits(bridged, 6),
+      });
+      
+      return { native, bridged };
+    } catch (err) {
+      console.error('Error checking USDC balances:', err);
+      return { native: ethers.BigNumber.from(0), bridged: ethers.BigNumber.from(0) };
+    }
+  }, []);
+
+  /**
+   * Create swap transaction for native USDC -> USDC.e
+   * Uses Uniswap V3
+   */
+  const createSwapTransaction = useCallback((amount: ethers.BigNumber, safeAddress: string) => {
+    const swapRouterInterface = new ethers.utils.Interface(SWAP_ROUTER_ABI);
+    
+    // Swap parameters
+    const params = {
+      tokenIn: USDC_NATIVE_ADDRESS,
+      tokenOut: USDC_ADDRESS,
+      fee: USDC_SWAP_FEE,
+      recipient: safeAddress,
+      deadline: Math.floor(Date.now() / 1000) + 60 * 20, // 20 minutes
+      amountIn: amount,
+      amountOutMinimum: amount.mul(99).div(100), // 1% slippage max (stablecoins)
+      sqrtPriceLimitX96: 0,
+    };
+    
+    return {
+      to: UNISWAP_SWAP_ROUTER,
+      value: '0',
+      data: swapRouterInterface.encodeFunctionData('exactInputSingle', [params]),
+      operation: 0,
+    };
+  }, []);
+
+  /**
+   * Create approval transaction for native USDC to SwapRouter
+   */
+  const createNativeUsdcApproval = useCallback((amount: ethers.BigNumber) => {
+    const erc20Interface = new ethers.utils.Interface(ERC20_ABI);
+    return {
+      to: USDC_NATIVE_ADDRESS,
+      value: '0',
+      data: erc20Interface.encodeFunctionData('approve', [UNISWAP_SWAP_ROUTER, amount]),
+      operation: 0,
+    };
+  }, []);
+
+  /**
+   * Create all approval transactions for Polymarket
+   */
+  const createApprovalTransactions = useCallback(() => {
+    const MAX_UINT256 = ethers.constants.MaxUint256;
+    
+    const erc20Interface = new ethers.utils.Interface(ERC20_ABI);
+    const erc1155Interface = new ethers.utils.Interface(ERC1155_ABI);
+
+    const transactions = [];
+
+    // USDC.e approvals
+    const usdcSpenders = [CTF_ADDRESS, CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER];
+    for (const spender of usdcSpenders) {
+      transactions.push({
+        to: USDC_ADDRESS,
+        value: '0',
+        data: erc20Interface.encodeFunctionData('approve', [spender, MAX_UINT256]),
+        operation: 0,
+      });
     }
 
+    // CTF approvals
+    const ctfOperators = [CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER];
+    for (const operator of ctfOperators) {
+      transactions.push({
+        to: CTF_ADDRESS,
+        value: '0',
+        data: erc1155Interface.encodeFunctionData('setApprovalForAll', [operator, true]),
+        operation: 0,
+      });
+    }
+
+    return transactions;
+  }, []);
+
+  /**
+   * Initialize session - OPTIMIZED to minimize signatures
+   */
+  const initializeSession = useCallback(async () => {
+    if (isInitializing) return;
     if (!authenticated || !walletsReady || wallets.length === 0) {
       setError('Wallet not connected');
       return;
@@ -207,40 +343,38 @@ export const usePolymarketSession = () => {
     setCurrentStep('initializing');
 
     try {
-      // Step 1: Get signer from Privy wallet
+      // Get signer
       const signer = await getPrivySigner();
-      if (!signer) {
-        throw new Error('Failed to get wallet signer');
-      }
+      if (!signer) throw new Error('Failed to get wallet signer');
       signerRef.current = signer;
 
       const eoaAddress = await signer.getAddress();
-      const provider = signer.provider;
       console.log('📍 EOA Address:', eoaAddress);
 
-      // Step 2: Derive Safe address (deterministic)
+      // Derive Safe address
       const contractConfig = getContractConfig(POLYGON_CHAIN_ID);
       const safeAddress = deriveSafe(eoaAddress, contractConfig.SafeContracts.SafeFactory);
-      console.log('📍 Derived Safe Address:', safeAddress);
+      console.log('📍 Safe Address:', safeAddress);
 
-      // Step 3: Check for stored session with valid credentials
+      // Load stored session
       const storedSession = loadStoredSession();
-      if (storedSession && 
-          storedSession.eoaAddress.toLowerCase() === eoaAddress.toLowerCase() &&
-          isValidCredentials(storedSession.credentials)) {
-        console.log('📦 Found stored session with valid credentials');
-        credentialsRef.current = storedSession.credentials;
+      const isReturningUser = storedSession && 
+        storedSession.eoaAddress.toLowerCase() === eoaAddress.toLowerCase();
+
+      // === STEP 1: Check/Deploy Safe ===
+      setCurrentStep('deploying_safe');
+      let isSafeDeployed = isReturningUser && storedSession.safeDeployed;
+      
+      if (!isSafeDeployed) {
+        isSafeDeployed = await checkSafeDeployed(safeAddress);
       }
 
-      // Step 4: Create RelayClient with builder config
+      // Create RelayClient
       const builderConfig = createBuilderConfig();
-      
-      // Need to use viem wallet client for RelayClient
       const ethereumProvider = await wallets[0].getEthereumProvider();
       const { createWalletClient, custom } = await import('viem');
       const { polygon } = await import('viem/chains');
       
-      // Create viem wallet client from provider
       const walletClient = createWalletClient({
         chain: polygon,
         transport: custom(ethereumProvider),
@@ -254,122 +388,125 @@ export const usePolymarketSession = () => {
       );
       relayClientRef.current = relayClient;
 
-      // Step 5: Check if Safe is deployed using ethers provider
-      setCurrentStep('deploying_safe');
-      let isSafeDeployed = false;
-      
-      if (provider) {
-        isSafeDeployed = await checkSafeDeployed(safeAddress, provider);
-        console.log('🏦 Safe deployed:', isSafeDeployed);
-      }
-
       if (!isSafeDeployed) {
-        console.log('🚀 Deploying Safe wallet...');
+        console.log('🚀 Deploying Safe...');
         try {
           const deployResponse = await relayClient.deploy();
-          const deployResult = await deployResponse.wait();
-          console.log('✅ Safe deployed:', deployResult?.proxyAddress || safeAddress);
+          await deployResponse.wait();
           isSafeDeployed = true;
-        } catch (deployError: any) {
-          // Safe might already be deployed (race condition or already exists)
-          if (deployError.message?.includes('already deployed') || deployError.message?.includes('Safe already exists')) {
-            console.log('✅ Safe already deployed');
+          console.log('✅ Safe deployed');
+        } catch (err: any) {
+          if (err.message?.includes('already deployed') || err.message?.includes('already exists')) {
             isSafeDeployed = true;
           } else {
-            throw deployError;
+            throw err;
           }
         }
+      } else {
+        console.log('✅ Safe already deployed (cached)');
       }
 
-      // Step 6: Derive User API Credentials (ALWAYS do this, don't trust stored)
+      // === STEP 2: Get/Cache Credentials ===
       setCurrentStep('deriving_credentials');
       let credentials: UserApiCredentials | null = null;
 
-      console.log('🔑 Deriving User API credentials...');
-      
-      // Create temporary ClobClient to derive credentials
-      const tempClient = new ClobClient(
-        CLOB_API_URL,
-        POLYGON_CHAIN_ID,
-        signer as any
-      );
+      // TRY TO USE CACHED CREDENTIALS FIRST - NO SIGNATURE NEEDED
+      if (isReturningUser && isValidCredentials(storedSession.credentials)) {
+        credentials = storedSession.credentials;
+        console.log('✅ Using cached credentials (no signature needed)');
+      } else {
+        // Need to derive credentials - requires ONE signature
+        console.log('🔑 Deriving credentials (requires signature)...');
+        
+        const tempClient = new ClobClient(
+          CLOB_API_URL,
+          POLYGON_CHAIN_ID,
+          signer as any
+        );
 
-      try {
-        // Try to derive existing credentials first
-        const derivedCreds = await tempClient.deriveApiKey();
-        console.log('🔍 Derived credentials response:', derivedCreds);
-        
-        if (isValidCredentials(derivedCreds)) {
-          credentials = derivedCreds as UserApiCredentials;
-          console.log('✅ Derived existing credentials:', {
-            key: credentials.key,
-            hasSecret: !!credentials.secret,
-            hasPassphrase: !!credentials.passphrase,
-          });
-        } else {
-          throw new Error('Derived credentials are invalid');
-        }
-      } catch (deriveError: any) {
-        console.log('⚠️ Derive failed, creating new credentials...', deriveError.message);
-        
-        // If derive fails, create new credentials
         try {
+          const derivedCreds = await tempClient.deriveApiKey();
+          if (isValidCredentials(derivedCreds)) {
+            credentials = derivedCreds as UserApiCredentials;
+            console.log('✅ Derived credentials');
+          } else {
+            throw new Error('Invalid credentials');
+          }
+        } catch {
+          console.log('⚠️ Creating new credentials...');
           const newCreds = await tempClient.createApiKey();
-          console.log('🔍 Created credentials response:', newCreds);
-          
           if (isValidCredentials(newCreds)) {
             credentials = newCreds as UserApiCredentials;
-            console.log('✅ Created new credentials:', {
-              key: credentials.key,
-              hasSecret: !!credentials.secret,
-              hasPassphrase: !!credentials.passphrase,
-            });
+            console.log('✅ Created new credentials');
           } else {
-            throw new Error('Created credentials are invalid');
+            throw new Error('Failed to create credentials');
           }
-        } catch (createError: any) {
-          console.error('❌ Failed to create credentials:', createError);
-          throw new Error(`Failed to create API credentials: ${createError.message}`);
         }
       }
 
-      if (!credentials) {
-        throw new Error('Failed to obtain valid API credentials');
-      }
-
+      if (!credentials) throw new Error('Failed to obtain credentials');
       credentialsRef.current = credentials;
 
-      // Step 7: Set token approvals
-      setCurrentStep('setting_approvals');
-      console.log('✅ Setting token approvals...');
-
-      // Check and set approvals (this is gasless via RelayClient)
-      try {
-        const approvalTxs = createApprovalTransactions();
-        if (approvalTxs.length > 0) {
-          const approvalResponse = await relayClient.execute(approvalTxs, safeAddress);
-          await approvalResponse.wait();
-          console.log('✅ Token approvals set');
-        }
-      } catch (approvalError: any) {
-        // Approvals might already be set, continue
-        console.log('⚠️ Approval check:', approvalError.message);
+      // === STEP 3: Check/Set Approvals ===
+      setCurrentStep('checking_approvals');
+      let approvalsSet = isReturningUser && storedSession.approvalsSet;
+      
+      if (!approvalsSet) {
+        // Check on-chain if approvals are already set
+        approvalsSet = await checkApprovalsOnChain(safeAddress);
       }
 
-      // Step 8: Create authenticated ClobClient with verified credentials
-      console.log('🔧 Creating authenticated ClobClient with credentials:', {
-        key: credentials.key,
-        hasSecret: !!credentials.secret,
-        secretLength: credentials.secret?.length,
-        hasPassphrase: !!credentials.passphrase,
-      });
+      if (!approvalsSet) {
+        setCurrentStep('setting_approvals');
+        console.log('📝 Setting token approvals...');
+        
+        const approvalTxs = createApprovalTransactions();
+        try {
+          const approvalResponse = await relayClient.execute(approvalTxs, safeAddress);
+          await approvalResponse.wait();
+          approvalsSet = true;
+          console.log('✅ Approvals set');
+        } catch (err: any) {
+          console.log('⚠️ Approval error (may already be set):', err.message);
+          // Check again - they might be set
+          approvalsSet = await checkApprovalsOnChain(safeAddress);
+        }
+      } else {
+        console.log('✅ Approvals already set (cached/on-chain)');
+      }
 
+      // === STEP 4: Check/Swap USDC ===
+      setCurrentStep('checking_usdc');
+      const { native, bridged } = await checkUsdcBalances(safeAddress);
+      
+      // If user has native USDC but no/low USDC.e, auto-swap
+      const MIN_SWAP_AMOUNT = ethers.utils.parseUnits('0.5', 6); // $0.50 minimum
+      if (native.gt(MIN_SWAP_AMOUNT) && bridged.lt(MIN_SWAP_AMOUNT)) {
+        setCurrentStep('swapping_usdc');
+        console.log('🔄 Auto-swapping native USDC to USDC.e...');
+        
+        try {
+          const swapTxs = [
+            createNativeUsdcApproval(native),
+            createSwapTransaction(native, safeAddress),
+          ];
+          
+          const swapResponse = await relayClient.execute(swapTxs, safeAddress);
+          await swapResponse.wait();
+          console.log('✅ USDC swapped successfully');
+        } catch (err: any) {
+          console.error('⚠️ USDC swap failed:', err.message);
+          // Don't fail the whole session - user might add USDC.e manually
+        }
+      }
+
+      // === STEP 5: Create Authenticated ClobClient ===
       const authenticatedClient = new ClobClient(
         CLOB_API_URL,
         POLYGON_CHAIN_ID,
         signer as any,
         credentials,
-        SIGNATURE_TYPES.BROWSER, // signature_type = 2 for browser wallets
+        SIGNATURE_TYPES.BROWSER,
         safeAddress,
         undefined,
         false,
@@ -377,13 +514,13 @@ export const usePolymarketSession = () => {
       );
       clobClientRef.current = authenticatedClient;
 
-      // Step 9: Save session and update state
+      // === SAVE SESSION ===
       const newSession: TradingSession = {
         eoaAddress,
         safeAddress,
         isSafeDeployed: true,
         hasCredentials: true,
-        hasApprovals: true,
+        hasApprovals: approvalsSet,
         isReady: true,
       };
 
@@ -391,76 +528,65 @@ export const usePolymarketSession = () => {
         eoaAddress,
         safeAddress,
         credentials,
+        approvalsSet,
+        safeDeployed: true,
         timestamp: Date.now(),
       });
 
       setSession(newSession);
       setCurrentStep('ready');
-      console.log('🎉 Trading session ready!');
+      console.log('🎉 Session ready! Future trades need only 1 signature (the order)');
 
     } catch (err: any) {
-      console.error('❌ Session initialization failed:', err);
-      setError(err.message || 'Failed to initialize trading session');
+      console.error('❌ Session init failed:', err);
+      setError(err.message || 'Failed to initialize');
       setCurrentStep('error');
     } finally {
       setIsInitializing(false);
     }
   }, [
-    authenticated, 
-    walletsReady, 
-    wallets, 
-    isInitializing,
-    getPrivySigner, 
-    createBuilderConfig, 
-    loadStoredSession, 
-    saveSession,
-    checkSafeDeployed
+    authenticated, walletsReady, wallets, isInitializing,
+    getPrivySigner, createBuilderConfig, loadStoredSession, saveSession,
+    checkSafeDeployed, checkApprovalsOnChain, checkUsdcBalances,
+    createApprovalTransactions, createSwapTransaction, createNativeUsdcApproval
   ]);
 
   /**
-   * Create approval transactions for Safe
+   * Ensure USDC.e balance before trade
+   * Auto-swaps native USDC if needed
    */
-  const createApprovalTransactions = () => {
-    const MAX_UINT256 = ethers.constants.MaxUint256;
+  const ensureUsdcBalance = useCallback(async (requiredAmount: ethers.BigNumber): Promise<boolean> => {
+    if (!session || !relayClientRef.current) return false;
     
-    const erc20Interface = new ethers.utils.Interface([
-      'function approve(address spender, uint256 amount)',
-    ]);
+    const { native, bridged } = await checkUsdcBalances(session.safeAddress);
     
-    const erc1155Interface = new ethers.utils.Interface([
-      'function setApprovalForAll(address operator, bool approved)',
-    ]);
-
-    const transactions = [];
-
-    // USDC approvals (ERC-20)
-    const usdcSpenders = [CTF_ADDRESS, CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER];
-    for (const spender of usdcSpenders) {
-      transactions.push({
-        to: USDC_ADDRESS,
-        value: '0',
-        data: erc20Interface.encodeFunctionData('approve', [spender, MAX_UINT256]),
-        operation: 0,
-      });
+    // If we have enough USDC.e, we're good
+    if (bridged.gte(requiredAmount)) return true;
+    
+    // If we have native USDC, swap it
+    if (native.gt(0)) {
+      console.log('🔄 Need more USDC.e, swapping native USDC...');
+      try {
+        const swapTxs = [
+          createNativeUsdcApproval(native),
+          createSwapTransaction(native, session.safeAddress),
+        ];
+        
+        const swapResponse = await relayClientRef.current.execute(swapTxs, session.safeAddress);
+        await swapResponse.wait();
+        
+        // Check balance again
+        const { bridged: newBridged } = await checkUsdcBalances(session.safeAddress);
+        return newBridged.gte(requiredAmount);
+      } catch (err) {
+        console.error('Swap failed:', err);
+        return false;
+      }
     }
+    
+    return false;
+  }, [session, checkUsdcBalances, createNativeUsdcApproval, createSwapTransaction]);
 
-    // CTF approvals (ERC-1155)
-    const ctfOperators = [CTF_EXCHANGE, NEG_RISK_CTF_EXCHANGE, NEG_RISK_ADAPTER];
-    for (const operator of ctfOperators) {
-      transactions.push({
-        to: CTF_ADDRESS,
-        value: '0',
-        data: erc1155Interface.encodeFunctionData('setApprovalForAll', [operator, true]),
-        operation: 0,
-      });
-    }
-
-    return transactions;
-  };
-
-  /**
-   * End the trading session
-   */
   const endSession = useCallback(() => {
     relayClientRef.current = null;
     clobClientRef.current = null;
@@ -471,66 +597,41 @@ export const usePolymarketSession = () => {
     setCurrentStep('idle');
     setError(null);
     
+    // Don't clear credentials - keep them for next time!
+    // Only clear if user explicitly logs out
+  }, []);
+
+  const clearAllData = useCallback(() => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEYS.TRADING_SESSION);
     }
-    
-    console.log('🔌 Trading session ended');
-  }, []);
+    endSession();
+  }, [endSession]);
 
-  /**
-   * Get the authenticated ClobClient
-   */
-  const getClobClient = useCallback(() => {
-    return clobClientRef.current;
-  }, []);
+  const getClobClient = useCallback(() => clobClientRef.current, []);
+  const getRelayClient = useCallback(() => relayClientRef.current, []);
+  const getCredentials = useCallback(() => credentialsRef.current, []);
 
-  /**
-   * Get the RelayClient
-   */
-  const getRelayClient = useCallback(() => {
-    return relayClientRef.current;
-  }, []);
-
-  /**
-   * Get the current credentials (for order submission)
-   */
-  const getCredentials = useCallback(() => {
-    return credentialsRef.current;
-  }, []);
-
-  // Auto-initialize when Privy is ready and authenticated
-  useEffect(() => {
-    if (privyReady && walletsReady && authenticated && wallets.length > 0 && !session && !isInitializing) {
-      // Check for stored session first
-      const stored = loadStoredSession();
-      if (stored && stored.eoaAddress.toLowerCase() === wallets[0].address.toLowerCase()) {
-        console.log('🔄 Auto-initializing from stored session...');
-        // Don't auto-initialize, let user trigger it
-      }
-    }
-  }, [privyReady, walletsReady, authenticated, wallets, session, isInitializing, loadStoredSession]);
-
-  // Computed values
   const isReady = session?.isReady ?? false;
   const isSessionActive = session !== null;
 
-  // Status message for UI
   const getStatusMessage = () => {
     switch (currentStep) {
-      case 'connecting': return '🔗 Connecting wallet...';
-      case 'initializing': return '⚙️ Initializing session...';
-      case 'deploying_safe': return '🏦 Deploying secure wallet...';
-      case 'deriving_credentials': return '🔑 Setting up trading credentials...';
-      case 'setting_approvals': return '✅ Approving tokens...';
-      case 'ready': return '🎉 Ready to trade!';
+      case 'connecting': return '🔗 Connecting...';
+      case 'initializing': return '⚙️ Initializing...';
+      case 'deploying_safe': return '🏦 Setting up wallet...';
+      case 'deriving_credentials': return '🔑 Setting up trading...';
+      case 'checking_approvals': return '✅ Checking permissions...';
+      case 'setting_approvals': return '📝 Setting permissions...';
+      case 'checking_usdc': return '💰 Checking balance...';
+      case 'swapping_usdc': return '🔄 Converting USDC...';
+      case 'ready': return '🎉 Ready!';
       case 'error': return `❌ ${error}`;
       default: return '';
     }
   };
 
   return {
-    // Session state
     session,
     currentStep,
     error,
@@ -539,11 +640,11 @@ export const usePolymarketSession = () => {
     isSessionActive,
     statusMessage: getStatusMessage(),
 
-    // Actions
     initializeSession,
     endSession,
+    clearAllData,
+    ensureUsdcBalance,
 
-    // Clients
     getClobClient,
     getRelayClient,
     getCredentials,
