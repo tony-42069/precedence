@@ -13,10 +13,13 @@ import {
   User,
   LogOut,
   Copy,
-  Check
+  Check,
+  ArrowDownCircle,
+  Info
 } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { useWallet } from '../hooks/useWallet';
+import { useSafeAddress } from '../hooks/useSafeAddress';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -30,13 +33,16 @@ export function Sidebar({ isOpen, onToggle, onConnectWallet }: SidebarProps) {
   const { logout: privyLogout } = usePrivy();
   const { user, clearUser } = useUser();
   const { walletState, disconnect } = useWallet();
+  const { safeAddress, eoaAddress, isLoading: safeLoading } = useSafeAddress();
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [showAddressInfo, setShowAddressInfo] = useState(false);
 
-  // Handle copy wallet address
+  // Handle copy deposit (Safe) address
   const handleCopyAddress = async () => {
-    if (user?.wallet_address) {
+    const addressToCopy = safeAddress || user?.wallet_address;
+    if (addressToCopy) {
       try {
-        await navigator.clipboard.writeText(user.wallet_address);
+        await navigator.clipboard.writeText(addressToCopy);
         setCopiedAddress(true);
         setTimeout(() => setCopiedAddress(false), 2000);
       } catch (err) {
@@ -182,14 +188,15 @@ const handleDisconnect = async () => {
                 <div className="text-sm font-semibold text-white truncate">
                   {user.display_name || user.username || formatAddress(user.wallet_address)}
                 </div>
+                {/* Show Deposit Address (Safe) */}
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-slate-400 font-mono">
-                    {formatAddress(user.wallet_address)}
+                    {safeLoading ? '...' : safeAddress ? formatAddress(safeAddress) : formatAddress(user.wallet_address)}
                   </span>
                   <button
                     onClick={handleCopyAddress}
                     className="p-1 hover:bg-white/10 rounded transition-colors"
-                    title="Copy full wallet address"
+                    title="Copy deposit address"
                   >
                     {copiedAddress ? (
                       <Check size={12} className="text-green-400" />
@@ -207,6 +214,29 @@ const handleDisconnect = async () => {
                 <LogOut size={16} />
               </button>
             </div>
+            
+            {/* Deposit Address Highlight */}
+            {safeAddress && (
+              <div className="mt-3 bg-green-500/10 border border-green-500/20 rounded-lg p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <ArrowDownCircle size={12} className="text-green-400" />
+                    <span className="text-[10px] text-green-400 uppercase font-mono">Deposit Address</span>
+                  </div>
+                  <button
+                    onClick={() => setShowAddressInfo(!showAddressInfo)}
+                    className="p-0.5 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <Info size={10} className="text-slate-400" />
+                  </button>
+                </div>
+                {showAddressInfo && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Send USDC (Polygon) to this address to fund your trading account.
+                  </p>
+                )}
+              </div>
+            )}
             
             {/* User Stats */}
             <div className="mt-3 grid grid-cols-2 gap-2">

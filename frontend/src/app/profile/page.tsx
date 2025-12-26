@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallet } from '../../hooks/useWallet';
 import { useUser } from '../../contexts/UserContext';
+import { useSafeAddress } from '../../hooks/useSafeAddress';
 import { Sidebar, MobileMenuButton } from '../../components/Sidebar';
 import { WalletConnectModal } from '../../components/WalletConnectModal';
 import {
@@ -22,7 +23,10 @@ import {
   Save,
   X,
   Copy,
-  Check
+  Check,
+  ArrowDownCircle,
+  Info,
+  ExternalLink
 } from 'lucide-react';
 
 export default function ProfilePage() {
@@ -30,6 +34,7 @@ export default function ProfilePage() {
   const { logout: privyLogout, authenticated, user: privyUser, exportWallet } = usePrivy();
   const { walletState, disconnect } = useWallet();
   const { user, clearUser, updateProfile, stats, fetchStats } = useUser();
+  const { safeAddress, eoaAddress, isLoading: safeLoading } = useSafeAddress();
 
   // Check if user has an embedded Privy wallet (not external like MetaMask)
   const hasEmbeddedWallet = privyUser?.linkedAccounts?.find(
@@ -51,15 +56,29 @@ export default function ProfilePage() {
   });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [copiedAddress, setCopiedAddress] = useState(false);
+  const [copiedDepositAddress, setCopiedDepositAddress] = useState(false);
+  const [copiedSigningAddress, setCopiedSigningAddress] = useState(false);
 
-  // Handle copy wallet address
-  const handleCopyAddress = async () => {
+  // Handle copy deposit (Safe) address
+  const handleCopyDepositAddress = async () => {
+    if (safeAddress) {
+      try {
+        await navigator.clipboard.writeText(safeAddress);
+        setCopiedDepositAddress(true);
+        setTimeout(() => setCopiedDepositAddress(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy address:', err);
+      }
+    }
+  };
+
+  // Handle copy signing (EOA) address
+  const handleCopySigningAddress = async () => {
     if (user?.wallet_address) {
       try {
         await navigator.clipboard.writeText(user.wallet_address);
-        setCopiedAddress(true);
-        setTimeout(() => setCopiedAddress(false), 2000);
+        setCopiedSigningAddress(true);
+        setTimeout(() => setCopiedSigningAddress(false), 2000);
       } catch (err) {
         console.error('Failed to copy address:', err);
       }
@@ -238,6 +257,60 @@ export default function ProfilePage() {
                 {/* Profile Tab */}
                 {activeTab === 'profile' && (
                   <div className="space-y-8">
+                    
+                    {/* DEPOSIT ADDRESS CARD - PROMINENT */}
+                    <div className="bg-gradient-to-r from-green-600/10 to-blue-600/10 backdrop-blur-md border border-green-500/30 rounded-xl p-6 relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-green-500 to-blue-500"></div>
+                      
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                            <ArrowDownCircle size={24} className="text-green-400" />
+                          </div>
+                          <div>
+                            <h2 className="text-lg font-bold text-white">Deposit Address</h2>
+                            <p className="text-sm text-slate-400">Send USDC here to fund your trading account</p>
+                          </div>
+                        </div>
+                        <a
+                          href={safeAddress ? `https://polygonscan.com/address/${safeAddress}` : '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                          View on Polygonscan <ExternalLink size={12} />
+                        </a>
+                      </div>
+
+                      <div className="bg-black/30 rounded-lg p-4 border border-white/10">
+                        <div className="flex items-center justify-between gap-4">
+                          <code className="text-lg font-mono text-green-400 break-all">
+                            {safeLoading ? 'Loading...' : safeAddress || 'Unavailable'}
+                          </code>
+                          <button
+                            onClick={handleCopyDepositAddress}
+                            disabled={!safeAddress}
+                            className="flex-shrink-0 p-3 bg-green-500/20 hover:bg-green-500/30 rounded-lg transition-colors disabled:opacity-50"
+                            title="Copy deposit address"
+                          >
+                            {copiedDepositAddress ? (
+                              <Check size={20} className="text-green-400" />
+                            ) : (
+                              <Copy size={20} className="text-green-400" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-start gap-2 text-xs text-slate-400">
+                        <Info size={14} className="flex-shrink-0 mt-0.5 text-blue-400" />
+                        <p>
+                          <strong className="text-white">Important:</strong> Only send <strong className="text-green-400">USDC on Polygon network</strong> to this address. 
+                          Sending other tokens or using the wrong network may result in loss of funds.
+                        </p>
+                      </div>
+                    </div>
+
                     {/* Profile Overview */}
                     <div className="bg-[#0A0A0C]/60 backdrop-blur-md border border-white/10 rounded-xl p-8 relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
@@ -311,22 +384,6 @@ export default function ProfilePage() {
                                   {user.username && (
                                     <p className="text-slate-400 text-sm mb-1">@{user.username}</p>
                                   )}
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-slate-500 font-mono text-sm bg-black/30 px-2 py-1 rounded inline-block border border-white/5">
-                                      {formatAddress(user.wallet_address)}
-                                    </p>
-                                    <button
-                                      onClick={handleCopyAddress}
-                                      className="p-1.5 hover:bg-white/10 rounded transition-colors"
-                                      title="Copy full wallet address"
-                                    >
-                                      {copiedAddress ? (
-                                        <Check size={14} className="text-green-400" />
-                                      ) : (
-                                        <Copy size={14} className="text-slate-400 hover:text-white" />
-                                      )}
-                                    </button>
-                                  </div>
                                 </>
                               )}
                             </div>
@@ -344,6 +401,33 @@ export default function ProfilePage() {
                           ) : user.bio ? (
                             <p className="text-slate-400 text-sm mb-4">{user.bio}</p>
                           ) : null}
+
+                          {/* Signing Wallet (EOA) - Secondary */}
+                          <div className="bg-black/20 rounded-lg p-4 border border-white/5 mt-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Key size={14} className="text-purple-400" />
+                                <span className="text-xs text-slate-400 uppercase">Signing Wallet</span>
+                              </div>
+                              <button
+                                onClick={handleCopySigningAddress}
+                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                                title="Copy signing wallet address"
+                              >
+                                {copiedSigningAddress ? (
+                                  <Check size={12} className="text-green-400" />
+                                ) : (
+                                  <Copy size={12} className="text-slate-400 hover:text-white" />
+                                )}
+                              </button>
+                            </div>
+                            <p className="text-slate-500 font-mono text-xs break-all">
+                              {user.wallet_address}
+                            </p>
+                            <p className="text-[10px] text-slate-600 mt-2">
+                              This wallet signs transactions. Export its private key below for backup.
+                            </p>
+                          </div>
 
                           {/* Connection Status */}
                           <div className="bg-black/20 rounded-lg p-4 border border-white/5 mt-4">
@@ -443,7 +527,7 @@ export default function ProfilePage() {
                       </div>
                       {hasEmbeddedWallet && (
                         <p className="text-xs text-slate-500 mt-3">
-                          Export your private key to use your wallet in MetaMask or other wallet apps.
+                          Export your private key to use your signing wallet in MetaMask or other wallet apps.
                         </p>
                       )}
                     </div>
