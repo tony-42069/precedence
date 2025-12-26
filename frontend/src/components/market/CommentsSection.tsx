@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { MessageCircle, Heart, Clock, Users, Activity, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageCircle, Heart, Clock, Users, Activity, ChevronDown, Wifi, WifiOff } from 'lucide-react';
 
 interface Comment {
   id?: string;
-  text: string;
+  text?: string;
+  body?: string; // RTDS uses 'body' instead of 'text'
   username?: string;
+  userAddress?: string;
   user?: {
     name?: string;
     username?: string;
@@ -21,16 +23,97 @@ interface Comment {
 
 interface CommentsSectionProps {
   marketId: string;
+  eventId?: string; // Event ID for WebSocket subscription
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:5003';
 
-export default function CommentsSection({ marketId }: CommentsSectionProps) {
+export default function CommentsSection({ marketId, eventId }: CommentsSectionProps) {
   const [activeTab, setActiveTab] = useState<'comments' | 'holders' | 'activity'>('comments');
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentCount, setCommentCount] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
+  // Convert RTDS comment to our format
+  const convertRTDSComment = useCallback((rtdsComment: any): Comment => {
+    return {
+      id: rtdsComment.id,
+      text: rtdsComment.body,
+      body: rtdsComment.body,
+      userAddress: rtdsComment.userAddress,
+      username: rtdsComment.userAddress?.slice(0, 8) + '...' + rtdsComment.userAddress?.slice(-4),
+      createdAt: rtdsComment.createdAt,
+      timestamp: rtdsComment.createdAt,
+    };
+  }, []);
+
+  // Connect to WebSocket for live comments
+  useEffect(() => {
+    const effectiveEventId = eventId || marketId;
+    if (!effectiveEventId) return;
+
+    console.log('🔌 Connecting to comments WebSocket for event:', effectiveEventId);
+
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('✅ Comments WebSocket connected');
+      setWsConnected(true);
+
+      // Subscribe to comments for this event
+      ws.send(JSON.stringify({
+        type: 'subscribe_comments',
+        eventId: effectiveEventId
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        if (message.type === 'comment_created') {
+          console.log('💬 New comment received:', message.payload);
+          const newComment = convertRTDSComment(message.payload);
+          setComments(prev => [newComment, ...prev]);
+          setCommentCount(prev => prev + 1);
+        } else if (message.type === 'comment_removed') {
+          console.log('🗑️ Comment removed:', message.payload?.id);
+          setComments(prev => prev.filter(c => c.id !== message.payload?.id));
+          setCommentCount(prev => Math.max(0, prev - 1));
+        } else if (message.status === 'subscribed_comments') {
+          console.log('✅ Subscribed to comments for event:', message.eventId);
+        }
+      } catch (err) {
+        console.error('Failed to parse WebSocket message:', err);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('❌ Comments WebSocket error:', error);
+      setWsConnected(false);
+    };
+
+    ws.onclose = () => {
+      console.log('🔌 Comments WebSocket disconnected');
+      setWsConnected(false);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'unsubscribe_comments',
+          eventId: effectiveEventId
+        }));
+      }
+      ws.close();
+    };
+  }, [eventId, marketId, convertRTDSComment]);
+
+  // Fetch initial comments from REST API (may not work, but try anyway)
   useEffect(() => {
     async function fetchComments() {
       if (!marketId) return;
@@ -41,8 +124,10 @@ export default function CommentsSection({ marketId }: CommentsSectionProps) {
 
         if (res.ok) {
           const data = await res.json();
-          setComments(data.comments || []);
-          setCommentCount(data.total || data.count || data.comments?.length || 0);
+          if (data.comments && data.comments.length > 0) {
+            setComments(data.comments);
+            setCommentCount(data.total || data.count || data.comments.length);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch comments:', err);
@@ -74,7 +159,12 @@ export default function CommentsSection({ marketId }: CommentsSectionProps) {
 
   // Get username from comment object
   const getUsername = (comment: Comment) => {
-    return comment.user?.username || comment.user?.name || comment.username || 'Anonymous';
+    return comment.user?.username || comment.user?.name || comment.username || comment.userAddress?.slice(0, 8) + '...' || 'Anonymous';
+  };
+
+  // Get comment text (handle both 'text' and 'body' fields)
+  const getCommentText = (comment: Comment) => {
+    return comment.text || comment.body || '';
   };
 
   // Get avatar initial
@@ -97,6 +187,15 @@ export default function CommentsSection({ marketId }: CommentsSectionProps) {
         >
           <MessageCircle size={16} />
           Comments {commentCount > 0 && `(${commentCount.toLocaleString()})`}
+          {wsConnected ? (
+            <span className="flex items-center gap-1 text-xs text-green-400" title="Live updates enabled">
+              <Wifi size={12} />
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-gray-500" title="Live updates unavailable">
+              <WifiOff size={12} />
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('holders')}
@@ -203,7 +302,7 @@ export default function CommentsSection({ marketId }: CommentsSectionProps) {
                         </span>
                       </div>
                       <p className="text-gray-300 text-sm leading-relaxed">
-                        {comment.text}
+                        {getCommentText(comment)}
                       </p>
                       <div className="flex items-center gap-4 mt-2">
                         <button className="flex items-center gap-1 text-gray-500 hover:text-red-400 transition-colors text-sm">
@@ -224,7 +323,11 @@ export default function CommentsSection({ marketId }: CommentsSectionProps) {
               <div className="text-center py-12 text-gray-500">
                 <MessageCircle size={48} className="mx-auto mb-3 opacity-50" />
                 <p>No comments yet</p>
-                <p className="text-sm text-gray-600 mt-1">Be the first to share your thoughts</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {wsConnected
+                    ? 'New comments will appear here in real-time'
+                    : 'Comments will appear here when available'}
+                </p>
               </div>
             )}
           </div>

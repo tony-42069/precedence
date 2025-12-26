@@ -603,7 +603,7 @@ export default function MarketDetailPage() {
 
         {/* Comments Section - Full Width */}
         <div className="mt-6">
-          <CommentsSection marketId={marketId} />
+          <CommentsSection marketId={marketId} eventId={marketId} />
         </div>
       </div>
     </div>

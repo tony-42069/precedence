@@ -18,14 +18,20 @@ const WS_PORT = process.env.WEBSOCKET_PORT || 5003;
 const PRIVATE_KEY = process.env.POLYMARKET_PRIVATE_KEY;
 const CLOB_HOST = 'https://clob.polymarket.com';
 const CLOB_WS_HOST = 'wss://ws-subscriptions-clob.polymarket.com';
+const RTDS_WS_HOST = 'wss://ws-live-data.polymarket.com'; // Real Time Data Stream for comments
 
 // Global state
 let wss = null;
 let clobClient = null; // Official Polymarket client
+let rtdsConnection = null; // RTDS WebSocket for comments
 const activeSubscriptions = new Map(); // clientId -> Set of tokenIds
 const marketSubscriptions = new Map(); // tokenId -> Set of clientIds
 const clobConnections = new Map(); // conditionId -> WebSocket connection
 const retryCounts = new Map(); // conditionId -> retry count
+
+// Comments state (RTDS)
+const commentSubscriptions = new Map(); // eventId -> Set of clientIds
+const clientCommentSubscriptions = new Map(); // clientId -> Set of eventIds
 
 /**
  * Create new CLOB API credentials using EIP-712 signing
@@ -296,7 +302,183 @@ function handleClientDisconnect(clientId) {
     activeSubscriptions.delete(clientId);
   }
 
+  // Also clean up comment subscriptions
+  if (clientCommentSubscriptions.has(clientId)) {
+    const eventIds = clientCommentSubscriptions.get(clientId);
+    eventIds.forEach(eventId => {
+      unsubscribeClientFromComments(clientId, eventId);
+    });
+    clientCommentSubscriptions.delete(clientId);
+  }
+
   console.log(`👋 Client ${clientId} disconnected`);
+}
+
+/**
+ * Connect to Polymarket RTDS WebSocket for live comments
+ */
+function connectRTDS() {
+  if (rtdsConnection && rtdsConnection.readyState === WebSocket.OPEN) {
+    console.log('⚡ RTDS already connected');
+    return;
+  }
+
+  console.log('🔌 Connecting to Polymarket RTDS for live comments...');
+  rtdsConnection = new WebSocket(RTDS_WS_HOST);
+
+  rtdsConnection.on('open', () => {
+    console.log('✅ RTDS WebSocket connected');
+
+    // Re-subscribe to any existing comment subscriptions
+    commentSubscriptions.forEach((clientIds, eventId) => {
+      if (clientIds.size > 0) {
+        sendRTDSSubscription(eventId, 'subscribe');
+      }
+    });
+  });
+
+  rtdsConnection.on('message', (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      console.log('💬 RTDS Message:', JSON.stringify(message).slice(0, 200));
+
+      // Handle comment events
+      if (message.type === 'comment_created' || message.type === 'comment_removed' ||
+          message.type === 'reaction_created' || message.type === 'reaction_removed') {
+
+        const eventId = message.data?.parentEntityID?.toString();
+        if (eventId && commentSubscriptions.has(eventId)) {
+          // Broadcast to all clients subscribed to this event's comments
+          const clientIds = commentSubscriptions.get(eventId);
+          broadcastToClients(clientIds, {
+            type: message.type,
+            payload: message.data,
+            timestamp: Date.now()
+          });
+        }
+      }
+    } catch (err) {
+      console.error('❌ RTDS parse error:', err.message);
+    }
+  });
+
+  rtdsConnection.on('error', (err) => {
+    console.error('❌ RTDS WebSocket error:', err.message);
+  });
+
+  rtdsConnection.on('close', (code, reason) => {
+    console.log(`🔌 RTDS WebSocket closed (${code}): ${reason || 'No reason'}`);
+    rtdsConnection = null;
+
+    // Reconnect after 5 seconds if we have active subscriptions
+    if (commentSubscriptions.size > 0) {
+      console.log('🔄 Reconnecting RTDS in 5 seconds...');
+      setTimeout(connectRTDS, 5000);
+    }
+  });
+}
+
+/**
+ * Send subscription message to RTDS
+ */
+function sendRTDSSubscription(eventId, action = 'subscribe') {
+  if (!rtdsConnection || rtdsConnection.readyState !== WebSocket.OPEN) {
+    console.warn('⚠️ RTDS not connected, cannot send subscription');
+    return;
+  }
+
+  const subscriptionMsg = {
+    action: action,
+    subscriptions: [
+      {
+        topic: 'comments',
+        type: '*', // All comment types
+        filters: JSON.stringify({
+          parentEntityID: parseInt(eventId, 10),
+          parentEntityType: 'Event'
+        })
+      }
+    ]
+  };
+
+  rtdsConnection.send(JSON.stringify(subscriptionMsg));
+  console.log(`📡 RTDS ${action} sent for event ${eventId}`);
+}
+
+/**
+ * Subscribe client to comments for an event
+ */
+function subscribeClientToComments(clientId, eventId) {
+  // Add to client's comment subscriptions
+  if (!clientCommentSubscriptions.has(clientId)) {
+    clientCommentSubscriptions.set(clientId, new Set());
+  }
+  clientCommentSubscriptions.get(clientId).add(eventId);
+
+  // Add to event's subscribers
+  const isNewSubscription = !commentSubscriptions.has(eventId);
+  if (!commentSubscriptions.has(eventId)) {
+    commentSubscriptions.set(eventId, new Set());
+  }
+  commentSubscriptions.get(eventId).add(clientId);
+
+  // Connect to RTDS if not already connected
+  if (!rtdsConnection || rtdsConnection.readyState !== WebSocket.OPEN) {
+    connectRTDS();
+  } else if (isNewSubscription) {
+    // Send subscription for this event
+    sendRTDSSubscription(eventId, 'subscribe');
+  }
+
+  console.log(`✅ Client ${clientId} subscribed to comments for event ${eventId}`);
+}
+
+/**
+ * Unsubscribe client from comments for an event
+ */
+function unsubscribeClientFromComments(clientId, eventId) {
+  // Remove from client's subscriptions
+  if (clientCommentSubscriptions.has(clientId)) {
+    clientCommentSubscriptions.get(clientId).delete(eventId);
+  }
+
+  // Remove from event's subscribers
+  if (commentSubscriptions.has(eventId)) {
+    commentSubscriptions.get(eventId).delete(clientId);
+
+    // If no more subscribers for this event, unsubscribe from RTDS
+    if (commentSubscriptions.get(eventId).size === 0) {
+      commentSubscriptions.delete(eventId);
+      if (rtdsConnection && rtdsConnection.readyState === WebSocket.OPEN) {
+        sendRTDSSubscription(eventId, 'unsubscribe');
+      }
+    }
+  }
+
+  console.log(`❌ Client ${clientId} unsubscribed from comments for event ${eventId}`);
+}
+
+/**
+ * Broadcast message to specific client IDs
+ */
+function broadcastToClients(clientIds, message) {
+  if (!wss) return;
+
+  let sentCount = 0;
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN && clientIds.has(client.id)) {
+      try {
+        client.send(JSON.stringify(message));
+        sentCount++;
+      } catch (error) {
+        console.error('❌ Failed to send to client:', error);
+      }
+    }
+  });
+
+  if (sentCount > 0) {
+    console.log(`📤 Broadcasted ${message.type} to ${sentCount} clients`);
+  }
 }
 
 // Real tokenId from docs (active binary outcome)
@@ -441,6 +623,30 @@ function initializeWebSocketServer() {
             ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
             break;
 
+          case 'subscribe_comments':
+            if (message.eventId) {
+              subscribeClientToComments(ws.id, message.eventId.toString());
+              ws.send(JSON.stringify({
+                status: 'subscribed_comments',
+                eventId: message.eventId
+              }));
+            } else {
+              ws.send(JSON.stringify({ error: 'Missing eventId for subscribe_comments' }));
+            }
+            break;
+
+          case 'unsubscribe_comments':
+            if (message.eventId) {
+              unsubscribeClientFromComments(ws.id, message.eventId.toString());
+              ws.send(JSON.stringify({
+                status: 'unsubscribed_comments',
+                eventId: message.eventId
+              }));
+            } else {
+              ws.send(JSON.stringify({ error: 'Missing eventId for unsubscribe_comments' }));
+            }
+            break;
+
           default:
             console.log(`📨 Unknown message type from ${ws.id}:`, action || 'undefined');
             ws.send(JSON.stringify({ error: 'Unknown message type' }));
@@ -487,7 +693,8 @@ function getServerStatus() {
       marketSubscriptions: marketSubscriptions.size
     },
     rtds: {
-      connected: rtdClient ? true : false
+      connected: rtdsConnection && rtdsConnection.readyState === WebSocket.OPEN,
+      commentSubscriptions: commentSubscriptions.size
     }
   };
 }
@@ -497,6 +704,13 @@ function getServerStatus() {
  */
 function shutdown() {
   console.log('🛑 Shutting down WebSocket service...');
+
+  // Close RTDS connection
+  if (rtdsConnection) {
+    console.log('🔌 Closing RTDS connection');
+    rtdsConnection.close();
+    rtdsConnection = null;
+  }
 
   // Close all CLOB connections
   clobConnections.forEach((ws, key) => {
@@ -583,5 +797,8 @@ module.exports = {
   initializeWebSocketServer,
   getServerStatus,
   subscribeClientToMarket,
-  unsubscribeClientFromMarket
+  unsubscribeClientFromMarket,
+  subscribeClientToComments,
+  unsubscribeClientFromComments,
+  connectRTDS
 };
