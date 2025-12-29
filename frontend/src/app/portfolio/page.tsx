@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useWallet } from '../../hooks/useWallet';
 import { useUser } from '../../contexts/UserContext';
 import { useSafeAddress } from '../../hooks/useSafeAddress';
@@ -311,51 +312,62 @@ export default function PortfolioPage() {
                       </div>
                     ) : combinedPositions && combinedPositions.length > 0 ? (
                       <div className="divide-y divide-white/5">
-                        {combinedPositions.map((position, idx) => (
-                          <div key={idx} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-white/5 transition-colors">
-                            <div className="flex-1 mb-4 md:mb-0">
-                              <h4 className="font-medium text-slate-200 mb-1">
-                                {position.marketQuestion || position.marketSlug || position.market_id?.slice(0, 20) + '...' || 'Unknown Market'}
-                              </h4>
-                              <div className="flex items-center gap-4 text-sm font-mono">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] uppercase border ${
-                                  position.outcome === 'Yes' || position.outcome === 'YES'
-                                    ? 'bg-green-500/10 text-green-400 border-green-500/20' 
-                                    : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                }`}>
-                                  {position.outcome || 'POSITION'}
-                                </span>
-                                <span className="text-slate-500">
-                                  SIZE: <span className="text-slate-300">{parseFloat(position.size || position.total_shares || '0').toFixed(2)}</span>
-                                </span>
-                                <span className="text-slate-500">
-                                  AVG: <span className="text-slate-300">${parseFloat(position.avgPrice || position.avg_entry_price || '0').toFixed(3)}</span>
-                                </span>
-                                {position.source && (
-                                  <span className={`text-[10px] px-1 py-0.5 rounded ${
-                                    position.source === 'database' 
-                                      ? 'bg-green-500/20 text-green-400' 
-                                      : 'bg-blue-500/20 text-blue-400'
-                                  }`}>
-                                    {position.source === 'database' ? 'INSTANT' : 'PM'}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold font-mono text-white mb-1">
-                                {parseFloat(position.size || position.total_shares || '0').toFixed(2)} shares
-                              </div>
-                              {(position.pnl !== undefined || position.realized_pnl !== undefined) && (
-                                <div className={`text-sm font-mono font-medium ${
-                                  (position.pnl || position.realized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                                }`}>
-                                  {(position.pnl || position.realized_pnl || 0) >= 0 ? '+' : ''}{(position.pnl || position.realized_pnl || 0).toFixed(2)} P&L
+                        {combinedPositions.map((position, idx) => {
+                          // Determine the market link - use slug, conditionId, or market_id
+                          const marketLink = position.marketSlug || position.conditionId || position.market_id;
+
+                          return (
+                            <Link
+                              key={idx}
+                              href={`/app/markets/${marketLink}`}
+                              className="block p-4 hover:bg-white/5 transition-colors cursor-pointer group"
+                            >
+                              <div className="flex flex-col md:flex-row md:items-center justify-between">
+                                <div className="flex-1 mb-4 md:mb-0">
+                                  <h4 className="font-medium text-slate-200 mb-1 group-hover:text-blue-400 transition-colors">
+                                    {position.marketQuestion || position.marketSlug || position.market_id?.slice(0, 20) + '...' || 'Unknown Market'}
+                                  </h4>
+                                  <div className="flex items-center gap-4 text-sm font-mono">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] uppercase border ${
+                                      position.outcome === 'Yes' || position.outcome === 'YES'
+                                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                    }`}>
+                                      {position.outcome || 'POSITION'}
+                                    </span>
+                                    <span className="text-slate-500">
+                                      SIZE: <span className="text-slate-300">{parseFloat(position.size || position.total_shares || '0').toFixed(2)}</span>
+                                    </span>
+                                    <span className="text-slate-500">
+                                      AVG: <span className="text-slate-300">${parseFloat(position.avgPrice || position.avg_entry_price || '0').toFixed(3)}</span>
+                                    </span>
+                                    {position.source && (
+                                      <span className={`text-[10px] px-1 py-0.5 rounded ${
+                                        position.source === 'database'
+                                          ? 'bg-green-500/20 text-green-400'
+                                          : 'bg-blue-500/20 text-blue-400'
+                                      }`}>
+                                        {position.source === 'database' ? 'INSTANT' : 'PM'}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                                <div className="text-right">
+                                  <div className="text-lg font-bold font-mono text-white mb-1">
+                                    {parseFloat(position.size || position.total_shares || '0').toFixed(2)} shares
+                                  </div>
+                                  {(position.pnl !== undefined || position.realized_pnl !== undefined) && (
+                                    <div className={`text-sm font-mono font-medium ${
+                                      (position.pnl || position.realized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                                    }`}>
+                                      {(position.pnl || position.realized_pnl || 0) >= 0 ? '+' : ''}{(position.pnl || position.realized_pnl || 0).toFixed(2)} P&L
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </Link>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="text-center py-16">

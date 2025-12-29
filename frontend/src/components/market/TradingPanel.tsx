@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Info, Wallet } from 'lucide-react';
 import { TradingModal } from '../TradingModal';
 import { useUser } from '@/contexts/UserContext';
+import { useSafeAddress, PolymarketPosition } from '@/hooks/useSafeAddress';
 
 interface MarketOutcome {
   name: string;
@@ -41,32 +42,61 @@ export default function TradingPanel({ market, currentPrice, orderBook, selected
   const [selectedOutcome, setSelectedOutcome] = useState<'yes' | 'no'>('yes');
   const [shares, setShares] = useState<string>('');
 
-  // Get user positions from context
-  const { positions, fetchPositions, user } = useUser();
+  // Get user from context
+  const { user } = useUser();
 
-  // Fetch positions when component mounts or user changes
-  useEffect(() => {
-    if (user) {
-      fetchPositions();
-    }
-  }, [user, fetchPositions]);
+  // Get positions directly from Polymarket via useSafeAddress hook
+  // This uses the Safe address where trades actually occur
+  const { positions: polymarketPositions, refreshPositions, positionsLoading } = useSafeAddress();
 
   // Find user's positions for this market
+  // Polymarket uses conditionId to identify markets
   const userPositions = useMemo(() => {
-    if (!positions || !market?.id) return { yes: 0, no: 0 };
+    if (!polymarketPositions || polymarketPositions.length === 0 || !market?.id) {
+      return { yes: 0, no: 0 };
+    }
 
-    const yesPosition = positions.find(
-      p => p.market_id === market.id && p.outcome === 'YES'
-    );
-    const noPosition = positions.find(
-      p => p.market_id === market.id && p.outcome === 'NO'
-    );
+    // Try to match by conditionId, market_id, or slug
+    const marketIdentifiers = [
+      market.id,
+      market.condition_id,
+      market.conditionId,
+      market.slug,
+    ].filter(Boolean).map(id => id?.toLowerCase());
+
+    // Find YES position
+    const yesPosition = polymarketPositions.find(p => {
+      const positionIds = [
+        p.conditionId,
+        p.asset,
+        p.marketSlug,
+      ].filter(Boolean).map(id => id?.toLowerCase());
+
+      const isMatch = marketIdentifiers.some(mid => positionIds.some(pid => pid === mid || pid?.includes(mid) || mid?.includes(pid)));
+      const isYes = p.outcome === 'Yes' || p.outcome === 'YES';
+
+      return isMatch && isYes;
+    });
+
+    // Find NO position
+    const noPosition = polymarketPositions.find(p => {
+      const positionIds = [
+        p.conditionId,
+        p.asset,
+        p.marketSlug,
+      ].filter(Boolean).map(id => id?.toLowerCase());
+
+      const isMatch = marketIdentifiers.some(mid => positionIds.some(pid => pid === mid || pid?.includes(mid) || mid?.includes(pid)));
+      const isNo = p.outcome === 'No' || p.outcome === 'NO';
+
+      return isMatch && isNo;
+    });
 
     return {
-      yes: yesPosition?.total_shares || 0,
-      no: noPosition?.total_shares || 0
+      yes: parseFloat(yesPosition?.size || '0'),
+      no: parseFloat(noPosition?.size || '0')
     };
-  }, [positions, market?.id]);
+  }, [polymarketPositions, market?.id, market?.condition_id, market?.conditionId, market?.slug]);
 
   // Get shares for currently selected outcome
   const selectedShares = selectedOutcome === 'yes' ? userPositions.yes : userPositions.no;
