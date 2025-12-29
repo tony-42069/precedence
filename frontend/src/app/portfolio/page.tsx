@@ -275,12 +275,12 @@ export default function PortfolioPage() {
 
                     {/* Quick Actions */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <a href="/app/markets" className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                      <Link href="/markets" className="bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
                         <TrendingUp size={18} className="group-hover:scale-110 transition-transform" /> View Markets
-                      </a>
-                      <a href="/app/cases" className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
+                      </Link>
+                      <Link href="/cases" className="bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
                         <Gavel size={18} className="group-hover:scale-110 transition-transform" /> View Cases
-                      </a>
+                      </Link>
                       <button className="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 px-6 py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 group">
                         <Download size={18} className="group-hover:scale-110 transition-transform" /> Export CSV
                       </button>
@@ -313,13 +313,15 @@ export default function PortfolioPage() {
                     ) : combinedPositions && combinedPositions.length > 0 ? (
                       <div className="divide-y divide-white/5">
                         {combinedPositions.map((position, idx) => {
-                          // Determine the market link - use slug, conditionId, or market_id
-                          const marketLink = position.marketSlug || position.conditionId || position.market_id;
+                          // Determine the market link - prefer conditionId (numeric) over slug
+                          // basePath: '/app' is set in next.config.ts for production
+                          // So Link href should NOT include /app - it's auto-prepended
+                          const marketLink = position.conditionId || position.market_id || position.marketSlug;
 
                           return (
                             <Link
                               key={idx}
-                              href={`/app/markets/${marketLink}`}
+                              href={`/markets/${marketLink}`}
                               className="block p-4 hover:bg-white/5 transition-colors cursor-pointer group"
                             >
                               <div className="flex flex-col md:flex-row md:items-center justify-between">
@@ -374,12 +376,12 @@ export default function PortfolioPage() {
                         <AlertCircle className="w-12 h-12 text-slate-600 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-white mb-1">No Active Positions</h3>
                         <p className="text-slate-500 text-sm mb-4">Start trading on markets to build your portfolio.</p>
-                        <a 
-                          href="/app/markets"
+                        <Link
+                          href="/markets"
                           className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
                         >
                           <TrendingUp size={16} /> Browse Markets
-                        </a>
+                        </Link>
                       </div>
                     )}
                   </div>

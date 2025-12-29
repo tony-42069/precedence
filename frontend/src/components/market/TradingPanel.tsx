@@ -147,11 +147,13 @@ export default function TradingPanel({ market, currentPrice, orderBook, selected
   };
 
   // Handle sell percentage buttons - now connected to actual holdings
+  // Use toFixed(2) to preserve decimals instead of Math.floor
   const handleSellPercent = (percent: number) => {
     if (!hasPosition) return;
 
-    const shareAmount = Math.floor(selectedShares * (percent / 100));
-    setShares(shareAmount.toString());
+    const shareAmount = selectedShares * (percent / 100);
+    // Round to 2 decimal places, preserving fractional shares
+    setShares(shareAmount.toFixed(2));
   };
 
   // Get action button text
@@ -402,6 +404,9 @@ export default function TradingPanel({ market, currentPrice, orderBook, selected
         market={getMarketForTrading()}
         isOpen={showTradingModal}
         onClose={() => setShowTradingModal(false)}
+        initialTradeType={tradeMode}
+        initialOutcome={selectedOutcome}
+        userShares={selectedShares}
       />
     </>
   );

@@ -24,6 +24,9 @@ interface TradingModalProps {
   market: any;
   isOpen: boolean;
   onClose: () => void;
+  initialTradeType?: 'buy' | 'sell';
+  initialOutcome?: 'yes' | 'no';
+  userShares?: number;  // User's shares for the selected outcome (for selling)
 }
 
 interface MarketData {
@@ -33,7 +36,7 @@ interface MarketData {
   best_ask: number;
 }
 
-export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => {
+export const TradingModal = ({ market, isOpen, onClose, initialTradeType, initialOutcome, userShares = 0 }: TradingModalProps) => {
   const { authenticated, login } = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
 
@@ -164,26 +167,50 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     }
   }, [isOpen, market, marketType]);
 
-  // Reset state when modal closes
+  // Initialize state when modal opens, reset when it closes
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      // Initialize from props when modal opens
+      setTradeType(initialTradeType === 'sell' ? 'SELL' : 'BUY');
+      setSide(initialOutcome === 'no' ? 'NO' : 'YES');
+      setAmount('');
+      setBalanceError(null);
+    } else {
+      // Reset when modal closes
       resetOrder();
       setAmount('');
       setSide('YES');
       setTradeType('BUY');
       setBalanceError(null);
     }
-  }, [isOpen, resetOrder]);
+  }, [isOpen, initialTradeType, initialOutcome, resetOrder]);
 
   // Check balance when amount changes
   useEffect(() => {
     const checkBalance = async () => {
-      if (!amount || parseFloat(amount) <= 0 || !balance) {
+      if (!amount || parseFloat(amount) <= 0) {
         setBalanceError(null);
         return;
       }
 
       const tradeAmount = parseFloat(amount);
+
+      // For SELL mode: check if user has enough SHARES to sell
+      if (tradeType === 'SELL') {
+        if (tradeAmount > userShares) {
+          setBalanceError(`Insufficient shares. You have ${userShares.toFixed(2)} ${side} shares available.`);
+        } else {
+          setBalanceError(null);
+        }
+        return;
+      }
+
+      // For BUY mode: check USDC balance
+      if (!balance) {
+        setBalanceError(null);
+        return;
+      }
+
       const totalBalance = parseFloat(balance);
       const bridgedBalance = balances ? parseFloat(balances.bridged) : 0;
       const nativeBalance = balances ? parseFloat(balances.native) : 0;
@@ -201,7 +228,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
     };
 
     checkBalance();
-  }, [amount, balance, balances]);
+  }, [amount, balance, balances, tradeType, userShares, side]);
 
   if (!isOpen) return null;
 
@@ -278,18 +305,28 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
       return;
     }
 
-    // Step 4: Check balance and auto-swap if needed
+    // Step 4: Check balance and auto-swap if needed (BUY mode only)
     setIsCheckingBalance(true);
     setBalanceError(null);
 
     try {
-      const requiredAmount = ethers.utils.parseUnits(amount, 6);
-      const hasEnough = await ensureUsdcBalance(requiredAmount);
-      
-      if (!hasEnough) {
-        setBalanceError('Insufficient USDC balance. Please deposit more funds.');
-        setIsCheckingBalance(false);
-        return;
+      // For SELL mode: verify user has enough shares (already checked in useEffect, but double-check)
+      if (tradeType === 'SELL') {
+        if (parseFloat(amount) > userShares) {
+          setBalanceError(`Insufficient shares. You have ${userShares.toFixed(2)} ${side} shares available.`);
+          setIsCheckingBalance(false);
+          return;
+        }
+      } else {
+        // For BUY mode: check and auto-swap USDC if needed
+        const requiredAmount = ethers.utils.parseUnits(amount, 6);
+        const hasEnough = await ensureUsdcBalance(requiredAmount);
+
+        if (!hasEnough) {
+          setBalanceError('Insufficient USDC balance. Please deposit more funds.');
+          setIsCheckingBalance(false);
+          return;
+        }
       }
 
       setIsCheckingBalance(false);
@@ -375,8 +412,10 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
   const displayStatus = isInitializing ? sessionStatus : orderStatus;
 
-  // Calculate if user has enough balance
-  const hasInsufficientBalance = balance && amount && parseFloat(amount) > parseFloat(balance);
+  // Calculate if user has enough balance/shares
+  const hasInsufficientBalance = tradeType === 'SELL'
+    ? amount && parseFloat(amount) > userShares
+    : balance && amount && parseFloat(amount) > parseFloat(balance);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -556,27 +595,61 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
             </div>
           </div>
 
-          {/* Amount Input */}
+          {/* Amount Input - Different for BUY vs SELL */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <label className="block text-xs text-slate-400 uppercase tracking-wider font-mono">
-                Investment Amount
+                {tradeType === 'SELL' ? 'Shares to Sell' : 'Investment Amount'}
               </label>
-              <div className="flex gap-2">
-                {[10, 50, 100].map((preset) => (
+
+              {/* For BUY: show dollar presets */}
+              {tradeType === 'BUY' && (
+                <div className="flex gap-2">
+                  {[10, 50, 100].map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => setAmount(preset.toString())}
+                      className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20"
+                    >
+                      ${preset}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* For SELL: show available shares and percentage buttons */}
+              {tradeType === 'SELL' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">
+                    Available: <span className={`font-mono ${userShares > 0 ? 'text-green-400' : 'text-slate-600'}`}>
+                      {userShares.toFixed(2)}
+                    </span>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* SELL mode: percentage buttons */}
+            {tradeType === 'SELL' && userShares > 0 && (
+              <div className="flex gap-2 mb-3">
+                {[25, 50, 100].map((percent) => (
                   <button
-                    key={preset}
-                    onClick={() => setAmount(preset.toString())}
-                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20"
+                    key={percent}
+                    onClick={() => setAmount((userShares * (percent / 100)).toFixed(2))}
+                    className="flex-1 text-xs text-amber-400 hover:text-amber-300 transition-colors px-2 py-2 rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20"
                   >
-                    ${preset}
+                    {percent === 100 ? 'Max' : `${percent}%`}
                   </button>
                 ))}
               </div>
-            </div>
+            )}
 
             <div className="relative">
-              <DollarSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+              {tradeType === 'BUY' ? (
+                <DollarSign size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+              ) : (
+                <TrendingDown size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-500" />
+              )}
               <input
                 type="number"
                 value={amount}
@@ -586,7 +659,7 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
                 disabled={isOrderLoading || isInitializing || isCheckingBalance}
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-500 font-mono">
-                USDC
+                {tradeType === 'SELL' ? 'SHARES' : 'USDC'}
               </span>
             </div>
 
