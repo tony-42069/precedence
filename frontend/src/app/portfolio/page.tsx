@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '../../hooks/useWallet';
 import { useUser } from '../../contexts/UserContext';
@@ -27,32 +27,92 @@ export default function PortfolioPage() {
   const { walletState } = useWallet();
   const { user, clearUser, stats, fetchStats } = useUser();
   
-  // Use Safe address for positions (trades happen from Safe, not EOA!)
+  // Use Safe address for Polymarket positions, EOA for our database
   const { 
     safeAddress, 
     balance,
-    positions: safePositions, 
-    positionsLoading,
-    refreshPositions,
+    positions: polymarketPositions, // Renamed - this is from Polymarket API (slow)
+    positionsLoading: polymarketLoading,
+    refreshPositions: refreshPolymarketPositions,
     refreshBalance 
   } = useSafeAddress();
+  
+  // Our database positions (fast!) - fetch via API
+  const [dbPositions, setDbPositions] = useState<any[]>([]);
+  const [dbPositionsLoading, setDbPositionsLoading] = useState(false);
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'positions' | 'history'>('positions');
   const [refreshing, setRefreshing] = useState(false);
 
+  // Fetch positions from our database (instant!)
+  const fetchDbPositions = useCallback(async () => {
+    if (!user?.wallet_address) return;
+    
+    setDbPositionsLoading(true);
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://precedence-production.up.railway.app';
+      const response = await fetch(`${API_BASE_URL}/api/users/${user.wallet_address}/positions?active_only=true`);
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📊 Positions from our DB:', data);
+        setDbPositions(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch DB positions:', err);
+    } finally {
+      setDbPositionsLoading(false);
+    }
+  }, [user?.wallet_address]);
+
   // Fetch data when user is available
   useEffect(() => {
     if (user) {
       fetchStats();
+      fetchDbPositions(); // Fetch from our DB immediately
     }
-  }, [user, fetchStats]);
+  }, [user, fetchStats, fetchDbPositions]);
+
+  // Combine positions: prefer our DB (instant), supplement with Polymarket (delayed)
+  const combinedPositions = useMemo(() => {
+    // Start with our DB positions
+    const positionsMap = new Map();
+    
+    // Add DB positions first (these are instant)
+    dbPositions.forEach(pos => {
+      const key = `${pos.market_id}-${pos.outcome}`;
+      positionsMap.set(key, {
+        ...pos,
+        source: 'database',
+        marketQuestion: pos.market_question || pos.market_id,
+        size: pos.total_shares?.toString() || '0',
+        avgPrice: pos.avg_entry_price?.toString() || '0',
+      });
+    });
+    
+    // Then add Polymarket positions that aren't in our DB yet
+    // (This handles positions that existed before we started tracking)
+    if (polymarketPositions) {
+      polymarketPositions.forEach(pos => {
+        const key = `${pos.conditionId || pos.asset}-${pos.outcome || 'YES'}`;
+        if (!positionsMap.has(key)) {
+          positionsMap.set(key, {
+            ...pos,
+            source: 'polymarket',
+          });
+        }
+      });
+    }
+    
+    return Array.from(positionsMap.values());
+  }, [dbPositions, polymarketPositions]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      refreshPositions(),
+      fetchDbPositions(),      // Our DB (fast)
+      refreshPolymarketPositions(), // Polymarket API (slow)
       refreshBalance(),
       fetchStats()
     ]);
@@ -61,7 +121,8 @@ export default function PortfolioPage() {
 
   // Calculate portfolio metrics
   const totalPortfolioValue = parseFloat(balance || '0');
-  const positionCount = safePositions?.length || 0;
+  const positionCount = combinedPositions.length;
+  const positionsLoading = dbPositionsLoading || polymarketLoading;
   const totalTrades = user?.total_trades || 0;
   const winRate = user?.win_rate ? user.win_rate * 100 : 0;
 
@@ -234,7 +295,7 @@ export default function PortfolioPage() {
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-slate-500">{positionCount} position{positionCount !== 1 ? 's' : ''}</span>
                         <button
-                          onClick={refreshPositions}
+                          onClick={handleRefresh}
                           disabled={positionsLoading}
                           className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                         >
@@ -248,13 +309,13 @@ export default function PortfolioPage() {
                         <RefreshCw className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
                         <p className="text-slate-400">Loading positions...</p>
                       </div>
-                    ) : safePositions && safePositions.length > 0 ? (
+                    ) : combinedPositions && combinedPositions.length > 0 ? (
                       <div className="divide-y divide-white/5">
-                        {safePositions.map((position, idx) => (
+                        {combinedPositions.map((position, idx) => (
                           <div key={idx} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-white/5 transition-colors">
                             <div className="flex-1 mb-4 md:mb-0">
                               <h4 className="font-medium text-slate-200 mb-1">
-                                {position.marketQuestion || position.marketSlug || position.conditionId?.slice(0, 16) + '...'}
+                                {position.marketQuestion || position.marketSlug || position.market_id?.slice(0, 20) + '...' || 'Unknown Market'}
                               </h4>
                               <div className="flex items-center gap-4 text-sm font-mono">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] uppercase border ${
@@ -265,22 +326,31 @@ export default function PortfolioPage() {
                                   {position.outcome || 'POSITION'}
                                 </span>
                                 <span className="text-slate-500">
-                                  SIZE: <span className="text-slate-300">{parseFloat(position.size).toFixed(2)}</span>
+                                  SIZE: <span className="text-slate-300">{parseFloat(position.size || position.total_shares || '0').toFixed(2)}</span>
                                 </span>
                                 <span className="text-slate-500">
-                                  AVG: <span className="text-slate-300">${parseFloat(position.avgPrice).toFixed(3)}</span>
+                                  AVG: <span className="text-slate-300">${parseFloat(position.avgPrice || position.avg_entry_price || '0').toFixed(3)}</span>
                                 </span>
+                                {position.source && (
+                                  <span className={`text-[10px] px-1 py-0.5 rounded ${
+                                    position.source === 'database' 
+                                      ? 'bg-green-500/20 text-green-400' 
+                                      : 'bg-blue-500/20 text-blue-400'
+                                  }`}>
+                                    {position.source === 'database' ? 'INSTANT' : 'PM'}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="text-right">
                               <div className="text-lg font-bold font-mono text-white mb-1">
-                                {parseFloat(position.size).toFixed(2)} shares
+                                {parseFloat(position.size || position.total_shares || '0').toFixed(2)} shares
                               </div>
-                              {position.pnl !== undefined && (
+                              {(position.pnl !== undefined || position.realized_pnl !== undefined) && (
                                 <div className={`text-sm font-mono font-medium ${
-                                  position.pnl >= 0 ? 'text-green-400' : 'text-red-400'
+                                  (position.pnl || position.realized_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
                                 }`}>
-                                  {position.pnl >= 0 ? '+' : ''}{position.pnl.toFixed(2)} P&L
+                                  {(position.pnl || position.realized_pnl || 0) >= 0 ? '+' : ''}{(position.pnl || position.realized_pnl || 0).toFixed(2)} P&L
                                 </div>
                               )}
                             </div>

@@ -99,6 +99,18 @@ class TradeResponse(BaseModel):
         from_attributes = True
 
 
+class TradeCreate(BaseModel):
+    """Request model for creating a trade record."""
+    market_id: str
+    side: str  # 'BUY' or 'SELL'
+    outcome: str  # 'YES' or 'NO'
+    size: float
+    price: float
+    order_id: Optional[str] = None
+    token_id: Optional[str] = None
+    market_question: Optional[str] = None
+
+
 class LeaderboardEntry(BaseModel):
     """Response model for leaderboard entry."""
     rank: int
@@ -336,6 +348,152 @@ async def get_user_trades(
     ).offset(offset).limit(limit).all()
     
     return [TradeResponse(**t.to_dict()) for t in trades]
+
+
+@router.post("/{wallet_address}/trades", response_model=TradeResponse, status_code=status.HTTP_201_CREATED)
+async def record_trade(
+    wallet_address: str,
+    trade: TradeCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Record a new trade for a user.
+    
+    Called by the frontend after a successful order placement on Polymarket.
+    Updates user stats (total_trades, total_volume, etc.)
+    Also creates/updates position records for immediate portfolio display.
+    
+    Args:
+        wallet_address: The user's wallet address (EOA address)
+        trade: Trade details
+        db: Database session
+    
+    Returns:
+        TradeResponse: The recorded trade
+    """
+    wallet = normalize_wallet_address(wallet_address)
+    
+    # Check if user exists
+    user = db.query(UserProfile).filter(
+        UserProfile.wallet_address == wallet
+    ).first()
+    
+    if not user:
+        # Create a minimal profile
+        user = UserProfile(
+            wallet_address=wallet,
+            badges=[],
+            notification_settings={},
+            display_settings={},
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    
+    # Calculate trade value
+    total_cost = trade.size * trade.price
+    
+    # Create trade record
+    new_trade = Trade(
+        wallet_address=wallet,
+        market_id=trade.market_id,
+        side=trade.side.upper(),
+        outcome=trade.outcome.upper(),
+        size=trade.size,
+        price=trade.price,
+        total_cost=total_cost,
+        fee=0,
+        order_id=trade.order_id,
+        status='FILLED',
+        executed_at=datetime.utcnow(),
+    )
+    
+    db.add(new_trade)
+    
+    # =========================================================================
+    # UPDATE OR CREATE POSITION - This is key for immediate portfolio display!
+    # =========================================================================
+    existing_position = db.query(Position).filter(
+        Position.wallet_address == wallet,
+        Position.market_id == trade.market_id,
+        Position.outcome == trade.outcome.upper()
+    ).first()
+    
+    if existing_position:
+        # Update existing position
+        if trade.side.upper() == 'BUY':
+            # Add to position
+            new_total_shares = existing_position.total_shares + trade.size
+            new_total_cost = existing_position.total_cost + total_cost
+            existing_position.total_shares = new_total_shares
+            existing_position.total_cost = new_total_cost
+            existing_position.avg_entry_price = new_total_cost / new_total_shares if new_total_shares > 0 else 0
+        else:
+            # Reduce position (SELL)
+            new_total_shares = existing_position.total_shares - trade.size
+            if new_total_shares <= 0:
+                # Position closed
+                # Calculate realized P&L
+                sell_value = trade.size * trade.price
+                cost_basis = trade.size * (existing_position.avg_entry_price or trade.price)
+                realized_pnl = sell_value - cost_basis
+                existing_position.realized_pnl = (existing_position.realized_pnl or 0) + realized_pnl
+                existing_position.total_shares = 0
+                existing_position.total_cost = 0
+            else:
+                # Partial close
+                sell_value = trade.size * trade.price
+                cost_basis = trade.size * (existing_position.avg_entry_price or trade.price)
+                realized_pnl = sell_value - cost_basis
+                existing_position.realized_pnl = (existing_position.realized_pnl or 0) + realized_pnl
+                existing_position.total_shares = new_total_shares
+                # Total cost proportionally reduced
+                existing_position.total_cost = new_total_shares * (existing_position.avg_entry_price or trade.price)
+        
+        existing_position.trade_count = (existing_position.trade_count or 0) + 1
+        existing_position.last_trade_at = datetime.utcnow()
+        existing_position.current_price = trade.price
+        existing_position.current_value = existing_position.total_shares * trade.price
+    else:
+        # Create new position (only for BUY orders)
+        if trade.side.upper() == 'BUY':
+            new_position = Position(
+                wallet_address=wallet,
+                market_id=trade.market_id,
+                outcome=trade.outcome.upper(),
+                total_shares=trade.size,
+                total_cost=total_cost,
+                avg_entry_price=trade.price,
+                trade_count=1,
+                current_price=trade.price,
+                current_value=total_cost,
+                unrealized_pnl=0,
+                realized_pnl=0,
+                last_trade_at=datetime.utcnow(),
+                # Store market question for display
+                # Note: Position model might need this field added
+            )
+            db.add(new_position)
+    
+    # Update user stats
+    user.total_trades = (user.total_trades or 0) + 1
+    user.total_volume = (user.total_volume or 0) + total_cost
+    user.last_active = datetime.utcnow()
+    
+    # Check if this is a new market for the user
+    existing_market_trade = db.query(Trade).filter(
+        Trade.wallet_address == wallet,
+        Trade.market_id == trade.market_id,
+        Trade.id != new_trade.id
+    ).first()
+    
+    if not existing_market_trade:
+        user.markets_traded = (user.markets_traded or 0) + 1
+    
+    db.commit()
+    db.refresh(new_trade)
+    
+    return TradeResponse(**new_trade.to_dict())
 
 
 @router.get("/{wallet_address}/stats")

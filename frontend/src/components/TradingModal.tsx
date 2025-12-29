@@ -18,7 +18,6 @@ import { usePolymarketOrder } from '../hooks/usePolymarketOrder';
 import { useGeoRestriction } from '../hooks/useGeoRestriction';
 import { useSafeAddress } from '../hooks/useSafeAddress';
 import { apiService } from '../services/api';
-import { userService } from '../services/userService';
 import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info, ArrowUpCircle, ArrowDownCircle, Receipt, RefreshCw } from 'lucide-react';
 
 interface TradingModalProps {
@@ -312,17 +311,26 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
         try {
           const walletAddress = session?.eoaAddress || wallets[0]?.address;
           if (walletAddress) {
-            await userService.recordTrade(walletAddress, {
-              market_id: market.id || market.condition_id || '',
-              side: tradeType,
-              outcome: side,
-              size: parseFloat(amount),
-              price: price,
-              order_id: result.orderId,
-              token_id: tokenId,
-              market_question: market.question || market.market || '',
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://precedence-production.up.railway.app';
+            const response = await fetch(`${API_BASE_URL}/api/users/${walletAddress}/trades`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                market_id: market.id || market.condition_id || '',
+                side: tradeType,
+                outcome: side,
+                size: parseFloat(amount),
+                price: price,
+                order_id: result.orderId,
+                token_id: tokenId,
+                market_question: market.question || market.market || '',
+              }),
             });
-            console.log('📝 Trade recorded in database');
+            if (response.ok) {
+              console.log('📝 Trade recorded in database');
+            } else {
+              console.warn('⚠️ Failed to record trade:', await response.text());
+            }
           }
         } catch (recordErr) {
           // Don't fail the trade if recording fails
