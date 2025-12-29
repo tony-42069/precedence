@@ -67,7 +67,7 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
           expiration: 0,
         },
         { negRisk: params.negRisk ?? false },
-        OrderType.FOK  // MARKET ORDER - NOT GTC (limit order)!
+        'FOK' as any  // MARKET ORDER - TypeScript types are incomplete, but API accepts FOK
       );
       
       console.log('✅ Order response:', response);
