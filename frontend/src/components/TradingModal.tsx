@@ -18,6 +18,7 @@ import { usePolymarketOrder } from '../hooks/usePolymarketOrder';
 import { useGeoRestriction } from '../hooks/useGeoRestriction';
 import { useSafeAddress } from '../hooks/useSafeAddress';
 import { apiService } from '../services/api';
+import { userService } from '../services/userService';
 import { X, DollarSign, TrendingUp, TrendingDown, Cpu, Wallet, Settings2, Shield, Loader2, AlertTriangle, Globe, Info, ArrowUpCircle, ArrowDownCircle, Receipt, RefreshCw } from 'lucide-react';
 
 interface TradingModalProps {
@@ -306,6 +307,28 @@ export const TradingModal = ({ market, isOpen, onClose }: TradingModalProps) => 
 
       if (result.success) {
         console.log('🎉 Trade successful!');
+        
+        // Record trade in backend database
+        try {
+          const walletAddress = session?.eoaAddress || wallets[0]?.address;
+          if (walletAddress) {
+            await userService.recordTrade(walletAddress, {
+              market_id: market.id || market.condition_id || '',
+              side: tradeType,
+              outcome: side,
+              size: parseFloat(amount),
+              price: price,
+              order_id: result.orderId,
+              token_id: tokenId,
+              market_question: market.question || market.market || '',
+            });
+            console.log('📝 Trade recorded in database');
+          }
+        } catch (recordErr) {
+          // Don't fail the trade if recording fails
+          console.warn('⚠️ Failed to record trade in database:', recordErr);
+        }
+        
         // Refresh balance after trade
         setTimeout(refreshBalance, 2000);
       }

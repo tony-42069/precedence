@@ -23,6 +23,7 @@ const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 // Polymarket APIs
 const GAMMA_API_URL = 'https://gamma-api.polymarket.com';
 const CLOB_API_URL = 'https://clob.polymarket.com';
+const DATA_API_URL = 'https://data-api.polymarket.com'; // CORRECT endpoint for positions!
 
 interface SafeAddressState {
   eoaAddress: string | null;
@@ -122,7 +123,11 @@ export const useSafeAddress = () => {
   }, []);
 
   /**
-   * Fetch positions from Polymarket for Safe address
+   * Fetch positions from Polymarket Data API for Safe address
+   * NOTE: Data API is the CORRECT endpoint, not Gamma API!
+   * See: https://docs.polymarket.com/developers/misc-endpoints/data-api-get-positions
+   * 
+   * IMPORTANT: There's typically a 1-5 minute indexing delay after trades!
    */
   const fetchPositions = useCallback(async (safeAddr: string) => {
     if (!safeAddr) {
@@ -132,25 +137,73 @@ export const useSafeAddress = () => {
 
     setPositionsLoading(true);
     try {
-      // Fetch from Polymarket Gamma API - user positions endpoint
-      const response = await fetch(
-        `${GAMMA_API_URL}/positions?user=${safeAddr.toLowerCase()}`
-      );
+      // Use Data API - the correct endpoint for user positions
+      // Include sizeThreshold=0 to show ALL positions including small ones
+      const url = `${DATA_API_URL}/positions?user=${safeAddr.toLowerCase()}&sizeThreshold=0&limit=100`;
+      console.log('📊 Fetching positions from Data API:', url);
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
-        console.warn('Positions API returned:', response.status);
+        console.warn('Data API positions returned:', response.status);
+        // Try CLOB API as fallback for open orders
+        try {
+          const clobUrl = `${CLOB_API_URL}/openorders?owner=${safeAddr.toLowerCase()}`;
+          console.log('📊 Trying CLOB API fallback:', clobUrl);
+          const clobResponse = await fetch(clobUrl);
+          if (clobResponse.ok) {
+            const clobData = await clobResponse.json();
+            console.log('📊 CLOB open orders:', clobData);
+          }
+        } catch (clobErr) {
+          console.warn('CLOB fallback failed:', clobErr);
+        }
         setPositions([]);
         return;
       }
       
       const data = await response.json();
-      console.log('📊 Polymarket positions for Safe:', data);
+      console.log('📊 Polymarket positions from Data API:', data);
       
+      // Data API returns an array directly
       if (Array.isArray(data)) {
-        setPositions(data);
-      } else if (data.positions && Array.isArray(data.positions)) {
-        setPositions(data.positions);
+        // Map the Data API response to our internal format
+        const mappedPositions: PolymarketPosition[] = data.map((pos: any) => ({
+          asset: pos.asset,
+          conditionId: pos.conditionId,
+          size: pos.size?.toString() || '0',
+          avgPrice: pos.avgPrice?.toString() || '0',
+          currentPrice: pos.curPrice,
+          marketSlug: pos.slug,
+          marketQuestion: pos.title,
+          outcome: pos.outcome,
+          pnl: pos.cashPnl,
+        }));
+        setPositions(mappedPositions);
+        console.log(`📊 Found ${mappedPositions.length} positions`);
+      } else if (data && typeof data === 'object') {
+        // Sometimes the API returns {positions: [...]} format
+        const positionsArray = data.positions || data.data || [];
+        if (Array.isArray(positionsArray)) {
+          const mappedPositions: PolymarketPosition[] = positionsArray.map((pos: any) => ({
+            asset: pos.asset,
+            conditionId: pos.conditionId,
+            size: pos.size?.toString() || '0',
+            avgPrice: pos.avgPrice?.toString() || '0',
+            currentPrice: pos.curPrice,
+            marketSlug: pos.slug,
+            marketQuestion: pos.title,
+            outcome: pos.outcome,
+            pnl: pos.cashPnl,
+          }));
+          setPositions(mappedPositions);
+          console.log(`📊 Found ${mappedPositions.length} positions (from nested format)`);
+        } else {
+          console.warn('📊 Data API returned unexpected nested format');
+          setPositions([]);
+        }
       } else {
+        console.warn('📊 Data API returned unexpected format:', typeof data);
         setPositions([]);
       }
     } catch (err) {
