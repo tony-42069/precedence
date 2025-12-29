@@ -195,6 +195,29 @@ class UserService {
     const params = new URLSearchParams({ limit: String(limit) });
     return this.request(`/api/users/leaderboard/profit?${params}`);
   }
+
+  /**
+   * Record a trade after successful order placement
+   * This updates user stats in our backend
+   */
+  async recordTrade(
+    walletAddress: string, 
+    trade: {
+      market_id: string;
+      side: 'BUY' | 'SELL';
+      outcome: 'YES' | 'NO';
+      size: number;
+      price: number;
+      order_id?: string;
+      token_id?: string;
+      market_question?: string;
+    }
+  ): Promise<Trade> {
+    return this.request(`/api/users/${walletAddress}/trades`, {
+      method: 'POST',
+      body: JSON.stringify(trade),
+    });
+  }
 }
 
 // Global instance

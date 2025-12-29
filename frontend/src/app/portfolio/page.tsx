@@ -313,10 +313,11 @@ export default function PortfolioPage() {
                     ) : combinedPositions && combinedPositions.length > 0 ? (
                       <div className="divide-y divide-white/5">
                         {combinedPositions.map((position, idx) => {
-                          // Determine the market link - prefer conditionId (numeric) over slug
+                          // Determine the market link - prefer slug, then market_id
+                          // conditionId is a hex hash and NOT the market ID!
                           // basePath: '/app' is set in next.config.ts for production
                           // So Link href should NOT include /app - it's auto-prepended
-                          const marketLink = position.conditionId || position.market_id || position.marketSlug;
+                          const marketLink = position.marketSlug || position.market_id || position.conditionId;
 
                           return (
                             <Link

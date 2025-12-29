@@ -32,8 +32,12 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
   /**
-   * Place a limit order
+   * Place a MARKET order (FOK - Fill Or Kill)
    * THIS IS THE ONLY PLACE THAT REQUIRES A SIGNATURE (the order itself)
+   *
+   * IMPORTANT: We use FOK (market orders), NOT GTC (limit orders)!
+   * - FOK: BUY in DOLLARS, SELL in SHARES - lower minimums, instant execution
+   * - GTC: Everything in SHARES - stricter minimums, sits on order book
    */
   const placeOrder = useCallback(async (params: OrderParams): Promise<OrderResult> => {
     setState('creating');
@@ -52,6 +56,7 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       console.log('📝 Placing order:', params);
 
       // This is the ONE signature the user needs to provide
+      // Use FOK (Fill Or Kill) market orders for instant execution
       const response = await client.createAndPostOrder(
         {
           tokenID: params.tokenId,
@@ -62,7 +67,7 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
           expiration: 0,
         },
         { negRisk: params.negRisk ?? false },
-        OrderType.GTC
+        OrderType.FOK  // MARKET ORDER - NOT GTC (limit order)!
       );
       
       console.log('✅ Order response:', response);
