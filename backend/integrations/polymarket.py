@@ -86,13 +86,12 @@ class PolymarketClient:
         """
         Get detailed information about a specific market from Gamma API.
 
-        Supports market IDs, event IDs, AND slugs:
-        - First tries to fetch as a market by ID
-        - Then tries to fetch as an event by ID
-        - Finally tries to fetch by slug
+        Supports both event IDs and market IDs:
+        - First tries to fetch as a market
+        - If not found, tries to fetch as an event and return the first market
 
         Args:
-            market_id: Polymarket market ID, event ID, or slug
+            market_id: Polymarket market ID or event ID
 
         Returns:
             Dict containing market details with parsed prices
@@ -208,39 +207,7 @@ class PolymarketClient:
                         
                         logger.info(f"Found binary market via event: {market.get('id') if market else 'None'}")
                 else:
-                    # Try as SLUG (e.g., "russia-x-ukraine-ceasefire-in-2025")
-                    logger.info(f"Event not found, trying as slug: {market_id}")
-                    slug_url = f"https://gamma-api.polymarket.com/events?slug={market_id}"
-                    slug_response = httpx.get(slug_url, timeout=10.0)
-                    
-                    if slug_response.status_code == 200:
-                        slug_events = slug_response.json()
-                        if slug_events and len(slug_events) > 0:
-                            event = slug_events[0]  # Take first matching event
-                            nested_markets = event.get('markets', [])
-                            
-                            # Find first active market
-                            for nm in nested_markets:
-                                if not nm.get('closed', False):
-                                    market = nm
-                                    market['event_title'] = event.get('title', '')
-                                    market['event_image'] = event.get('image', '')
-                                    market['event_icon'] = event.get('icon', '')
-                                    market['is_binary'] = True
-                                    break
-                            
-                            if not market and nested_markets:
-                                # Fallback to first market even if closed
-                                market = nested_markets[0]
-                                market['event_title'] = event.get('title', '')
-                                market['event_image'] = event.get('image', '')
-                                market['event_icon'] = event.get('icon', '')
-                                market['is_binary'] = True
-                            
-                            logger.info(f"Found market via slug: {market.get('id') if market else 'None'}")
-                    
-                    if not market:
-                        raise Exception(f"Market not found by ID, event ID, or slug: {market_id}")
+                    raise Exception(f"Neither market nor event found for ID: {market_id}")
 
             if not market:
                 raise Exception(f"No market data found for ID: {market_id}")

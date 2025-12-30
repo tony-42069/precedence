@@ -49,6 +49,7 @@ export interface PolymarketPosition {
   marketQuestion?: string;
   outcome?: string;
   pnl?: number;
+  market_id?: string; // NUMERIC ID for proper linking
 }
 
 export const useSafeAddress = () => {
@@ -168,34 +169,78 @@ export const useSafeAddress = () => {
       // Data API returns an array directly
       if (Array.isArray(data)) {
         // Map the Data API response to our internal format
-        const mappedPositions: PolymarketPosition[] = data.map((pos: any) => ({
-          asset: pos.asset,
-          conditionId: pos.conditionId,
-          size: pos.size?.toString() || '0',
-          avgPrice: pos.avgPrice?.toString() || '0',
-          currentPrice: pos.curPrice,
-          marketSlug: pos.slug,
-          marketQuestion: pos.title,
-          outcome: pos.outcome,
-          pnl: pos.cashPnl,
-        }));
+        // IMPORTANT: Also look up numeric market ID for proper linking
+        const mappedPositions: PolymarketPosition[] = await Promise.all(
+          data.map(async (pos: any) => {
+            // Try to get numeric market ID from slug via Gamma API
+            let marketId: string | undefined = undefined;
+            if (pos.slug) {
+              try {
+                const eventResponse = await fetch(`${GAMMA_API_URL}/events?slug=${pos.slug}`);
+                if (eventResponse.ok) {
+                  const events = await eventResponse.json();
+                  if (events && events.length > 0) {
+                    marketId = events[0].id;
+                    console.log(`📊 Resolved slug "${pos.slug}" to market ID: ${marketId}`);
+                  }
+                }
+              } catch (lookupErr) {
+                console.warn(`Failed to lookup market ID for slug ${pos.slug}:`, lookupErr);
+              }
+            }
+            
+            return {
+              asset: pos.asset,
+              conditionId: pos.conditionId,
+              size: pos.size?.toString() || '0',
+              avgPrice: pos.avgPrice?.toString() || '0',
+              currentPrice: pos.curPrice,
+              marketSlug: pos.slug,
+              marketQuestion: pos.title,
+              outcome: pos.outcome,
+              pnl: pos.cashPnl,
+              market_id: marketId, // NUMERIC ID for proper linking!
+            };
+          })
+        );
         setPositions(mappedPositions);
         console.log(`📊 Found ${mappedPositions.length} positions`);
       } else if (data && typeof data === 'object') {
         // Sometimes the API returns {positions: [...]} format
         const positionsArray = data.positions || data.data || [];
         if (Array.isArray(positionsArray)) {
-          const mappedPositions: PolymarketPosition[] = positionsArray.map((pos: any) => ({
-            asset: pos.asset,
-            conditionId: pos.conditionId,
-            size: pos.size?.toString() || '0',
-            avgPrice: pos.avgPrice?.toString() || '0',
-            currentPrice: pos.curPrice,
-            marketSlug: pos.slug,
-            marketQuestion: pos.title,
-            outcome: pos.outcome,
-            pnl: pos.cashPnl,
-          }));
+          // Same lookup logic as above
+          const mappedPositions: PolymarketPosition[] = await Promise.all(
+            positionsArray.map(async (pos: any) => {
+              let marketId: string | undefined = undefined;
+              if (pos.slug) {
+                try {
+                  const eventResponse = await fetch(`${GAMMA_API_URL}/events?slug=${pos.slug}`);
+                  if (eventResponse.ok) {
+                    const events = await eventResponse.json();
+                    if (events && events.length > 0) {
+                      marketId = events[0].id;
+                    }
+                  }
+                } catch (lookupErr) {
+                  console.warn(`Failed to lookup market ID for slug ${pos.slug}:`, lookupErr);
+                }
+              }
+              
+              return {
+                asset: pos.asset,
+                conditionId: pos.conditionId,
+                size: pos.size?.toString() || '0',
+                avgPrice: pos.avgPrice?.toString() || '0',
+                currentPrice: pos.curPrice,
+                marketSlug: pos.slug,
+                marketQuestion: pos.title,
+                outcome: pos.outcome,
+                pnl: pos.cashPnl,
+                market_id: marketId,
+              };
+            })
+          );
           setPositions(mappedPositions);
           console.log(`📊 Found ${mappedPositions.length} positions (from nested format)`);
         } else {
