@@ -62,18 +62,37 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         throw new Error('Trading session not ready. Please initialize first.');
       }
 
-      // Round price to 3 decimals (standard for Polymarket prices)
-      // Round size to 2 decimals (to ensure maker amount stays within 2 decimal limit)
+      // CRITICAL: Polymarket requires makerAmount (shares) to have max 2 decimals
+      // For BUY orders: makerAmount = size / price (shares you receive)
+      // For SELL orders: makerAmount = size (shares you sell)
+      // 
+      // We need to round SHARES to 2 decimals, then back-calculate size if needed
       const roundedPrice = roundToDecimals(params.price, 3);
-      const roundedSize = roundToDecimals(params.size, 2);
       
-      console.log('📝 Placing order:', {
-        ...params,
-        roundedPrice,
-        roundedSize,
-        originalPrice: params.price,
-        originalSize: params.size,
-      });
+      let finalSize: number;
+      if (params.side === 'BUY') {
+        // BUY: size is in USDC, makerAmount (shares) = size / price
+        // Round the shares first, then back-calculate USDC
+        const intendedShares = params.size / roundedPrice;
+        const roundedShares = roundToDecimals(intendedShares, 2);
+        // Back-calculate the exact USDC needed for these rounded shares
+        finalSize = roundToDecimals(roundedShares * roundedPrice, 2);
+        console.log('📝 BUY order calculation:', {
+          originalSize: params.size,
+          intendedShares,
+          roundedShares,
+          finalSize,
+          price: roundedPrice,
+        });
+      } else {
+        // SELL: size is in SHARES, which IS the makerAmount - just round it
+        finalSize = roundToDecimals(params.size, 2);
+        console.log('📝 SELL order calculation:', {
+          originalSize: params.size,
+          finalSize,
+          price: roundedPrice,
+        });
+      }
 
       // This is the ONE signature the user needs to provide
       // Use FOK (Fill Or Kill) market orders for instant execution
@@ -81,7 +100,7 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         {
           tokenID: params.tokenId,
           price: roundedPrice,
-          size: roundedSize,
+          size: finalSize,
           side: params.side === 'BUY' ? Side.BUY : Side.SELL,
           feeRateBps: 0,
           expiration: 0,

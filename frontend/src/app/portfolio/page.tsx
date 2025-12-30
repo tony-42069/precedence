@@ -112,40 +112,46 @@ export default function PortfolioPage() {
     return Array.from(positionsMap.values());
   }, [dbPositions, polymarketPositions]);
 
-  // Resolve market slugs to numeric IDs
+  // Resolve market slugs to numeric IDs (fallback - useSafeAddress should already have resolved these)
+  // This is a backup in case the primary resolution in useSafeAddress fails
   useEffect(() => {
+    const GAMMA_API_URL = 'https://gamma-api.polymarket.com';
+    
     const resolveSlugs = async () => {
       if (combinedPositions.length === 0) return;
 
       const slugsToResolve: string[] = [];
 
-      // Find slugs that need resolving
+      // Find slugs that need resolving (only if market_id is missing)
       combinedPositions.forEach(pos => {
-        const marketId = pos.market_id || pos.marketSlug || pos.conditionId;
-        if (marketId &&
-            !resolvedMarketIds.has(marketId) &&
-            !/^\d+$/.test(marketId) &&
-            marketId.includes('-') &&
-            marketId.length > 10) {
-          slugsToResolve.push(marketId);
+        // If we already have a numeric market_id, skip
+        if (pos.market_id && /^\d+$/.test(pos.market_id)) return;
+        
+        const slug = pos.marketSlug;
+        if (slug &&
+            !resolvedMarketIds.has(slug) &&
+            slug.includes('-') &&
+            slug.length > 10) {
+          slugsToResolve.push(slug);
         }
       });
 
       if (slugsToResolve.length === 0) return;
 
-      console.log('🔄 Resolving market slugs:', slugsToResolve);
+      console.log('🔄 Fallback: Resolving market slugs via Gamma API:', slugsToResolve);
 
-      // Resolve each slug
+      // Resolve each slug via Gamma API (correct endpoint: /events/slug/{slug})
       const newResolvedIds = new Map(resolvedMarketIds);
 
       for (const slug of slugsToResolve) {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://precedence-production.up.railway.app'}/api/markets/${slug}`);
+          const response = await fetch(`${GAMMA_API_URL}/events/slug/${slug}`);
           if (response.ok) {
-            const data = await response.json();
-            if (data.id && /^\d+$/.test(data.id)) {
-              newResolvedIds.set(slug, data.id);
-              console.log(`✅ Resolved ${slug} -> ${data.id}`);
+            const event = await response.json();
+            if (event && event.id) {
+              const numericId = event.id.toString();
+              newResolvedIds.set(slug, numericId);
+              console.log(`✅ Resolved ${slug} -> ${numericId}`);
             }
           }
         } catch (err) {
@@ -157,7 +163,7 @@ export default function PortfolioPage() {
     };
 
     resolveSlugs();
-  }, [combinedPositions]);
+  }, [combinedPositions, resolvedMarketIds]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -363,19 +369,27 @@ export default function PortfolioPage() {
                     ) : combinedPositions && combinedPositions.length > 0 ? (
                       <div className="divide-y divide-white/5">
                         {combinedPositions.map((position, idx) => {
-                          // Determine the market link - prefer numeric market_id first (from DB positions)
-                          // If it's a slug, check if we've resolved it to a numeric ID
-                          let marketLink = position.market_id || position.marketSlug || position.conditionId;
-
-                          // Check if this slug has been resolved to a numeric ID
-                          if (marketLink && resolvedMarketIds.has(marketLink)) {
-                            marketLink = resolvedMarketIds.get(marketLink)!;
+                          // Determine the market link - prefer numeric market_id (from useSafeAddress resolution or DB)
+                          // Priority: numeric market_id > resolved slug > raw slug/conditionId
+                          let marketLink: string;
+                          
+                          // 1. Check if we have a numeric market_id already
+                          if (position.market_id && /^\d+$/.test(position.market_id)) {
+                            marketLink = position.market_id;
+                          }
+                          // 2. Check if the slug was resolved in the fallback useEffect
+                          else if (position.marketSlug && resolvedMarketIds.has(position.marketSlug)) {
+                            marketLink = resolvedMarketIds.get(position.marketSlug)!;
+                          }
+                          // 3. Fall back to slug or conditionId (may not work but better than nothing)
+                          else {
+                            marketLink = position.marketSlug || position.conditionId || 'unknown';
                           }
 
                           return (
                             <Link
                               key={idx}
-                              href={`/markets/${marketLink}`}
+                              href={`/app/markets/${marketLink}`}
                               className="block p-4 hover:bg-white/5 transition-colors cursor-pointer group"
                             >
                               <div className="flex flex-col md:flex-row md:items-center justify-between">

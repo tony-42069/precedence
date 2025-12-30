@@ -86,12 +86,13 @@ class PolymarketClient:
         """
         Get detailed information about a specific market from Gamma API.
 
-        Supports both event IDs and market IDs:
-        - First tries to fetch as a market
-        - If not found, tries to fetch as an event and return the first market
+        Supports market IDs, event IDs, AND slugs:
+        - First tries to fetch as a market (numeric ID)
+        - If not found, tries to fetch as an event (numeric ID)
+        - If not found, tries to fetch as a slug
 
         Args:
-            market_id: Polymarket market ID or event ID
+            market_id: Polymarket market ID, event ID, or slug
 
         Returns:
             Dict containing market details with parsed prices
@@ -114,6 +115,16 @@ class PolymarketClient:
                 logger.info(f"Market not found, trying as event ID: {market_id}")
                 event_url = f"https://gamma-api.polymarket.com/events/{market_id}"
                 event_response = httpx.get(event_url, timeout=10.0)
+                
+                # If event ID also fails, try as slug
+                if event_response.status_code != 200:
+                    logger.info(f"Event not found, trying as slug: {market_id}")
+                    slug_url = f"https://gamma-api.polymarket.com/events/slug/{market_id}"
+                    slug_response = httpx.get(slug_url, timeout=10.0)
+                    
+                    if slug_response.status_code == 200:
+                        event_response = slug_response
+                        logger.info(f"Found event via slug: {market_id}")
 
                 if event_response.status_code == 200:
                     event = event_response.json()
