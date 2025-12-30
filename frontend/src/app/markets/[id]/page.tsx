@@ -611,7 +611,15 @@ export default function MarketDetailPage() {
           <div className="lg:col-span-1">
             <div className="sticky top-20">
               <TradingPanel
-                market={market}
+                market={{
+                  ...market,
+                  // Ensure we use numeric ID for trading (not slug from URL)
+                  // For multi-outcome: use selected outcome's market_id
+                  // For binary: use market.id (should be numeric after backend resolution)
+                  id: isMultiOutcome && selectedOutcome?.market_id
+                    ? selectedOutcome.market_id
+                    : market.id
+                }}
                 currentPrice={currentPrice}
                 orderBook={orderBooks.yes}
                 selectedMarketOutcome={selectedOutcome}
