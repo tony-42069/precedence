@@ -3,11 +3,8 @@
  * 
  * Handles order placement on Polymarket using the authenticated ClobClient.
  * 
- * CRITICAL: There are TWO different order methods:
- * 1. createAndPostOrder() - for LIMIT orders (GTC/GTD) - uses price + size
- * 2. createAndPostMarketOrder() - for MARKET orders (FOK/FAK) - uses amount
- * 
- * FOK orders have stricter decimal requirements - we use GTC for reliability.
+ * IMPORTANT: Some markets have MINIMUM ORDER SIZES (e.g., 5 shares minimum)
+ * The API returns errors in different formats - we must handle all of them.
  */
 
 'use client';
@@ -21,34 +18,28 @@ export interface OrderParams {
   size: number;       // For BUY: dollars to spend. For SELL: shares to sell
   side: 'BUY' | 'SELL';
   negRisk?: boolean;
-  tickSize?: string;  // Market tick size: "0.1", "0.01", "0.001", "0.0001"
+  tickSize?: string;
 }
 
 export interface OrderResult {
   success: boolean;
   orderId?: string;
+  transactionHashes?: string[];
+  status?: string;
   error?: string;
 }
 
 export type OrderState = 'idle' | 'creating' | 'submitting' | 'success' | 'error';
 
-// Cache for tick sizes to avoid repeated API calls
+// Cache for tick sizes
 const tickSizeCache = new Map<string, string>();
 
-/**
- * Round to specific decimal places (floor to avoid exceeding limits)
- */
 const roundDown = (value: number, decimals: number): number => {
   const factor = Math.pow(10, decimals);
   return Math.floor(value * factor) / factor;
 };
 
-/**
- * Fetch the tick size for a token from Polymarket's API
- * This is CRITICAL - using wrong tick size causes decimal errors!
- */
 const fetchTickSize = async (tokenId: string): Promise<string> => {
-  // Check cache first
   if (tickSizeCache.has(tokenId)) {
     return tickSizeCache.get(tokenId)!;
   }
@@ -59,14 +50,12 @@ const fetchTickSize = async (tokenId: string): Promise<string> => {
       const data = await response.json();
       const tickSize = data.minimum_tick_size || data.tick_size || '0.01';
       tickSizeCache.set(tokenId, tickSize);
-      console.log(`📊 Fetched tick size for ${tokenId.slice(0, 20)}...: ${tickSize}`);
+      console.log(`📊 Tick size for token: ${tickSize}`);
       return tickSize;
     }
   } catch (err) {
-    console.warn('Failed to fetch tick size, using default:', err);
+    console.warn('Failed to fetch tick size:', err);
   }
-
-  // Default to 0.01 if fetch fails (most common tick size)
   return '0.01';
 };
 
@@ -75,22 +64,21 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
   const [error, setError] = useState<string | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
-  /**
-   * Place a GTC (Good-Til-Cancelled) LIMIT order
-   * 
-   * GTC orders are more reliable than FOK because:
-   * - They have more flexible decimal precision
-   * - They can partially fill
-   * - They sit on the order book until filled
-   * 
-   * For "instant" execution, we set the price to be marketable (at or better than current price)
-   */
   const placeOrder = useCallback(async (params: OrderParams): Promise<OrderResult> => {
     setState('creating');
     setError(null);
     setLastOrderId(null);
 
     try {
+      console.log('🚀 === ORDER PLACEMENT START ===');
+      console.log('📋 Order params:', {
+        tokenId: params.tokenId.slice(0, 30) + '...',
+        price: params.price,
+        size: params.size,
+        side: params.side,
+        negRisk: params.negRisk,
+      });
+
       const clientResult = getClobClient();
       const client = clientResult instanceof Promise ? await clientResult : clientResult;
       
@@ -98,67 +86,53 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         throw new Error('Trading session not ready. Please initialize first.');
       }
 
-      // CRITICAL: Fetch the actual tick size from Polymarket API
-      // This prevents decimal precision errors!
+      console.log('✅ ClobClient obtained');
+
+      // Fetch tick size
       const tickSize = params.tickSize || await fetchTickSize(params.tokenId);
       
-      // Calculate precision based on tick size
-      // From Polymarket ROUNDING_CONFIG:
-      // "0.1": price=1, "0.01": price=2, "0.001": price=3, "0.0001": price=4
+      // Calculate precision
       let priceDecimals: number;
       switch (tickSize) {
         case '0.1': priceDecimals = 1; break;
         case '0.01': priceDecimals = 2; break;
         case '0.001': priceDecimals = 3; break;
         case '0.0001': priceDecimals = 4; break;
-        default: priceDecimals = 2; // Safe default
+        default: priceDecimals = 2;
       }
       
-      // Round price to tick size precision
       const roundedPrice = roundDown(params.price, priceDecimals);
       
-      // Validate price is valid (not zero after rounding)
       if (roundedPrice <= 0 || roundedPrice >= 1) {
-        throw new Error(`Invalid price after rounding: ${roundedPrice}. Price must be between 0 and 1.`);
+        throw new Error(`Invalid price: ${roundedPrice}. Must be between 0 and 1.`);
       }
       
-      // For GTC orders, size is always in SHARES
-      // BUY: we need to convert dollars to shares (dollars / price = shares)
-      // SELL: size is already in shares
+      // Convert to shares
       let sizeInShares: number;
-      
       if (params.side === 'BUY') {
-        // Convert dollars to shares: dollars / price = shares
         sizeInShares = params.size / roundedPrice;
       } else {
-        // Already in shares
         sizeInShares = params.size;
       }
       
-      // Round size to 2 decimal places (Polymarket requirement for ALL order types)
       const roundedSize = roundDown(sizeInShares, 2);
       
-      // Ensure minimum order size (Polymarket has minimums)
       if (roundedSize < 0.01) {
         throw new Error('Order size too small. Minimum is 0.01 shares.');
       }
 
-      // IMPORTANT: Validate that size * price doesn't exceed precision limits
-      const orderValue = roundedSize * roundedPrice;
-      console.log('📝 Placing GTC order:', {
+      console.log('📝 Order details:', {
         side: params.side,
-        originalInput: params.size,
         price: roundedPrice,
-        priceDecimals,
-        sizeInShares: roundedSize,
-        orderValue: orderValue.toFixed(6),
+        size: roundedSize,
         tickSize,
-        negRisk: params.negRisk,
-        tokenId: params.tokenId.slice(0, 30) + '...',
+        negRisk: params.negRisk ?? false,
       });
 
-      // Use createAndPostOrder for GTC limit orders
-      // This is more reliable than FOK market orders
+      setState('submitting');
+      console.log('📤 Calling createAndPostOrder...');
+
+      // Place the order
       const response = await client.createAndPostOrder(
         {
           tokenID: params.tokenId,
@@ -170,50 +144,104 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         },
         { 
           tickSize: tickSize as any,
-          negRisk: params.negRisk ?? false 
+          negRisk: params.negRisk ?? false,
         },
-        OrderType.GTC  // Good-Til-Cancelled - limit order
+        OrderType.GTC
       );
       
-      console.log('✅ Order response:', response);
+      // LOG THE FULL RESPONSE
+      console.log('📨 === FULL API RESPONSE ===');
+      console.log(JSON.stringify(response, null, 2));
 
-      // Check for errors in response
-      if (response?.errorMsg && response.errorMsg !== '') {
-        throw new Error(response.errorMsg);
+      // ============================================
+      // CRITICAL: Check for ALL possible error formats
+      // The API can return errors in different ways:
+      // 1. { errorMsg: "..." }
+      // 2. { error: "..." }
+      // 3. { status: 400, error: "..." }
+      // ============================================
+      
+      const errorMessage = response?.errorMsg || response?.error;
+      const httpStatus = response?.status;
+      
+      // Check for explicit errors
+      if (errorMessage && errorMessage !== '') {
+        console.error('❌ API returned error:', errorMessage);
+        throw new Error(errorMessage);
+      }
+      
+      // Check for HTTP error status
+      if (httpStatus && httpStatus >= 400) {
+        console.error('❌ API returned error status:', httpStatus);
+        throw new Error(`Order failed with status ${httpStatus}`);
       }
 
+      // If we get here, the order was accepted
       const orderId = response?.orderID || response?.orderHashes?.[0];
-      
-      if (orderId || response?.success) {
-        console.log('🎉 Order placed:', orderId || 'success');
+      const txHashes = response?.transactionsHashes || response?.transactionHashes || [];
+      const status = response?.status;
+
+      console.log('📊 Parsed response:', {
+        success: response?.success,
+        orderId,
+        status,
+        txHashes: txHashes.length,
+      });
+
+      // Check if order was ACTUALLY EXECUTED
+      const wasExecuted = (
+        status === 'matched' || 
+        status === 'filled' || 
+        (txHashes && txHashes.length > 0)
+      );
+
+      if (wasExecuted) {
+        console.log('🎉 ORDER EXECUTED! Transaction hashes:', txHashes);
         setLastOrderId(orderId || null);
         setState('success');
-        return { success: true, orderId };
-      } else {
-        // Order was placed but no ID returned - still a success
+        return { 
+          success: true, 
+          orderId,
+          transactionHashes: txHashes,
+          status,
+        };
+      } else if (response?.success || orderId) {
+        // Order was accepted but NOT executed (sitting on order book)
+        console.log('✅ Order ACCEPTED (on order book, waiting for match)');
+        setLastOrderId(orderId || null);
         setState('success');
-        return { success: true };
+        return { 
+          success: true, 
+          orderId,
+          status: status || 'pending',
+        };
+      } else {
+        console.error('❌ Order was rejected - no orderId or success flag');
+        throw new Error('Order was rejected by the exchange');
       }
 
     } catch (err: any) {
-      console.error('❌ Order failed:', err);
+      console.error('❌ === ORDER FAILED ===');
+      console.error('Error:', err);
       
-      let errorMsg = 'Failed to place order';
-      if (err.message) {
-        errorMsg = err.message;
-      } else if (err.response?.data?.error) {
-        errorMsg = err.response.data.error;
-      }
+      let errorMsg = err.message || 'Failed to place order';
       
-      // User-friendly error messages
-      if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
-        errorMsg = 'Order blocked. Try using a VPN to a non-restricted region.';
-      } else if (errorMsg.includes('not enough balance')) {
-        errorMsg = 'Insufficient USDC balance. Please deposit more funds.';
-      } else if (errorMsg.includes('min tick size')) {
-        errorMsg = 'Price precision error. Try a rounder price.';
-      } else if (errorMsg.includes('decimal')) {
-        errorMsg = 'Amount precision error. Try a rounder amount.';
+      // Parse user-friendly error messages
+      if (errorMsg.includes('lower than the minimum')) {
+        // Extract the minimum size from the error
+        const match = errorMsg.match(/minimum:\s*(\d+)/);
+        const minSize = match ? match[1] : '5';
+        errorMsg = `Order too small. This market requires a minimum of ${minSize} shares. Try a larger amount (e.g., $${parseInt(minSize) + 1} or more).`;
+      } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
+        errorMsg = 'Order blocked by geo-restriction. Try using a VPN.';
+      } else if (errorMsg.includes('not enough balance') || errorMsg.includes('allowance')) {
+        errorMsg = 'Insufficient USDC balance or allowance not set.';
+      } else if (errorMsg.includes('min tick size') || errorMsg.includes('tick')) {
+        errorMsg = 'Price precision error. The market may have moved.';
+      } else if (errorMsg.includes('decimal') || errorMsg.includes('precision')) {
+        errorMsg = 'Amount precision error. Try a simpler amount.';
+      } else if (errorMsg.includes('signature')) {
+        errorMsg = 'Signature error. Try disconnecting and reconnecting your wallet.';
       }
       
       setError(errorMsg);
@@ -227,7 +255,6 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       const clientResult = getClobClient();
       const client = clientResult instanceof Promise ? await clientResult : clientResult;
       if (!client) return false;
-
       await client.cancelOrder({ orderID: orderId });
       return true;
     } catch (err: any) {
@@ -242,7 +269,6 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       const clientResult = getClobClient();
       const client = clientResult instanceof Promise ? await clientResult : clientResult;
       if (!client) return false;
-
       await client.cancelAll();
       return true;
     } catch (err: any) {
@@ -257,7 +283,6 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       const clientResult = getClobClient();
       const client = clientResult instanceof Promise ? await clientResult : clientResult;
       if (!client) return [];
-
       return await client.getOpenOrders() || [];
     } catch {
       return [];
@@ -270,28 +295,18 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
     setLastOrderId(null);
   }, []);
 
-  const isLoading = state === 'creating' || state === 'submitting';
-  const isSuccess = state === 'success';
-  const isError = state === 'error';
-
-  const getStatusMessage = () => {
-    switch (state) {
-      case 'creating': return '📝 Sign to confirm order...';
-      case 'submitting': return '📤 Submitting...';
-      case 'success': return '✅ Order placed!';
-      case 'error': return `❌ ${error}`;
-      default: return '';
-    }
-  };
-
   return {
     state,
     error,
     lastOrderId,
-    isLoading,
-    isSuccess,
-    isError,
-    statusMessage: getStatusMessage(),
+    isLoading: state === 'creating' || state === 'submitting',
+    isSuccess: state === 'success',
+    isError: state === 'error',
+    statusMessage: state === 'creating' ? '📝 Creating order...' 
+                 : state === 'submitting' ? '📤 Submitting to exchange...'
+                 : state === 'success' ? '✅ Order placed!'
+                 : state === 'error' ? `❌ ${error}`
+                 : '',
     placeOrder,
     cancelOrder,
     cancelAllOrders,
