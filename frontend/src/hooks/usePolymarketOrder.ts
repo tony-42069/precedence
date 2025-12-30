@@ -3,18 +3,11 @@
  * 
  * Handles order placement on Polymarket using the authenticated ClobClient.
  * 
- * CRITICAL DECIMAL PRECISION RULES (from Polymarket docs):
+ * CRITICAL: There are TWO different order methods:
+ * 1. createAndPostOrder() - for LIMIT orders (GTC/GTD) - uses price + size
+ * 2. createAndPostMarketOrder() - for MARKET orders (FOK/FAK) - uses amount
  * 
- * Tick Size -> RoundConfig(price decimals, size decimals, amount decimals)
- * "0.1":    -> price=1, size=2, amount=3
- * "0.01":   -> price=2, size=2, amount=4
- * "0.001":  -> price=3, size=2, amount=5
- * "0.0001": -> price=4, size=2, amount=6
- * 
- * For GTC orders: size is ALWAYS in shares, rounded to 2 decimals
- * For FOK orders: maker amount (2 decimals), taker amount (4-5 decimals)
- * 
- * We use GTC for reliability - FOK has stricter requirements and often fails.
+ * FOK orders have stricter decimal requirements - we use GTC for reliability.
  */
 
 'use client';
@@ -151,7 +144,6 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       }
 
       // IMPORTANT: Validate that size * price doesn't exceed precision limits
-      // The product should not exceed 2 decimals for FOK, but we use GTC so more flexible
       const orderValue = roundedSize * roundedPrice;
       console.log('📝 Placing GTC order:', {
         side: params.side,
