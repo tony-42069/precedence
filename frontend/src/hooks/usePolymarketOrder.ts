@@ -1,10 +1,16 @@
 /**
  * usePolymarketOrder Hook
  * 
- * Handles order placement on Polymarket using the authenticated ClobClient.
+ * Handles MARKET order placement on Polymarket using FOK (Fill-Or-Kill).
  * 
- * IMPORTANT: Some markets have MINIMUM ORDER SIZES (e.g., 5 shares minimum)
- * The API returns errors in different formats - we must handle all of them.
+ * FOK = Fill-Or-Kill = MARKET ORDER
+ * - Executes IMMEDIATELY at best available price
+ * - No $5 minimum like GTC limit orders
+ * - Either fills completely or cancels entirely
+ * 
+ * For FOK orders:
+ * - BUY: amount is in DOLLARS (how much USDC to spend)
+ * - SELL: amount is in SHARES (how many shares to sell)
  */
 
 'use client';
@@ -14,7 +20,7 @@ import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
 
 export interface OrderParams {
   tokenId: string;
-  price: number;
+  price: number;      // Used for display/estimation, FOK uses market price
   size: number;       // For BUY: dollars to spend. For SELL: shares to sell
   side: 'BUY' | 'SELL';
   negRisk?: boolean;
@@ -70,7 +76,7 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
     setLastOrderId(null);
 
     try {
-      console.log('🚀 === ORDER PLACEMENT START ===');
+      console.log('🚀 === FOK MARKET ORDER START ===');
       console.log('📋 Order params:', {
         tokenId: params.tokenId.slice(0, 30) + '...',
         price: params.price,
@@ -91,63 +97,41 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       // Fetch tick size
       const tickSize = params.tickSize || await fetchTickSize(params.tokenId);
       
-      // Calculate precision
-      let priceDecimals: number;
-      switch (tickSize) {
-        case '0.1': priceDecimals = 1; break;
-        case '0.01': priceDecimals = 2; break;
-        case '0.001': priceDecimals = 3; break;
-        case '0.0001': priceDecimals = 4; break;
-        default: priceDecimals = 2;
-      }
+      // For FOK MARKET orders:
+      // - BUY: amount is in DOLLARS (how much USDC to spend)
+      // - SELL: amount is in SHARES (how many shares to sell)
+      // Round to 2 decimal places (FOK requirement)
+      const roundedAmount = roundDown(params.size, 2);
       
-      const roundedPrice = roundDown(params.price, priceDecimals);
-      
-      if (roundedPrice <= 0 || roundedPrice >= 1) {
-        throw new Error(`Invalid price: ${roundedPrice}. Must be between 0 and 1.`);
-      }
-      
-      // Convert to shares
-      let sizeInShares: number;
-      if (params.side === 'BUY') {
-        sizeInShares = params.size / roundedPrice;
-      } else {
-        sizeInShares = params.size;
-      }
-      
-      const roundedSize = roundDown(sizeInShares, 2);
-      
-      if (roundedSize < 0.01) {
-        throw new Error('Order size too small. Minimum is 0.01 shares.');
+      if (roundedAmount < 0.01) {
+        throw new Error('Order amount too small. Minimum is $0.01');
       }
 
-      console.log('📝 Order details:', {
+      console.log('📝 FOK Market Order:', {
         side: params.side,
-        price: roundedPrice,
-        size: roundedSize,
+        amount: roundedAmount,
         tickSize,
         negRisk: params.negRisk ?? false,
       });
 
       setState('submitting');
-      console.log('📤 Calling createAndPostOrder...');
+      console.log('📤 Creating market order...');
 
-      // Place the order
-      const response = await client.createAndPostOrder(
-        {
-          tokenID: params.tokenId,
-          price: roundedPrice,
-          size: roundedSize,
-          side: params.side === 'BUY' ? Side.BUY : Side.SELL,
-          feeRateBps: 0,
-          expiration: 0,
-        },
-        { 
-          tickSize: tickSize as any,
-          negRisk: params.negRisk ?? false,
-        },
-        OrderType.GTC
-      );
+      // Create a MARKET order (FOK)
+      const signedOrder = await client.createMarketOrder({
+        tokenID: params.tokenId,
+        amount: roundedAmount,  // BUY: dollars, SELL: shares
+        side: params.side === 'BUY' ? Side.BUY : Side.SELL,
+        feeRateBps: 0,
+      }, {
+        tickSize: tickSize as any,
+        negRisk: params.negRisk ?? false,
+      });
+
+      console.log('📝 Order signed, posting with FOK...');
+
+      // Post with FOK (Fill-Or-Kill) for immediate execution
+      const response = await client.postOrder(signedOrder, OrderType.FOK);
       
       // LOG THE FULL RESPONSE
       console.log('📨 === FULL API RESPONSE ===');
@@ -155,69 +139,63 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
 
       // ============================================
       // CRITICAL: Check for ALL possible error formats
-      // The API can return errors in different ways:
-      // 1. { errorMsg: "..." }
-      // 2. { error: "..." }
-      // 3. { status: 400, error: "..." }
       // ============================================
-      
       const errorMessage = response?.errorMsg || response?.error;
       const httpStatus = response?.status;
       
       // Check for explicit errors
-      if (errorMessage && errorMessage !== '') {
+      if (errorMessage && errorMessage !== '' && typeof errorMessage === 'string') {
         console.error('❌ API returned error:', errorMessage);
         throw new Error(errorMessage);
       }
       
-      // Check for HTTP error status
-      if (httpStatus && httpStatus >= 400) {
+      // Check for HTTP error status (but not 'matched' status string)
+      if (typeof httpStatus === 'number' && httpStatus >= 400) {
         console.error('❌ API returned error status:', httpStatus);
         throw new Error(`Order failed with status ${httpStatus}`);
       }
 
-      // If we get here, the order was accepted
+      // Success! Parse the response
       const orderId = response?.orderID || response?.orderHashes?.[0];
       const txHashes = response?.transactionsHashes || response?.transactionHashes || [];
       const status = response?.status;
+      const takingAmount = response?.takingAmount;
+      const makingAmount = response?.makingAmount;
 
       console.log('📊 Parsed response:', {
         success: response?.success,
         orderId,
         status,
-        txHashes: txHashes.length,
+        txHashes,
+        takingAmount,
+        makingAmount,
       });
 
-      // Check if order was ACTUALLY EXECUTED
+      // FOK orders should execute immediately or fail
       const wasExecuted = (
         status === 'matched' || 
         status === 'filled' || 
-        (txHashes && txHashes.length > 0)
+        (txHashes && txHashes.length > 0) ||
+        (response?.success && orderId)
       );
 
       if (wasExecuted) {
-        console.log('🎉 ORDER EXECUTED! Transaction hashes:', txHashes);
+        console.log('🎉 ORDER EXECUTED!');
+        if (txHashes.length > 0) {
+          console.log('   Transaction hashes:', txHashes);
+        }
         setLastOrderId(orderId || null);
         setState('success');
         return { 
           success: true, 
           orderId,
           transactionHashes: txHashes,
-          status,
-        };
-      } else if (response?.success || orderId) {
-        // Order was accepted but NOT executed (sitting on order book)
-        console.log('✅ Order ACCEPTED (on order book, waiting for match)');
-        setLastOrderId(orderId || null);
-        setState('success');
-        return { 
-          success: true, 
-          orderId,
-          status: status || 'pending',
+          status: status || 'matched',
         };
       } else {
-        console.error('❌ Order was rejected - no orderId or success flag');
-        throw new Error('Order was rejected by the exchange');
+        // FOK should not end up here - it either fills or fails
+        console.warn('⚠️ Unexpected: FOK order neither filled nor errored');
+        throw new Error('Order could not be filled. Try again or adjust amount.');
       }
 
     } catch (err: any) {
@@ -228,10 +206,9 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       
       // Parse user-friendly error messages
       if (errorMsg.includes('lower than the minimum')) {
-        // Extract the minimum size from the error
         const match = errorMsg.match(/minimum:\s*(\d+)/);
         const minSize = match ? match[1] : '5';
-        errorMsg = `Order too small. This market requires a minimum of ${minSize} shares. Try a larger amount (e.g., $${parseInt(minSize) + 1} or more).`;
+        errorMsg = `Order too small. Minimum ${minSize} shares required.`;
       } else if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
         errorMsg = 'Order blocked by geo-restriction. Try using a VPN.';
       } else if (errorMsg.includes('not enough balance') || errorMsg.includes('allowance')) {
@@ -239,9 +216,11 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
       } else if (errorMsg.includes('min tick size') || errorMsg.includes('tick')) {
         errorMsg = 'Price precision error. The market may have moved.';
       } else if (errorMsg.includes('decimal') || errorMsg.includes('precision')) {
-        errorMsg = 'Amount precision error. Try a simpler amount.';
+        errorMsg = 'Amount precision error. Try a simpler amount like $1, $5, $10.';
       } else if (errorMsg.includes('signature')) {
         errorMsg = 'Signature error. Try disconnecting and reconnecting your wallet.';
+      } else if (errorMsg.includes('no liquidity') || errorMsg.includes('unfillable')) {
+        errorMsg = 'Not enough liquidity. Try a smaller amount.';
       }
       
       setError(errorMsg);
@@ -303,8 +282,8 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
     isSuccess: state === 'success',
     isError: state === 'error',
     statusMessage: state === 'creating' ? '📝 Creating order...' 
-                 : state === 'submitting' ? '📤 Submitting to exchange...'
-                 : state === 'success' ? '✅ Order placed!'
+                 : state === 'submitting' ? '📤 Executing trade...'
+                 : state === 'success' ? '✅ Trade executed!'
                  : state === 'error' ? `❌ ${error}`
                  : '',
     placeOrder,
