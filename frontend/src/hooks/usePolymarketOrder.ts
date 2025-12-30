@@ -2,7 +2,19 @@
  * usePolymarketOrder Hook
  * 
  * Handles order placement on Polymarket using the authenticated ClobClient.
- * Uses createAndPostOrder which handles signing and posting in one call.
+ * 
+ * CRITICAL DECIMAL PRECISION RULES (from Polymarket docs):
+ * 
+ * Tick Size -> RoundConfig(price decimals, size decimals, amount decimals)
+ * "0.1":    -> price=1, size=2, amount=3
+ * "0.01":   -> price=2, size=2, amount=4
+ * "0.001":  -> price=3, size=2, amount=5
+ * "0.0001": -> price=4, size=2, amount=6
+ * 
+ * For GTC orders: size is ALWAYS in shares, rounded to 2 decimals
+ * For FOK orders: maker amount (2 decimals), taker amount (4-5 decimals)
+ * 
+ * We use GTC for reliability - FOK has stricter requirements and often fails.
  */
 
 'use client';
@@ -13,19 +25,11 @@ import { ClobClient, Side, OrderType } from '@polymarket/clob-client';
 export interface OrderParams {
   tokenId: string;
   price: number;
-  size: number;
+  size: number;       // For BUY: dollars to spend. For SELL: shares to sell
   side: 'BUY' | 'SELL';
   negRisk?: boolean;
+  tickSize?: string;  // Market tick size: "0.1", "0.01", "0.001", "0.0001"
 }
-
-/**
- * Rounds a number to specified decimal places
- * Polymarket requires: maker amount max 2 decimals, taker amount max 5 decimals
- */
-const roundToDecimals = (value: number, decimals: number): number => {
-  const factor = Math.pow(10, decimals);
-  return Math.floor(value * factor) / factor;
-};
 
 export interface OrderResult {
   success: boolean;
@@ -35,18 +39,58 @@ export interface OrderResult {
 
 export type OrderState = 'idle' | 'creating' | 'submitting' | 'success' | 'error';
 
+// Cache for tick sizes to avoid repeated API calls
+const tickSizeCache = new Map<string, string>();
+
+/**
+ * Round to specific decimal places (floor to avoid exceeding limits)
+ */
+const roundDown = (value: number, decimals: number): number => {
+  const factor = Math.pow(10, decimals);
+  return Math.floor(value * factor) / factor;
+};
+
+/**
+ * Fetch the tick size for a token from Polymarket's API
+ * This is CRITICAL - using wrong tick size causes decimal errors!
+ */
+const fetchTickSize = async (tokenId: string): Promise<string> => {
+  // Check cache first
+  if (tickSizeCache.has(tokenId)) {
+    return tickSizeCache.get(tokenId)!;
+  }
+
+  try {
+    const response = await fetch(`https://clob.polymarket.com/tick-size?token_id=${tokenId}`);
+    if (response.ok) {
+      const data = await response.json();
+      const tickSize = data.minimum_tick_size || data.tick_size || '0.01';
+      tickSizeCache.set(tokenId, tickSize);
+      console.log(`📊 Fetched tick size for ${tokenId.slice(0, 20)}...: ${tickSize}`);
+      return tickSize;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch tick size, using default:', err);
+  }
+
+  // Default to 0.01 if fetch fails (most common tick size)
+  return '0.01';
+};
+
 export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | null> | ClobClient | null) => {
   const [state, setState] = useState<OrderState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
   /**
-   * Place a MARKET order (FOK - Fill Or Kill)
-   * THIS IS THE ONLY PLACE THAT REQUIRES A SIGNATURE (the order itself)
-   *
-   * IMPORTANT: We use FOK (market orders), NOT GTC (limit orders)!
-   * - FOK: BUY in DOLLARS, SELL in SHARES - lower minimums, instant execution
-   * - GTC: Everything in SHARES - stricter minimums, sits on order book
+   * Place a GTC (Good-Til-Cancelled) LIMIT order
+   * 
+   * GTC orders are more reliable than FOK because:
+   * - They have more flexible decimal precision
+   * - They can partially fill
+   * - They sit on the order book until filled
+   * 
+   * For "instant" execution, we set the price to be marketable (at or better than current price)
    */
   const placeOrder = useCallback(async (params: OrderParams): Promise<OrderResult> => {
     setState('creating');
@@ -54,7 +98,6 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
     setLastOrderId(null);
 
     try {
-      // Get client (may be async)
       const clientResult = getClobClient();
       const client = clientResult instanceof Promise ? await clientResult : clientResult;
       
@@ -62,66 +105,100 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         throw new Error('Trading session not ready. Please initialize first.');
       }
 
-      // CRITICAL: Polymarket requires makerAmount (shares) to have max 2 decimals
-      // For BUY orders: makerAmount = size / price (shares you receive)
-      // For SELL orders: makerAmount = size (shares you sell)
-      // 
-      // We need to round SHARES to 2 decimals, then back-calculate size if needed
-      const roundedPrice = roundToDecimals(params.price, 3);
+      // CRITICAL: Fetch the actual tick size from Polymarket API
+      // This prevents decimal precision errors!
+      const tickSize = params.tickSize || await fetchTickSize(params.tokenId);
       
-      let finalSize: number;
+      // Calculate precision based on tick size
+      // From Polymarket ROUNDING_CONFIG:
+      // "0.1": price=1, "0.01": price=2, "0.001": price=3, "0.0001": price=4
+      let priceDecimals: number;
+      switch (tickSize) {
+        case '0.1': priceDecimals = 1; break;
+        case '0.01': priceDecimals = 2; break;
+        case '0.001': priceDecimals = 3; break;
+        case '0.0001': priceDecimals = 4; break;
+        default: priceDecimals = 2; // Safe default
+      }
+      
+      // Round price to tick size precision
+      const roundedPrice = roundDown(params.price, priceDecimals);
+      
+      // Validate price is valid (not zero after rounding)
+      if (roundedPrice <= 0 || roundedPrice >= 1) {
+        throw new Error(`Invalid price after rounding: ${roundedPrice}. Price must be between 0 and 1.`);
+      }
+      
+      // For GTC orders, size is always in SHARES
+      // BUY: we need to convert dollars to shares (dollars / price = shares)
+      // SELL: size is already in shares
+      let sizeInShares: number;
+      
       if (params.side === 'BUY') {
-        // BUY: size is in USDC, makerAmount (shares) = size / price
-        // Round the shares first, then back-calculate USDC
-        const intendedShares = params.size / roundedPrice;
-        const roundedShares = roundToDecimals(intendedShares, 2);
-        // Back-calculate the exact USDC needed for these rounded shares
-        finalSize = roundToDecimals(roundedShares * roundedPrice, 2);
-        console.log('📝 BUY order calculation:', {
-          originalSize: params.size,
-          intendedShares,
-          roundedShares,
-          finalSize,
-          price: roundedPrice,
-        });
+        // Convert dollars to shares: dollars / price = shares
+        sizeInShares = params.size / roundedPrice;
       } else {
-        // SELL: size is in SHARES, which IS the makerAmount - just round it
-        finalSize = roundToDecimals(params.size, 2);
-        console.log('📝 SELL order calculation:', {
-          originalSize: params.size,
-          finalSize,
-          price: roundedPrice,
-        });
+        // Already in shares
+        sizeInShares = params.size;
+      }
+      
+      // Round size to 2 decimal places (Polymarket requirement for ALL order types)
+      const roundedSize = roundDown(sizeInShares, 2);
+      
+      // Ensure minimum order size (Polymarket has minimums)
+      if (roundedSize < 0.01) {
+        throw new Error('Order size too small. Minimum is 0.01 shares.');
       }
 
-      // This is the ONE signature the user needs to provide
-      // Use FOK (Fill Or Kill) market orders for instant execution
+      // IMPORTANT: Validate that size * price doesn't exceed precision limits
+      // The product should not exceed 2 decimals for FOK, but we use GTC so more flexible
+      const orderValue = roundedSize * roundedPrice;
+      console.log('📝 Placing GTC order:', {
+        side: params.side,
+        originalInput: params.size,
+        price: roundedPrice,
+        priceDecimals,
+        sizeInShares: roundedSize,
+        orderValue: orderValue.toFixed(6),
+        tickSize,
+        negRisk: params.negRisk,
+        tokenId: params.tokenId.slice(0, 30) + '...',
+      });
+
+      // Use createAndPostOrder for GTC limit orders
+      // This is more reliable than FOK market orders
       const response = await client.createAndPostOrder(
         {
           tokenID: params.tokenId,
           price: roundedPrice,
-          size: finalSize,
+          size: roundedSize,
           side: params.side === 'BUY' ? Side.BUY : Side.SELL,
           feeRateBps: 0,
           expiration: 0,
         },
-        { negRisk: params.negRisk ?? false },
-        'FOK' as any  // MARKET ORDER - TypeScript types are incomplete, but API accepts FOK
+        { 
+          tickSize: tickSize as any,
+          negRisk: params.negRisk ?? false 
+        },
+        OrderType.GTC  // Good-Til-Cancelled - limit order
       );
       
       console.log('✅ Order response:', response);
 
-      const orderId = response?.orderID || response?.id;
+      // Check for errors in response
+      if (response?.errorMsg && response.errorMsg !== '') {
+        throw new Error(response.errorMsg);
+      }
+
+      const orderId = response?.orderID || response?.orderHashes?.[0];
       
-      if (orderId) {
-        console.log('🎉 Order placed:', orderId);
-        setLastOrderId(orderId);
+      if (orderId || response?.success) {
+        console.log('🎉 Order placed:', orderId || 'success');
+        setLastOrderId(orderId || null);
         setState('success');
         return { success: true, orderId };
       } else {
-        if (response?.error) {
-          throw new Error(response.error);
-        }
+        // Order was placed but no ID returned - still a success
         setState('success');
         return { success: true };
       }
@@ -136,8 +213,15 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         errorMsg = err.response.data.error;
       }
       
+      // User-friendly error messages
       if (errorMsg.includes('403') || errorMsg.includes('Forbidden')) {
         errorMsg = 'Order blocked. Try using a VPN to a non-restricted region.';
+      } else if (errorMsg.includes('not enough balance')) {
+        errorMsg = 'Insufficient USDC balance. Please deposit more funds.';
+      } else if (errorMsg.includes('min tick size')) {
+        errorMsg = 'Price precision error. Try a rounder price.';
+      } else if (errorMsg.includes('decimal')) {
+        errorMsg = 'Amount precision error. Try a rounder amount.';
       }
       
       setError(errorMsg);
