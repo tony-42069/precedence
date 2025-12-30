@@ -653,7 +653,14 @@ export const TradingModal = ({ market, isOpen, onClose, initialTradeType, initia
               <input
                 type="number"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  // Limit to 2 decimal places for Polymarket compatibility
+                  const val = e.target.value;
+                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                    setAmount(val);
+                  }
+                }}
+                step="0.01"
                 placeholder="0.00"
                 className="w-full pl-12 pr-4 py-4 bg-[#030304] border border-white/10 rounded-xl text-white font-mono text-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none placeholder-slate-600"
                 disabled={isOrderLoading || isInitializing || isCheckingBalance}

@@ -18,6 +18,15 @@ export interface OrderParams {
   negRisk?: boolean;
 }
 
+/**
+ * Rounds a number to specified decimal places
+ * Polymarket requires: maker amount max 2 decimals, taker amount max 5 decimals
+ */
+const roundToDecimals = (value: number, decimals: number): number => {
+  const factor = Math.pow(10, decimals);
+  return Math.floor(value * factor) / factor;
+};
+
 export interface OrderResult {
   success: boolean;
   orderId?: string;
@@ -53,15 +62,26 @@ export const usePolymarketOrder = (getClobClient: () => Promise<ClobClient | nul
         throw new Error('Trading session not ready. Please initialize first.');
       }
 
-      console.log('📝 Placing order:', params);
+      // Round price to 3 decimals (standard for Polymarket prices)
+      // Round size to 2 decimals (to ensure maker amount stays within 2 decimal limit)
+      const roundedPrice = roundToDecimals(params.price, 3);
+      const roundedSize = roundToDecimals(params.size, 2);
+      
+      console.log('📝 Placing order:', {
+        ...params,
+        roundedPrice,
+        roundedSize,
+        originalPrice: params.price,
+        originalSize: params.size,
+      });
 
       // This is the ONE signature the user needs to provide
       // Use FOK (Fill Or Kill) market orders for instant execution
       const response = await client.createAndPostOrder(
         {
           tokenID: params.tokenId,
-          price: params.price,
-          size: params.size,
+          price: roundedPrice,
+          size: roundedSize,
           side: params.side === 'BUY' ? Side.BUY : Side.SELL,
           feeRateBps: 0,
           expiration: 0,
