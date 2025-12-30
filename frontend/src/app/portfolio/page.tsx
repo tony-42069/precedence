@@ -41,6 +41,9 @@ export default function PortfolioPage() {
   // Our database positions (fast!) - fetch via API
   const [dbPositions, setDbPositions] = useState<any[]>([]);
   const [dbPositionsLoading, setDbPositionsLoading] = useState(false);
+
+  // Resolved market IDs (slug -> numeric)
+  const [resolvedMarketIds, setResolvedMarketIds] = useState<Map<string, string>>(new Map());
   
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
@@ -79,7 +82,7 @@ export default function PortfolioPage() {
   const combinedPositions = useMemo(() => {
     // Start with our DB positions
     const positionsMap = new Map();
-    
+
     // Add DB positions first (these are instant)
     dbPositions.forEach(pos => {
       const key = `${pos.market_id}-${pos.outcome}`;
@@ -91,7 +94,7 @@ export default function PortfolioPage() {
         avgPrice: pos.avg_entry_price?.toString() || '0',
       });
     });
-    
+
     // Then add Polymarket positions that aren't in our DB yet
     // (This handles positions that existed before we started tracking)
     if (polymarketPositions) {
@@ -105,9 +108,56 @@ export default function PortfolioPage() {
         }
       });
     }
-    
+
     return Array.from(positionsMap.values());
   }, [dbPositions, polymarketPositions]);
+
+  // Resolve market slugs to numeric IDs
+  useEffect(() => {
+    const resolveSlugs = async () => {
+      if (combinedPositions.length === 0) return;
+
+      const slugsToResolve: string[] = [];
+
+      // Find slugs that need resolving
+      combinedPositions.forEach(pos => {
+        const marketId = pos.market_id || pos.marketSlug || pos.conditionId;
+        if (marketId &&
+            !resolvedMarketIds.has(marketId) &&
+            !/^\d+$/.test(marketId) &&
+            marketId.includes('-') &&
+            marketId.length > 10) {
+          slugsToResolve.push(marketId);
+        }
+      });
+
+      if (slugsToResolve.length === 0) return;
+
+      console.log('🔄 Resolving market slugs:', slugsToResolve);
+
+      // Resolve each slug
+      const newResolvedIds = new Map(resolvedMarketIds);
+
+      for (const slug of slugsToResolve) {
+        try {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://precedence-production.up.railway.app'}/api/markets/${slug}`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.id && /^\d+$/.test(data.id)) {
+              newResolvedIds.set(slug, data.id);
+              console.log(`✅ Resolved ${slug} -> ${data.id}`);
+            }
+          }
+        } catch (err) {
+          console.warn(`❌ Failed to resolve ${slug}:`, err);
+        }
+      }
+
+      setResolvedMarketIds(newResolvedIds);
+    };
+
+    resolveSlugs();
+  }, [combinedPositions]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -314,11 +364,13 @@ export default function PortfolioPage() {
                       <div className="divide-y divide-white/5">
                         {combinedPositions.map((position, idx) => {
                           // Determine the market link - prefer numeric market_id first (from DB positions)
-                          // market_id from our DB is the numeric ID (e.g., 516719) that works with /markets/[id]
-                          // marketSlug is the text slug (e.g., russia-x-ukraine-ceasefire-in-2025) which doesn't work
-                          // basePath: '/app' is set in next.config.ts for production
-                          // So Link href should NOT include /app - it's auto-prepended
-                          const marketLink = position.market_id || position.marketSlug || position.conditionId;
+                          // If it's a slug, check if we've resolved it to a numeric ID
+                          let marketLink = position.market_id || position.marketSlug || position.conditionId;
+
+                          // Check if this slug has been resolved to a numeric ID
+                          if (marketLink && resolvedMarketIds.has(marketLink)) {
+                            marketLink = resolvedMarketIds.get(marketLink)!;
+                          }
 
                           return (
                             <Link
