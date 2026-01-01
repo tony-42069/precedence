@@ -112,57 +112,87 @@ export default function PortfolioPage() {
     return Array.from(positionsMap.values());
   }, [dbPositions, polymarketPositions]);
 
-  // Resolve market slugs to numeric IDs (fallback - useSafeAddress should already have resolved these)
+  // Resolve market slugs/conditionIds to numeric IDs (fallback - useSafeAddress should already have resolved these)
   // This is a backup in case the primary resolution in useSafeAddress fails
   useEffect(() => {
     const GAMMA_API_URL = 'https://gamma-api.polymarket.com';
-    
-    const resolveSlugs = async () => {
+
+    const resolvePositions = async () => {
       if (combinedPositions.length === 0) return;
 
-      const slugsToResolve: string[] = [];
+      const positionsToResolve: Array<{slug?: string, conditionId?: string}> = [];
 
-      // Find slugs that need resolving (only if market_id is missing)
+      // Find positions that need resolving (only if market_id is missing)
       combinedPositions.forEach(pos => {
         // If we already have a numeric market_id, skip
-        if (pos.market_id && /^\d+$/.test(pos.market_id)) return;
-        
+        if (pos.market_id && /^\d+$/.test(String(pos.market_id))) return;
+
         const slug = pos.marketSlug;
-        if (slug &&
-            !resolvedMarketIds.has(slug) &&
-            slug.includes('-') &&
-            slug.length > 10) {
-          slugsToResolve.push(slug);
+        const conditionId = pos.conditionId;
+
+        // Check if we already resolved this slug
+        if (slug && resolvedMarketIds.has(slug)) return;
+
+        if (conditionId || (slug && slug.includes('-') && slug.length > 10)) {
+          positionsToResolve.push({ slug, conditionId });
         }
       });
 
-      if (slugsToResolve.length === 0) return;
+      if (positionsToResolve.length === 0) return;
 
-      console.log('🔄 Fallback: Resolving market slugs via Gamma API:', slugsToResolve);
+      console.log('🔄 Fallback: Resolving positions via Gamma API:', positionsToResolve.length);
 
-      // Resolve each slug via Gamma API (correct endpoint: /events/slug/{slug})
+      // CRITICAL: Use /markets?condition_id= or /markets?slug= (returns ARRAY with MARKET ID)
+      // NOT /events/slug/ which returns EVENT ID (different ID space!)
       const newResolvedIds = new Map(resolvedMarketIds);
 
-      for (const slug of slugsToResolve) {
-        try {
-          const response = await fetch(`${GAMMA_API_URL}/events/slug/${slug}`);
-          if (response.ok) {
-            const event = await response.json();
-            if (event && event.id) {
-              const numericId = event.id.toString();
-              newResolvedIds.set(slug, numericId);
-              console.log(`✅ Resolved ${slug} -> ${numericId}`);
+      for (const pos of positionsToResolve) {
+        let resolved = false;
+
+        // Try conditionId first (more reliable)
+        if (pos.conditionId && !resolved) {
+          try {
+            const response = await fetch(`${GAMMA_API_URL}/markets?condition_id=${pos.conditionId}`);
+            if (response.ok) {
+              const markets = await response.json();
+              // Response is an ARRAY, not a single object
+              if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
+                const numericId = markets[0].id.toString();
+                if (pos.slug) {
+                  newResolvedIds.set(pos.slug, numericId);
+                }
+                console.log(`✅ Resolved conditionId ${pos.conditionId.slice(0,20)}... -> market ${numericId}`);
+                resolved = true;
+              }
             }
+          } catch (err) {
+            console.warn(`❌ Failed to resolve conditionId ${pos.conditionId}:`, err);
           }
-        } catch (err) {
-          console.warn(`❌ Failed to resolve ${slug}:`, err);
+        }
+
+        // Fallback to slug query
+        if (pos.slug && !resolved) {
+          try {
+            const response = await fetch(`${GAMMA_API_URL}/markets?slug=${pos.slug}`);
+            if (response.ok) {
+              const markets = await response.json();
+              if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
+                const numericId = markets[0].id.toString();
+                newResolvedIds.set(pos.slug, numericId);
+                console.log(`✅ Resolved slug ${pos.slug} -> market ${numericId}`);
+                resolved = true;
+              }
+            }
+          } catch (err) {
+            console.warn(`❌ Failed to resolve slug ${pos.slug}:`, err);
+          }
         }
       }
 
       setResolvedMarketIds(newResolvedIds);
     };
 
-    resolveSlugs();
+    resolvePositions();
   }, [combinedPositions, resolvedMarketIds]);
 
   const handleRefresh = async () => {
@@ -373,9 +403,10 @@ export default function PortfolioPage() {
                           // Priority: numeric market_id > resolved slug > raw slug/conditionId
                           let marketLink: string;
                           
-                          // 1. Check if we have a numeric market_id already
-                          if (position.market_id && /^\d+$/.test(position.market_id)) {
-                            marketLink = position.market_id;
+                          // 1. Check if we have a numeric market_id already (convert to string first!)
+                          const marketIdStr = position.market_id ? String(position.market_id) : '';
+                          if (marketIdStr && /^\d+$/.test(marketIdStr)) {
+                            marketLink = marketIdStr;
                           }
                           // 2. Check if the slug was resolved in the fallback useEffect
                           else if (position.marketSlug && resolvedMarketIds.has(position.marketSlug)) {
@@ -386,10 +417,23 @@ export default function PortfolioPage() {
                             marketLink = position.marketSlug || position.conditionId || 'unknown';
                           }
 
+                          // DEBUG: Log what we're linking to
+                          console.log(`🔗 Position ${idx} linking to: /markets/${marketLink}`, {
+                            marketLink,
+                            market_id: position.market_id,
+                            market_id_type: typeof position.market_id,
+                            marketIdStr,
+                            isNumeric: /^\d+$/.test(marketIdStr),
+                            marketSlug: position.marketSlug,
+                            conditionId: position.conditionId,
+                            resolved: resolvedMarketIds.get(position.marketSlug || ''),
+                            source: position.source
+                          });
+
                           return (
                             <Link
                               key={idx}
-                              href={`/app/markets/${marketLink}`}
+                              href={`/markets/${marketLink}`}
                               className="block p-4 hover:bg-white/5 transition-colors cursor-pointer group"
                             >
                               <div className="flex flex-col md:flex-row md:items-center justify-between">

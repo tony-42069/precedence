@@ -82,17 +82,50 @@ class PolymarketClient:
             logger.error(f"Failed to get markets: {e}")
             raise
 
+    def _parse_market_prices(self, market: Dict) -> Dict:
+        """
+        Parse outcomePrices and clobTokenIds for a market.
+        Helper method to avoid code duplication.
+        """
+        import json
+
+        # Parse outcomePrices to add current_yes_price and current_no_price
+        try:
+            outcome_prices = market.get('outcomePrices', '["0.5", "0.5"]')
+            if isinstance(outcome_prices, str):
+                outcome_prices = json.loads(outcome_prices)
+
+            market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
+            market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+
+            logger.info(f"Parsed prices: YES={market['current_yes_price']}, NO={market['current_no_price']}")
+        except Exception as e:
+            logger.warning(f"Failed to parse outcomePrices: {e}")
+            market['current_yes_price'] = 0.5
+            market['current_no_price'] = 0.5
+
+        # Parse clobTokenIds if string
+        clob_token_ids = market.get('clobTokenIds', [])
+        if isinstance(clob_token_ids, str):
+            try:
+                market['clobTokenIds'] = json.loads(clob_token_ids)
+            except:
+                market['clobTokenIds'] = []
+
+        return market
+
     def get_market_details(self, market_id: str) -> Dict:
         """
         Get detailed information about a specific market from Gamma API.
 
-        Supports market IDs, event IDs, AND slugs:
-        - First tries to fetch as a market (numeric ID)
+        Supports market IDs, event IDs, condition IDs, AND slugs:
+        - First checks if it's a condition_id (hex string starting with 0x)
+        - Then tries to fetch as a market (numeric ID)
         - If not found, tries to fetch as an event (numeric ID)
         - If not found, tries to fetch as a slug
 
         Args:
-            market_id: Polymarket market ID, event ID, or slug
+            market_id: Polymarket market ID, event ID, condition ID, or slug
 
         Returns:
             Dict containing market details with parsed prices
@@ -101,7 +134,23 @@ class PolymarketClient:
             import httpx
             import json
 
-            # Try as market first
+            # Check if it looks like a condition_id (hex string starting with 0x, typically 66 chars)
+            if market_id.startswith('0x') and len(market_id) > 40:
+                logger.info(f"Detected condition_id format, querying by condition_id: {market_id[:20]}...")
+                condition_url = f"https://gamma-api.polymarket.com/markets?condition_id={market_id}"
+                condition_response = httpx.get(condition_url, timeout=10.0)
+                if condition_response.status_code == 200:
+                    markets = condition_response.json()
+                    # Response is an ARRAY, not a single object
+                    if isinstance(markets, list) and len(markets) > 0:
+                        logger.info(f"Found market via condition_id: {markets[0].get('id')}")
+                        market = markets[0]
+                        # Continue to parse prices below
+                        # Skip the other lookup attempts
+                        return self._parse_market_prices(market)
+                logger.warning(f"No market found for condition_id: {market_id}")
+
+            # Try as market first (numeric ID)
             gamma_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
             response = httpx.get(gamma_url, timeout=10.0)
 
@@ -223,30 +272,8 @@ class PolymarketClient:
             if not market:
                 raise Exception(f"No market data found for ID: {market_id}")
 
-            # Parse outcomePrices to add current_yes_price and current_no_price
-            try:
-                outcome_prices = market.get('outcomePrices', '["0.5", "0.5"]')
-                if isinstance(outcome_prices, str):
-                    outcome_prices = json.loads(outcome_prices)
-
-                market['current_yes_price'] = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
-                market['current_no_price'] = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
-
-                logger.info(f"Parsed prices: YES={market['current_yes_price']}, NO={market['current_no_price']}")
-            except Exception as e:
-                logger.warning(f"Failed to parse outcomePrices: {e}")
-                market['current_yes_price'] = 0.5
-                market['current_no_price'] = 0.5
-
-            # Parse clobTokenIds if string
-            clob_token_ids = market.get('clobTokenIds', [])
-            if isinstance(clob_token_ids, str):
-                try:
-                    market['clobTokenIds'] = json.loads(clob_token_ids)
-                except:
-                    market['clobTokenIds'] = []
-
-            return market
+            # Parse prices and clobTokenIds using helper method
+            return self._parse_market_prices(market)
 
         except Exception as e:
             logger.error(f"Failed to get market details for {market_id}: {e}")
