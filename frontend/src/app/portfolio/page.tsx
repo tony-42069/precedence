@@ -433,7 +433,7 @@ export default function PortfolioPage() {
                           return (
                             <Link
                               key={idx}
-                              href={`/markets/${marketLink}`}
+                              href={`/app/markets/${marketLink}`}
                               className="block p-4 hover:bg-white/5 transition-colors cursor-pointer group"
                             >
                               <div className="flex flex-col md:flex-row md:items-center justify-between">

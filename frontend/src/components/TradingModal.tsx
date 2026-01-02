@@ -348,12 +348,30 @@ export const TradingModal = ({ market, isOpen, onClose, initialTradeType, initia
         try {
           const walletAddress = session?.eoaAddress || wallets[0]?.address;
           if (walletAddress) {
+            // CRITICAL: Ensure we record a NUMERIC market ID, not a conditionId or slug
+            // This is essential for portfolio links to work correctly
+            let numericMarketId = market.id;
+
+            // Check if market.id looks like a numeric ID
+            if (!numericMarketId || !/^\d+$/.test(String(numericMarketId))) {
+              // Try to get numeric ID from outcomes (for multi-outcome markets)
+              if (market.outcomes && Array.isArray(market.outcomes) && market.outcomes.length > 0) {
+                numericMarketId = market.outcomes[0]?.market_id;
+              }
+              // If still not numeric, log warning but continue with what we have
+              if (!numericMarketId || !/^\d+$/.test(String(numericMarketId))) {
+                console.warn('⚠️ Market missing numeric ID, using:', market.id, 'conditionId:', market.condition_id);
+                // Fall back to market.id (could be event ID which might work)
+                numericMarketId = market.id || '';
+              }
+            }
+
             const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://precedence-production.up.railway.app';
             const response = await fetch(`${API_BASE_URL}/api/users/${walletAddress}/trades`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                market_id: market.id || market.condition_id || '',
+                market_id: numericMarketId,
                 side: tradeType,
                 outcome: side,
                 size: parseFloat(amount),
@@ -364,7 +382,7 @@ export const TradingModal = ({ market, isOpen, onClose, initialTradeType, initia
               }),
             });
             if (response.ok) {
-              console.log('📝 Trade recorded in database');
+              console.log('📝 Trade recorded in database with market_id:', numericMarketId);
             } else {
               console.warn('⚠️ Failed to record trade:', await response.text());
             }
