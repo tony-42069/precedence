@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
 from ..services.llm_analyzer import get_llm_analyzer
+from ..services.llm_market_analyzer import get_market_analyzer
 
 # Configure logging
 logger = logging.getLogger("api.predictions")
@@ -22,7 +23,128 @@ class FlexibleCaseData(BaseModel):
 
 
 # ============================================================
-# NEW ENDPOINT - Takes case_id, fetches details, runs LLM
+# MARKET ANALYSIS ENDPOINT - Analyze any Polymarket market
+# ============================================================
+@router.post("/analyze-market")
+async def analyze_market_with_llm(payload: Dict[str, Any]):
+    """
+    Analyze a prediction market by ID using LLM.
+    Fetches market data from Polymarket, then runs AI analysis.
+    
+    Request body:
+    {
+        "market_id": "123456",  // Polymarket market ID or slug
+        // OR pass market data directly:
+        "question": "Will X happen?",
+        "description": "Resolution rules...",
+        "current_yes_price": 0.65,
+        "current_no_price": 0.35,
+        "volume": 1000000,
+        "end_date": "2024-12-31",
+        "category": "Politics",
+        "outcomes": [...]  // For multi-outcome markets
+    }
+    """
+    try:
+        market_id = payload.get("market_id")
+        
+        # If market_id provided, fetch market data
+        if market_id:
+            logger.info(f"🤖 Market Analysis requested for market_id: {market_id}")
+            
+            # Fetch market details from our backend (which calls Polymarket)
+            import httpx
+            import os
+            
+            api_url = os.getenv("API_URL", "http://localhost:8000")
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{api_url}/api/markets/{market_id}", timeout=30.0)
+                
+                if response.status_code != 200:
+                    raise HTTPException(status_code=404, detail=f"Market {market_id} not found")
+                
+                market_data = response.json()
+            
+            # Extract fields from fetched market
+            question = market_data.get("question", "Unknown market")
+            description = market_data.get("description", "")
+            current_yes_price = market_data.get("current_yes_price", 0.5)
+            current_no_price = market_data.get("current_no_price", 0.5)
+            volume = market_data.get("volume", 0)
+            end_date = market_data.get("end_date") or market_data.get("endDate")
+            category = market_data.get("category", "General")
+            outcomes = market_data.get("outcomes", [])
+            
+        else:
+            # Use directly provided market data
+            logger.info(f"🤖 Market Analysis with direct data")
+            
+            question = payload.get("question")
+            if not question:
+                raise HTTPException(status_code=400, detail="Either market_id or question is required")
+            
+            description = payload.get("description", "")
+            current_yes_price = payload.get("current_yes_price", 0.5)
+            current_no_price = payload.get("current_no_price", 0.5)
+            volume = payload.get("volume", 0)
+            end_date = payload.get("end_date")
+            category = payload.get("category", "General")
+            outcomes = payload.get("outcomes", [])
+        
+        logger.info(f"📊 Analyzing: {question[:60]}... (YES: {current_yes_price*100:.0f}%)")
+        
+        # Run LLM Analysis
+        analyzer = get_market_analyzer()
+        
+        result = await analyzer.analyze_market(
+            question=question,
+            description=description,
+            current_yes_price=current_yes_price,
+            current_no_price=current_no_price,
+            volume=volume,
+            end_date=end_date,
+            category=category,
+            outcomes=outcomes if len(outcomes) > 2 else None
+        )
+        
+        # Add market context to response
+        result["market_id"] = market_id
+        result["question"] = question
+        
+        logger.info(f"✅ Analysis complete: {result.get('predicted_outcome')} @ {result.get('ai_probability', 0)*100:.0f}% (edge: {result.get('edge', 0)*100:+.1f}%)")
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Market Analysis failed: {str(e)}", exc_info=True)
+        return {
+            "market_type": "binary",
+            "predicted_outcome": "UNKNOWN",
+            "ai_probability": 0.5,
+            "market_probability": payload.get("current_yes_price", 0.5),
+            "edge": 0,
+            "edge_direction": "Fair price",
+            "confidence": 0.0,
+            "reasoning": f"Analysis error: {str(e)}",
+            "key_factors": [],
+            "risk_assessment": "high",
+            "analysis_method": "error"
+        }
+
+
+@router.get("/analyze-market/{market_id}")
+async def analyze_market_get(market_id: str):
+    """
+    GET endpoint for market analysis (convenience wrapper).
+    """
+    return await analyze_market_with_llm({"market_id": market_id})
+
+
+# ============================================================
+# CASE ANALYSIS ENDPOINT - Takes case_id, fetches details, runs LLM
 # ============================================================
 @router.post("/analyze-case-llm")
 async def analyze_case_with_llm(payload: Dict[str, Any]):
@@ -271,13 +393,15 @@ async def get_ai_insights(limit: int = 4):
 
 @router.get("/health")
 async def prediction_health_check():
-    """Check if LLM analyzer is available"""
+    """Check if LLM analyzers are available"""
     try:
-        analyzer = get_llm_analyzer()
+        case_analyzer = get_llm_analyzer()
+        market_analyzer = get_market_analyzer()
         return {
             "status": "online",
-            "ai_engine": "llm_claude",
-            "analyzer": "active"
+            "ai_engine": "gpt-4o",
+            "case_analyzer": "active",
+            "market_analyzer": "active"
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
