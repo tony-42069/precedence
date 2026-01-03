@@ -576,6 +576,18 @@ export default function MarketDetailPage() {
               </div>
             )}
 
+            {/* AI Analysis Panel - MOVED ABOVE ORDER BOOK */}
+            <AIAnalysisPanel
+              marketId={market.id}
+              marketQuestion={market.question}
+              currentYesPrice={currentPrice}
+              currentNoPrice={1 - currentPrice}
+              description={market.description}
+              volume={market.volume}
+              endDate={market.end_date || market.endDate}
+              outcomes={market.outcomes}
+            />
+
             {/* Order Book */}
             <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">
               <div className="flex items-center justify-between mb-4">
@@ -598,18 +610,6 @@ export default function MarketDetailPage() {
                 />
               )}
             </div>
-
-            {/* AI Analysis Panel */}
-            <AIAnalysisPanel
-              marketId={market.id}
-              marketQuestion={market.question}
-              currentYesPrice={currentPrice}
-              currentNoPrice={1 - currentPrice}
-              description={market.description}
-              volume={market.volume}
-              endDate={market.end_date || market.endDate}
-              outcomes={market.outcomes}
-            />
 
             {/* Market Rules */}
             <div className="bg-[#12131A] rounded-xl border border-gray-800 p-5">

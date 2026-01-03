@@ -28,14 +28,12 @@ class FlexibleCaseData(BaseModel):
 @router.post("/analyze-market")
 async def analyze_market_with_llm(payload: Dict[str, Any]):
     """
-    Analyze a prediction market by ID using LLM.
-    Fetches market data from Polymarket, then runs AI analysis.
+    Analyze a prediction market using LLM.
     
     Request body:
     {
-        "market_id": "123456",  // Polymarket market ID or slug
-        // OR pass market data directly:
-        "question": "Will X happen?",
+        "market_id": "123456",  // Optional - for reference
+        "question": "Will X happen?",  // REQUIRED
         "description": "Resolution rules...",
         "current_yes_price": 0.65,
         "current_no_price": 0.35,
@@ -48,51 +46,21 @@ async def analyze_market_with_llm(payload: Dict[str, Any]):
     try:
         market_id = payload.get("market_id")
         
-        # If market_id provided, fetch market data
-        if market_id:
-            logger.info(f"🤖 Market Analysis requested for market_id: {market_id}")
-            
-            # Fetch market details from our backend (which calls Polymarket)
-            import httpx
-            import os
-            
-            api_url = os.getenv("API_URL", "http://localhost:8000")
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"{api_url}/api/markets/{market_id}", timeout=30.0)
-                
-                if response.status_code != 200:
-                    raise HTTPException(status_code=404, detail=f"Market {market_id} not found")
-                
-                market_data = response.json()
-            
-            # Extract fields from fetched market
-            question = market_data.get("question", "Unknown market")
-            description = market_data.get("description", "")
-            current_yes_price = market_data.get("current_yes_price", 0.5)
-            current_no_price = market_data.get("current_no_price", 0.5)
-            volume = market_data.get("volume", 0)
-            end_date = market_data.get("end_date") or market_data.get("endDate")
-            category = market_data.get("category", "General")
-            outcomes = market_data.get("outcomes", [])
-            
-        else:
-            # Use directly provided market data
-            logger.info(f"🤖 Market Analysis with direct data")
-            
-            question = payload.get("question")
-            if not question:
-                raise HTTPException(status_code=400, detail="Either market_id or question is required")
-            
-            description = payload.get("description", "")
-            current_yes_price = payload.get("current_yes_price", 0.5)
-            current_no_price = payload.get("current_no_price", 0.5)
-            volume = payload.get("volume", 0)
-            end_date = payload.get("end_date")
-            category = payload.get("category", "General")
-            outcomes = payload.get("outcomes", [])
+        # Use directly provided market data (frontend sends all data)
+        question = payload.get("question")
+        if not question:
+            raise HTTPException(status_code=400, detail="Question is required for analysis")
         
-        logger.info(f"📊 Analyzing: {question[:60]}... (YES: {current_yes_price*100:.0f}%)")
+        description = payload.get("description", "")
+        current_yes_price = payload.get("current_yes_price", 0.5)
+        current_no_price = payload.get("current_no_price", 0.5)
+        volume = payload.get("volume", 0)
+        end_date = payload.get("end_date")
+        category = payload.get("category", "General")
+        outcomes = payload.get("outcomes", [])
+        
+        logger.info(f"🤖 Market Analysis requested for: {question[:60]}...")
+        logger.info(f"📊 Current prices - YES: {current_yes_price*100:.0f}%, NO: {current_no_price*100:.0f}%")
         
         # Run LLM Analysis
         analyzer = get_market_analyzer()
@@ -105,7 +73,7 @@ async def analyze_market_with_llm(payload: Dict[str, Any]):
             volume=volume,
             end_date=end_date,
             category=category,
-            outcomes=outcomes if len(outcomes) > 2 else None
+            outcomes=outcomes if outcomes and len(outcomes) > 2 else None
         )
         
         # Add market context to response
@@ -138,9 +106,38 @@ async def analyze_market_with_llm(payload: Dict[str, Any]):
 @router.get("/analyze-market/{market_id}")
 async def analyze_market_get(market_id: str):
     """
-    GET endpoint for market analysis (convenience wrapper).
+    GET endpoint for market analysis - requires fetching market data first.
+    For better results, use POST with full market data.
     """
-    return await analyze_market_with_llm({"market_id": market_id})
+    # For GET requests, we need to fetch the market data
+    try:
+        import httpx
+        from ..routes.markets import get_market_details
+        
+        # Try to get market details directly from our markets route
+        market_data = await get_market_details(market_id)
+        
+        if not market_data:
+            raise HTTPException(status_code=404, detail=f"Market {market_id} not found")
+        
+        # Now call the POST endpoint with the data
+        return await analyze_market_with_llm({
+            "market_id": market_id,
+            "question": market_data.get("question", "Unknown"),
+            "description": market_data.get("description", ""),
+            "current_yes_price": market_data.get("current_yes_price", 0.5),
+            "current_no_price": market_data.get("current_no_price", 0.5),
+            "volume": market_data.get("volume", 0),
+            "end_date": market_data.get("end_date") or market_data.get("endDate"),
+            "category": market_data.get("category", "General"),
+            "outcomes": market_data.get("outcomes", [])
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"GET analyze-market failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
@@ -399,7 +396,7 @@ async def prediction_health_check():
         market_analyzer = get_market_analyzer()
         return {
             "status": "online",
-            "ai_engine": "gpt-4o",
+            "ai_engine": "llm",
             "case_analyzer": "active",
             "market_analyzer": "active"
         }

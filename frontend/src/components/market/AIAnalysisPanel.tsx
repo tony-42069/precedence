@@ -140,7 +140,7 @@ export default function AIAnalysisPanel({
             <h3 className="font-semibold text-white flex items-center gap-2">
               AI Analysis
               <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-mono uppercase">
-                GPT-4
+                BETA
               </span>
             </h3>
             <p className="text-xs text-gray-500">Get AI-powered probability estimates and edge detection</p>
