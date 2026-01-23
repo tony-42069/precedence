@@ -172,51 +172,53 @@ export const useSafeAddress = () => {
         // IMPORTANT: Also look up numeric market ID for proper linking
         const mappedPositions: PolymarketPosition[] = await Promise.all(
           data.map(async (pos: any) => {
+            // Data API may use different field names depending on version
+            const conditionId = pos.conditionId || pos.condition_id;
+            const slug = pos.slug || pos.market || pos.marketSlug;
+            const title = pos.title || pos.question || pos.marketQuestion;
+
             // Try to get numeric market ID from conditionId via Gamma API
-            // CRITICAL: Use /markets?condition_id= which returns MARKET ID (not /events/slug/ which returns EVENT ID!)
-            // Event IDs and Market IDs are DIFFERENT - using event ID will cause 404s
+            // CRITICAL: Use /markets?condition_id= which returns MARKET ID
             let marketId: string | undefined = undefined;
-            if (pos.conditionId) {
+            if (conditionId) {
               try {
-                // Query by condition_id - returns array of markets
-                const marketResponse = await fetch(`${GAMMA_API_URL}/markets?condition_id=${pos.conditionId}`);
+                const marketResponse = await fetch(`${GAMMA_API_URL}/markets?condition_id=${conditionId}`);
                 if (marketResponse.ok) {
                   const markets = await marketResponse.json();
-                  // Response is an ARRAY, not a single object
                   if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
                     marketId = markets[0].id.toString();
-                    console.log(`📊 Resolved conditionId "${pos.conditionId.slice(0, 20)}..." to market ID: ${marketId}`);
+                    console.log(`📊 Resolved conditionId "${conditionId.slice(0, 20)}..." to market ID: ${marketId}`);
                   }
                 }
               } catch (lookupErr) {
-                console.warn(`Failed to lookup market ID for conditionId ${pos.conditionId}:`, lookupErr);
+                console.warn(`Failed to lookup market ID for conditionId ${conditionId}:`, lookupErr);
               }
             }
 
             // Fallback: try by slug if conditionId lookup failed
-            if (!marketId && pos.slug) {
+            if (!marketId && slug) {
               try {
-                const slugResponse = await fetch(`${GAMMA_API_URL}/markets?slug=${pos.slug}`);
+                const slugResponse = await fetch(`${GAMMA_API_URL}/markets?slug=${slug}`);
                 if (slugResponse.ok) {
                   const markets = await slugResponse.json();
                   if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
                     marketId = markets[0].id.toString();
-                    console.log(`📊 Resolved slug "${pos.slug}" to market ID: ${marketId}`);
+                    console.log(`📊 Resolved slug "${slug}" to market ID: ${marketId}`);
                   }
                 }
               } catch (lookupErr) {
-                console.warn(`Failed to lookup market ID for slug ${pos.slug}:`, lookupErr);
+                console.warn(`Failed to lookup market ID for slug ${slug}:`, lookupErr);
               }
             }
-            
+
             return {
               asset: pos.asset,
-              conditionId: pos.conditionId,
+              conditionId: conditionId,
               size: pos.size?.toString() || '0',
               avgPrice: pos.avgPrice?.toString() || '0',
               currentPrice: pos.curPrice,
-              marketSlug: pos.slug,
-              marketQuestion: pos.title,
+              marketSlug: slug,
+              marketQuestion: title,
               outcome: pos.outcome,
               pnl: pos.cashPnl,
               market_id: marketId, // NUMERIC ID for proper linking!
@@ -232,12 +234,14 @@ export const useSafeAddress = () => {
           // Same lookup logic as above
           const mappedPositions: PolymarketPosition[] = await Promise.all(
             positionsArray.map(async (pos: any) => {
-              // Try to get numeric market ID from conditionId via Gamma API
-              // CRITICAL: Use /markets?condition_id= which returns MARKET ID (not /events/slug/ which returns EVENT ID!)
+              const conditionId = pos.conditionId || pos.condition_id;
+              const slug = pos.slug || pos.market || pos.marketSlug;
+              const title = pos.title || pos.question || pos.marketQuestion;
+
               let marketId: string | undefined = undefined;
-              if (pos.conditionId) {
+              if (conditionId) {
                 try {
-                  const marketResponse = await fetch(`${GAMMA_API_URL}/markets?condition_id=${pos.conditionId}`);
+                  const marketResponse = await fetch(`${GAMMA_API_URL}/markets?condition_id=${conditionId}`);
                   if (marketResponse.ok) {
                     const markets = await marketResponse.json();
                     if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
@@ -245,14 +249,13 @@ export const useSafeAddress = () => {
                     }
                   }
                 } catch (lookupErr) {
-                  console.warn(`Failed to lookup market ID for conditionId ${pos.conditionId}:`, lookupErr);
+                  console.warn(`Failed to lookup market ID for conditionId ${conditionId}:`, lookupErr);
                 }
               }
 
-              // Fallback: try by slug if conditionId lookup failed
-              if (!marketId && pos.slug) {
+              if (!marketId && slug) {
                 try {
-                  const slugResponse = await fetch(`${GAMMA_API_URL}/markets?slug=${pos.slug}`);
+                  const slugResponse = await fetch(`${GAMMA_API_URL}/markets?slug=${slug}`);
                   if (slugResponse.ok) {
                     const markets = await slugResponse.json();
                     if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
@@ -260,18 +263,18 @@ export const useSafeAddress = () => {
                     }
                   }
                 } catch (lookupErr) {
-                  console.warn(`Failed to lookup market ID for slug ${pos.slug}:`, lookupErr);
+                  console.warn(`Failed to lookup market ID for slug ${slug}:`, lookupErr);
                 }
               }
 
               return {
                 asset: pos.asset,
-                conditionId: pos.conditionId,
+                conditionId: conditionId,
                 size: pos.size?.toString() || '0',
                 avgPrice: pos.avgPrice?.toString() || '0',
                 currentPrice: pos.curPrice,
-                marketSlug: pos.slug,
-                marketQuestion: pos.title,
+                marketSlug: slug,
+                marketQuestion: title,
                 outcome: pos.outcome,
                 pnl: pos.cashPnl,
                 market_id: marketId,

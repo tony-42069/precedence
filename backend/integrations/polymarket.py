@@ -185,7 +185,7 @@ class PolymarketClient:
                     if len(active_markets) > 2:
                         # MULTI-OUTCOME EVENT: Return event with all outcomes
                         logger.info(f"Multi-outcome event detected with {len(active_markets)} active outcomes")
-                        
+
                         market = {
                             'id': event.get('id'),
                             'question': event.get('title'),  # Use event title as main question
@@ -200,28 +200,93 @@ class PolymarketClient:
                             'num_outcomes': len(active_markets),
                             'outcomes': []
                         }
-                        
+
+                        # Check if nested market data looks incomplete
+                        # (all prices at 0.5 or missing clobTokenIds suggests the events endpoint
+                        # didn't include full market data)
+                        needs_individual_fetch = False
+                        sample_prices = []
+                        for nm in active_markets[:5]:  # Check first 5
+                            op = nm.get('outcomePrices')
+                            clob = nm.get('clobTokenIds')
+                            if op is None and clob is None:
+                                needs_individual_fetch = True
+                                break
+                            if op:
+                                try:
+                                    parsed = json.loads(op) if isinstance(op, str) else op
+                                    if parsed and len(parsed) > 0:
+                                        sample_prices.append(float(parsed[0]))
+                                except:
+                                    pass
+
+                        # If all sampled prices are exactly 0.5, data might be stale/incomplete
+                        if sample_prices and all(p == 0.5 for p in sample_prices) and len(sample_prices) >= 3:
+                            needs_individual_fetch = True
+
+                        # Fetch individual market data if needed
+                        enriched_markets = active_markets
+                        if needs_individual_fetch:
+                            logger.info(f"Nested market data looks incomplete, fetching individual markets...")
+                            enriched_markets = []
+                            for nm in active_markets:
+                                nm_id = nm.get('id')
+                                if nm_id:
+                                    try:
+                                        individual_url = f"https://gamma-api.polymarket.com/markets/{nm_id}"
+                                        individual_response = httpx.get(individual_url, timeout=10.0)
+                                        if individual_response.status_code == 200:
+                                            enriched_markets.append(individual_response.json())
+                                        else:
+                                            enriched_markets.append(nm)  # Fallback to nested data
+                                    except Exception as e:
+                                        logger.warning(f"Failed to fetch individual market {nm_id}: {e}")
+                                        enriched_markets.append(nm)
+                                else:
+                                    enriched_markets.append(nm)
+                            logger.info(f"Fetched {len(enriched_markets)} individual markets")
+
                         # Parse all active outcomes
-                        for nm in active_markets:
+                        for nm in enriched_markets:
                             try:
                                 outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
                                 if isinstance(outcome_prices, str):
                                     outcome_prices = json.loads(outcome_prices)
-                                
+
+                                # Handle None outcomePrices
+                                if not outcome_prices:
+                                    outcome_prices = [0.5, 0.5]
+
                                 yes_price = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
                                 no_price = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
-                                
+
                                 # Skip fully resolved outcomes (YES >= 99%)
                                 if yes_price >= 0.99:
                                     continue
-                                
+
+                                # Skip closed markets
+                                if nm.get('closed', False):
+                                    continue
+
                                 # Parse clobTokenIds
                                 clob_ids = nm.get('clobTokenIds', [])
                                 if isinstance(clob_ids, str):
-                                    clob_ids = json.loads(clob_ids)
-                                
+                                    try:
+                                        clob_ids = json.loads(clob_ids)
+                                    except:
+                                        clob_ids = []
+                                if clob_ids is None:
+                                    clob_ids = []
+
+                                # Get the best available name
+                                outcome_name = nm.get('groupItemTitle') or ''
+                                if not outcome_name:
+                                    # Try to extract a clean name from the question
+                                    question = nm.get('question', 'Unknown')
+                                    outcome_name = question
+
                                 market['outcomes'].append({
-                                    'name': nm.get('groupItemTitle') or nm.get('question', 'Unknown'),
+                                    'name': outcome_name,
                                     'question': nm.get('question'),
                                     'yes_price': yes_price,
                                     'no_price': no_price,
@@ -231,10 +296,10 @@ class PolymarketClient:
                                 })
                             except Exception as e:
                                 logger.warning(f"Failed to parse outcome: {e}")
-                        
+
                         # Sort outcomes by price (highest probability first)
                         market['outcomes'].sort(key=lambda x: x['price'], reverse=True)
-                        
+
                         # Set current price to top outcome for display
                         if market['outcomes']:
                             market['current_yes_price'] = market['outcomes'][0]['price']
@@ -243,8 +308,12 @@ class PolymarketClient:
                         else:
                             market['current_yes_price'] = 0.5
                             market['current_no_price'] = 0.5
-                        
+
                         logger.info(f"Returning multi-outcome event with {len(market['outcomes'])} outcomes")
+
+                        # Return directly - don't call _parse_market_prices which would
+                        # overwrite current_yes_price/current_no_price with defaults
+                        return market
                     
                     else:
                         # BINARY EVENT: Return first active market (existing behavior)

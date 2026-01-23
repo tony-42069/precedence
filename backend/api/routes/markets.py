@@ -379,13 +379,23 @@ async def get_trending_markets(
                         
                         # Use groupItemTitle for display name (cleaner than question)
                         outcome_name = nm.get('groupItemTitle', '') or nm.get('question', 'Unknown')
-                        
+
                         # Get the full question for the trading modal
                         outcome_question = nm.get('question', outcome_name)
-                        
+
                         # Get outcome-specific description for context
                         outcome_description = nm.get('description', '')
-                        
+
+                        # Parse clobTokenIds for price history fetching
+                        clob_ids = nm.get('clobTokenIds', [])
+                        if isinstance(clob_ids, str):
+                            try:
+                                clob_ids = json.loads(clob_ids)
+                            except:
+                                clob_ids = []
+                        if clob_ids is None:
+                            clob_ids = []
+
                         outcomes_raw.append({
                             'name': outcome_name,                    # Display name: "↑ 115,000"
                             'question': outcome_question,            # Full question for trading
@@ -395,6 +405,7 @@ async def get_trending_markets(
                             'price': yes_price,                      # For sorting/display
                             'id': nm.get('id'),                      # Market ID for trading
                             'market_id': nm.get('id'),               # Duplicate for clarity
+                            'clobTokenIds': clob_ids,                # Token IDs for price history
                         })
                     except Exception as e:
                         logger.warning(f"Failed to parse outcome: {e}")
