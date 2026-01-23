@@ -202,16 +202,21 @@ class PolymarketClient:
                         }
 
                         # Check if nested market data looks incomplete
-                        # (all prices at 0.5 or missing clobTokenIds suggests the events endpoint
-                        # didn't include full market data)
+                        # Cases that trigger individual fetch:
+                        # 1. outcomePrices AND clobTokenIds both missing
+                        # 2. All sampled prices are exactly 0.5 (stale/default data)
+                        # 3. groupItemTitle missing (causes placeholder names like "Person P")
                         needs_individual_fetch = False
                         sample_prices = []
+                        missing_names = 0
                         for nm in active_markets[:5]:  # Check first 5
                             op = nm.get('outcomePrices')
                             clob = nm.get('clobTokenIds')
                             if op is None and clob is None:
                                 needs_individual_fetch = True
                                 break
+                            if not nm.get('groupItemTitle'):
+                                missing_names += 1
                             if op:
                                 try:
                                     parsed = json.loads(op) if isinstance(op, str) else op
@@ -223,6 +228,11 @@ class PolymarketClient:
                         # If all sampled prices are exactly 0.5, data might be stale/incomplete
                         if sample_prices and all(p == 0.5 for p in sample_prices) and len(sample_prices) >= 3:
                             needs_individual_fetch = True
+
+                        # If most markets are missing groupItemTitle, fetch individually
+                        if missing_names >= 3:
+                            needs_individual_fetch = True
+                            logger.info(f"Missing groupItemTitle in {missing_names}/5 sampled markets")
 
                         # Fetch individual market data if needed
                         enriched_markets = active_markets

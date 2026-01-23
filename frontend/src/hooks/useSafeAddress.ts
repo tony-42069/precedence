@@ -21,9 +21,11 @@ const USDC_NATIVE = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
 const POLYGON_RPC_URL = 'https://polygon-rpc.com';
 
 // Polymarket APIs
-const GAMMA_API_URL = 'https://gamma-api.polymarket.com';
 const CLOB_API_URL = 'https://clob.polymarket.com';
 const DATA_API_URL = 'https://data-api.polymarket.com'; // CORRECT endpoint for positions!
+
+// Use our backend proxy for Gamma API calls (avoids CORS issues)
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface SafeAddressState {
   eoaAddress: string | null;
@@ -177,16 +179,16 @@ export const useSafeAddress = () => {
             const slug = pos.slug || pos.market || pos.marketSlug;
             const title = pos.title || pos.question || pos.marketQuestion;
 
-            // Try to get numeric market ID from conditionId via Gamma API
-            // CRITICAL: Use /markets?condition_id= which returns MARKET ID
+            // Try to get numeric market ID via our backend proxy (avoids CORS)
             let marketId: string | undefined = undefined;
             if (conditionId) {
               try {
-                const marketResponse = await fetch(`${GAMMA_API_URL}/markets?condition_id=${conditionId}`);
-                if (marketResponse.ok) {
-                  const markets = await marketResponse.json();
-                  if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
-                    marketId = markets[0].id.toString();
+                const lookupUrl = `${BACKEND_API_URL}/api/markets/lookup?condition_id=${conditionId}`;
+                const lookupResponse = await fetch(lookupUrl);
+                if (lookupResponse.ok) {
+                  const result = await lookupResponse.json();
+                  if (result.found && result.market_id) {
+                    marketId = result.market_id;
                     console.log(`📊 Resolved conditionId "${conditionId.slice(0, 20)}..." to market ID: ${marketId}`);
                   }
                 }
@@ -198,11 +200,12 @@ export const useSafeAddress = () => {
             // Fallback: try by slug if conditionId lookup failed
             if (!marketId && slug) {
               try {
-                const slugResponse = await fetch(`${GAMMA_API_URL}/markets?slug=${slug}`);
-                if (slugResponse.ok) {
-                  const markets = await slugResponse.json();
-                  if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
-                    marketId = markets[0].id.toString();
+                const lookupUrl = `${BACKEND_API_URL}/api/markets/lookup?slug=${slug}`;
+                const lookupResponse = await fetch(lookupUrl);
+                if (lookupResponse.ok) {
+                  const result = await lookupResponse.json();
+                  if (result.found && result.market_id) {
+                    marketId = result.market_id;
                     console.log(`📊 Resolved slug "${slug}" to market ID: ${marketId}`);
                   }
                 }
@@ -241,11 +244,12 @@ export const useSafeAddress = () => {
               let marketId: string | undefined = undefined;
               if (conditionId) {
                 try {
-                  const marketResponse = await fetch(`${GAMMA_API_URL}/markets?condition_id=${conditionId}`);
-                  if (marketResponse.ok) {
-                    const markets = await marketResponse.json();
-                    if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
-                      marketId = markets[0].id.toString();
+                  const lookupUrl = `${BACKEND_API_URL}/api/markets/lookup?condition_id=${conditionId}`;
+                  const lookupResponse = await fetch(lookupUrl);
+                  if (lookupResponse.ok) {
+                    const result = await lookupResponse.json();
+                    if (result.found && result.market_id) {
+                      marketId = result.market_id;
                     }
                   }
                 } catch (lookupErr) {
@@ -255,11 +259,12 @@ export const useSafeAddress = () => {
 
               if (!marketId && slug) {
                 try {
-                  const slugResponse = await fetch(`${GAMMA_API_URL}/markets?slug=${slug}`);
-                  if (slugResponse.ok) {
-                    const markets = await slugResponse.json();
-                    if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
-                      marketId = markets[0].id.toString();
+                  const lookupUrl = `${BACKEND_API_URL}/api/markets/lookup?slug=${slug}`;
+                  const lookupResponse = await fetch(lookupUrl);
+                  if (lookupResponse.ok) {
+                    const result = await lookupResponse.json();
+                    if (result.found && result.market_id) {
+                      marketId = result.market_id;
                     }
                   }
                 } catch (lookupErr) {

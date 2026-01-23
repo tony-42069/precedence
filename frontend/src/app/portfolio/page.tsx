@@ -114,8 +114,9 @@ export default function PortfolioPage() {
 
   // Resolve market slugs/conditionIds to numeric IDs (fallback - useSafeAddress should already have resolved these)
   // This is a backup in case the primary resolution in useSafeAddress fails
+  // Uses our backend proxy to avoid CORS issues with Gamma API
   useEffect(() => {
-    const GAMMA_API_URL = 'https://gamma-api.polymarket.com';
+    const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
     const resolvePositions = async () => {
       if (combinedPositions.length === 0) return;
@@ -140,10 +141,8 @@ export default function PortfolioPage() {
 
       if (positionsToResolve.length === 0) return;
 
-      console.log('🔄 Fallback: Resolving positions via Gamma API:', positionsToResolve.length);
+      console.log('🔄 Fallback: Resolving positions via backend proxy:', positionsToResolve.length);
 
-      // CRITICAL: Use /markets?condition_id= or /markets?slug= (returns ARRAY with MARKET ID)
-      // NOT /events/slug/ which returns EVENT ID (different ID space!)
       const newResolvedIds = new Map(resolvedMarketIds);
 
       for (const pos of positionsToResolve) {
@@ -152,12 +151,11 @@ export default function PortfolioPage() {
         // Try conditionId first (more reliable)
         if (pos.conditionId && !resolved) {
           try {
-            const response = await fetch(`${GAMMA_API_URL}/markets?condition_id=${pos.conditionId}`);
+            const response = await fetch(`${BACKEND_URL}/api/markets/lookup?condition_id=${pos.conditionId}`);
             if (response.ok) {
-              const markets = await response.json();
-              // Response is an ARRAY, not a single object
-              if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
-                const numericId = markets[0].id.toString();
+              const result = await response.json();
+              if (result.found && result.market_id) {
+                const numericId = result.market_id;
                 if (pos.slug) {
                   newResolvedIds.set(pos.slug, numericId);
                 }
@@ -173,11 +171,11 @@ export default function PortfolioPage() {
         // Fallback to slug query
         if (pos.slug && !resolved) {
           try {
-            const response = await fetch(`${GAMMA_API_URL}/markets?slug=${pos.slug}`);
+            const response = await fetch(`${BACKEND_URL}/api/markets/lookup?slug=${pos.slug}`);
             if (response.ok) {
-              const markets = await response.json();
-              if (Array.isArray(markets) && markets.length > 0 && markets[0].id) {
-                const numericId = markets[0].id.toString();
+              const result = await response.json();
+              if (result.found && result.market_id) {
+                const numericId = result.market_id;
                 newResolvedIds.set(pos.slug, numericId);
                 console.log(`✅ Resolved slug ${pos.slug} -> market ${numericId}`);
                 resolved = true;

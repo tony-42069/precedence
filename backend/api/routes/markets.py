@@ -236,6 +236,57 @@ async def resolve_market_for_case(case_query: str = Query(..., description="Cour
             "status": "error"
         }
 
+@router.get("/lookup")
+async def lookup_market(
+    condition_id: Optional[str] = Query(None, description="Condition ID to resolve to a market ID"),
+    slug: Optional[str] = Query(None, description="Market slug to resolve to a market ID"),
+):
+    """
+    Proxy for Gamma API market resolution - avoids CORS issues when called from frontend.
+    Resolves a condition_id or slug to a numeric Polymarket market ID.
+
+    Used by the portfolio page to create proper market links.
+    """
+    import httpx
+
+    if not condition_id and not slug:
+        raise HTTPException(status_code=400, detail="Must provide condition_id or slug parameter")
+
+    try:
+        gamma_url = "https://gamma-api.polymarket.com/markets"
+
+        if condition_id:
+            params = {"condition_id": condition_id}
+            response = httpx.get(gamma_url, params=params, timeout=10.0)
+            if response.status_code == 200:
+                markets = response.json()
+                if isinstance(markets, list) and len(markets) > 0 and markets[0].get('id'):
+                    return {
+                        "found": True,
+                        "market_id": str(markets[0]['id']),
+                        "slug": markets[0].get('slug'),
+                        "question": markets[0].get('question'),
+                    }
+
+        if slug:
+            params = {"slug": slug}
+            response = httpx.get(gamma_url, params=params, timeout=10.0)
+            if response.status_code == 200:
+                markets = response.json()
+                if isinstance(markets, list) and len(markets) > 0 and markets[0].get('id'):
+                    return {
+                        "found": True,
+                        "market_id": str(markets[0]['id']),
+                        "slug": markets[0].get('slug'),
+                        "question": markets[0].get('question'),
+                    }
+
+        return {"found": False, "market_id": None}
+
+    except Exception as e:
+        logger.error(f"Error looking up market: {e}")
+        return {"found": False, "market_id": None, "error": str(e)}
+
 @router.get("/trending")
 async def get_trending_markets(
     limit: int = Query(10, description="Maximum number of trending markets to return", ge=1, le=50),

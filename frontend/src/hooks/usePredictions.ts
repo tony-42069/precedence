@@ -47,7 +47,7 @@ export function usePredictions() {
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Map<string, string>>(new Map());
 
-  const API_BASE = 'http://localhost:8000/api';
+  const API_BASE = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api`;
 
   // Get AI prediction for a market
   const getPrediction = useCallback(async (marketId: string, caseData?: any) => {
