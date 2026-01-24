@@ -95,22 +95,49 @@ class LLMMarketAnalyzer:
                     }
                 ],
                 response_format={"type": "json_object"},
-                temperature=0.4,  # Slightly higher for market analysis creativity
+                temperature=0.4,
                 max_tokens=1500
             )
-            
+
             # Parse the response
             analysis_text = response.choices[0].message.content
-            analysis = json.loads(analysis_text)
-            
+
+            if not analysis_text:
+                logger.warning("Empty response from LLM")
+                return self._fallback_prediction(question, current_yes_price)
+
+            # Handle potential markdown code blocks in response
+            cleaned_text = analysis_text.strip()
+            if cleaned_text.startswith("```"):
+                # Strip markdown code block wrappers
+                lines = cleaned_text.split("\n")
+                # Remove first line (```json or ```) and last line (```)
+                lines = [l for l in lines if not l.strip().startswith("```")]
+                cleaned_text = "\n".join(lines).strip()
+
+            try:
+                analysis = json.loads(cleaned_text)
+            except json.JSONDecodeError as parse_error:
+                logger.error(f"Failed to parse LLM response as JSON: {parse_error}")
+                logger.error(f"Raw response (first 500 chars): {cleaned_text[:500]}")
+                return self._fallback_prediction(question, current_yes_price, raw_response=cleaned_text)
+
+            # Validate that analysis is a dict (not a string or other type)
+            if not isinstance(analysis, dict):
+                logger.error(f"LLM response parsed but is not a dict: type={type(analysis)}")
+                return self._fallback_prediction(question, current_yes_price, raw_response=str(analysis))
+
             logger.info(f"Analysis complete: {analysis.get('predicted_outcome')} @ {analysis.get('ai_probability', 0)*100:.0f}%")
-            
+
             # Validate and structure the response
             if is_multi_outcome:
                 return self._structure_multi_outcome_response(analysis, outcomes)
             else:
                 return self._structure_binary_response(analysis, current_yes_price)
-            
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error in market analysis: {e}", exc_info=True)
+            return self._fallback_prediction(question, current_yes_price)
         except Exception as e:
             logger.error(f"Error analyzing market with LLM: {e}", exc_info=True)
             return self._fallback_prediction(question, current_yes_price)
@@ -223,9 +250,20 @@ IMPORTANT:
         # Format outcomes with their current prices
         outcomes_text = ""
         for i, outcome in enumerate(outcomes[:10], 1):  # Limit to 10 outcomes
-            name = outcome.get('name', f'Outcome {i}')
-            price = outcome.get('price', outcome.get('yes_price', 0))
-            price_cents = round(price * 100)
+            if isinstance(outcome, dict):
+                name = outcome.get('name', f'Outcome {i}')
+                price = outcome.get('price', outcome.get('yes_price', 0))
+                try:
+                    price = float(price)
+                except (ValueError, TypeError):
+                    price = 0
+                price_cents = round(price * 100)
+            elif isinstance(outcome, str):
+                name = outcome
+                price_cents = 0
+            else:
+                name = f'Outcome {i}'
+                price_cents = 0
             outcomes_text += f"  {i}. {name}: {price_cents}¢\n"
         
         # Format volume
@@ -339,21 +377,29 @@ RESPONSE FORMAT (JSON):
             "analysis_method": "llm_gpt4"
         }
 
-    def _fallback_prediction(self, question: str, market_price: float) -> Dict[str, Any]:
+    def _fallback_prediction(self, question: str, market_price: float, raw_response: str = "") -> Dict[str, Any]:
         """Return a fallback prediction if LLM fails."""
-        
+
         logger.warning(f"Using fallback prediction for: {question[:50]}...")
-        
+
+        # Try to extract useful reasoning from raw response even if JSON failed
+        reasoning = "Unable to complete full analysis. Defaulting to market consensus."
+        if raw_response:
+            # Truncate and use as reasoning
+            clean_text = raw_response.strip()[:500]
+            if len(clean_text) > 20:
+                reasoning = f"Partial analysis: {clean_text}"
+
         return {
             "market_type": "binary",
             "predicted_outcome": "YES" if market_price > 0.5 else "NO",
-            "ai_probability": market_price,  # Just echo market price
+            "ai_probability": market_price,
             "market_probability": market_price,
             "edge": 0,
             "edge_direction": "Fair price",
             "confidence": 0.3,
-            "reasoning": "Unable to complete full analysis. Defaulting to market consensus.",
-            "key_factors": ["Analysis unavailable - using market price as estimate"],
+            "reasoning": reasoning,
+            "key_factors": ["Analysis degraded - using market price as baseline estimate"],
             "bull_case": "",
             "bear_case": "",
             "risk_assessment": "high",

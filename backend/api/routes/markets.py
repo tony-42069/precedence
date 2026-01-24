@@ -30,7 +30,7 @@ class MarketSearchRequest(BaseModel):
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def get_polymarket_markets(
-    limit: int = Query(20, description="Maximum number of markets to return", ge=1, le=100)
+    limit: int = Query(50, description="Maximum number of markets to return", ge=1, le=200)
 ):
     """
     Get available prediction markets from Polymarket.
@@ -52,7 +52,7 @@ async def get_polymarket_markets(
 @router.get("/search")
 async def search_polymarket_markets(
     query: str = Query(..., description="Search query for markets"),
-    limit: int = Query(20, description="Maximum number of results", ge=1, le=50)
+    limit: int = Query(50, description="Maximum number of results", ge=1, le=100)
 ):
     """
     Search for prediction markets by text query.
@@ -289,7 +289,7 @@ async def lookup_market(
 
 @router.get("/trending")
 async def get_trending_markets(
-    limit: int = Query(10, description="Maximum number of trending markets to return", ge=1, le=50),
+    limit: int = Query(50, description="Maximum number of trending markets to return", ge=1, le=100),
     category: Optional[str] = Query(None, description="Filter by category (Legal, Politics, Crypto, Culture, Sports, Economics)"),
     exclude_sports: bool = Query(True, description="Exclude sports markets from trending"),
     sort_by: str = Query("volume1wk", description="Sort by: volume, volume24hr, volume1wk, volume1mo")
