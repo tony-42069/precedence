@@ -80,30 +80,26 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/markets/legal`);
+        // Fetch trending markets (all categories, higher limit)
+        const response = await fetch(`${API_URL}/api/markets/trending?limit=50&exclude_sports=true`);
         if (response.ok) {
           const data = await response.json();
-          let rawMarkets = Array.isArray(data) ? data : (data.markets || []);
-          
+          let rawMarkets = Array.isArray(data) ? data : (data.trending || data.markets || []);
+
           if (highlightId && !rawMarkets.find((m: Market) => m.id === highlightId)) {
-            console.log('Highlighted market not in legal markets, fetching from trending...');
             try {
-              const trendingResponse = await fetch(`${API_URL}/api/markets/trending?limit=50`);
-              if (trendingResponse.ok) {
-                const trendingData = await trendingResponse.json();
-                const trendingMarkets = trendingData.trending || [];
-                const highlightedMarket = trendingMarkets.find((m: Market) => m.id === highlightId);
-                
+              const detailResponse = await fetch(`${API_URL}/api/markets/${highlightId}`);
+              if (detailResponse.ok) {
+                const highlightedMarket = await detailResponse.json();
                 if (highlightedMarket) {
                   rawMarkets = [highlightedMarket, ...rawMarkets];
-                  console.log('✅ Added highlighted market to top of list');
                 }
               }
             } catch (error) {
-              console.error('Failed to fetch trending markets:', error);
+              console.error('Failed to fetch highlighted market:', error);
             }
           }
-          
+
           setMarkets(rawMarkets);
 
           if (rawMarkets.length > 0) {
