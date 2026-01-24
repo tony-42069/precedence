@@ -11,8 +11,10 @@ Provides access to Polymarket's Builder program APIs:
 import os
 import logging
 import json
+import re
 import subprocess
 from typing import Dict, List, Optional, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -201,108 +203,129 @@ class PolymarketClient:
                             'outcomes': []
                         }
 
-                        # Check if nested market data looks incomplete
-                        # Cases that trigger individual fetch:
-                        # 1. outcomePrices AND clobTokenIds both missing
-                        # 2. All sampled prices are exactly 0.5 (stale/default data)
-                        # 3. groupItemTitle missing (causes placeholder names like "Person P")
-                        needs_individual_fetch = False
-                        sample_prices = []
-                        missing_names = 0
-                        for nm in active_markets[:5]:  # Check first 5
-                            op = nm.get('outcomePrices')
-                            clob = nm.get('clobTokenIds')
-                            if op is None and clob is None:
-                                needs_individual_fetch = True
-                                break
-                            if not nm.get('groupItemTitle'):
-                                missing_names += 1
-                            if op:
+                        # Collect YES token IDs for batch price fetching from CLOB
+                        # clobTokenIds[0] = YES token (matches outcomes[0] = "Yes")
+                        yes_tokens = []  # List of (token_id, market_data) tuples
+
+                        for nm in active_markets:
+                            # Skip closed markets
+                            if nm.get('closed', False):
+                                continue
+
+                            # Parse clobTokenIds
+                            clob_ids = nm.get('clobTokenIds', [])
+                            if isinstance(clob_ids, str):
                                 try:
-                                    parsed = json.loads(op) if isinstance(op, str) else op
-                                    if parsed and len(parsed) > 0:
-                                        sample_prices.append(float(parsed[0]))
+                                    clob_ids = json.loads(clob_ids)
                                 except:
-                                    pass
+                                    clob_ids = []
+                            if not clob_ids:
+                                continue
 
-                        # If all sampled prices are exactly 0.5, data might be stale/incomplete
-                        if sample_prices and all(p == 0.5 for p in sample_prices) and len(sample_prices) >= 3:
-                            needs_individual_fetch = True
+                            yes_token = clob_ids[0] if len(clob_ids) > 0 else None
+                            if yes_token:
+                                yes_tokens.append((yes_token, nm))
 
-                        # If most markets are missing groupItemTitle, fetch individually
-                        if missing_names >= 3:
-                            needs_individual_fetch = True
-                            logger.info(f"Missing groupItemTitle in {missing_names}/5 sampled markets")
+                        # Fetch live prices from CLOB /midpoint endpoint in parallel
+                        # This replaces the stale outcomePrices from Gamma API
+                        logger.info(f"Fetching live prices for {len(yes_tokens)} outcomes from CLOB API...")
+                        clob_prices = {}  # token_id -> price
 
-                        # Fetch individual market data if needed
-                        enriched_markets = active_markets
-                        if needs_individual_fetch:
-                            logger.info(f"Nested market data looks incomplete, fetching individual markets...")
-                            enriched_markets = []
-                            for nm in active_markets:
-                                nm_id = nm.get('id')
-                                if nm_id:
-                                    try:
-                                        individual_url = f"https://gamma-api.polymarket.com/markets/{nm_id}"
-                                        individual_response = httpx.get(individual_url, timeout=10.0)
-                                        if individual_response.status_code == 200:
-                                            enriched_markets.append(individual_response.json())
-                                        else:
-                                            enriched_markets.append(nm)  # Fallback to nested data
-                                    except Exception as e:
-                                        logger.warning(f"Failed to fetch individual market {nm_id}: {e}")
-                                        enriched_markets.append(nm)
-                                else:
-                                    enriched_markets.append(nm)
-                            logger.info(f"Fetched {len(enriched_markets)} individual markets")
-
-                        # Parse all active outcomes
-                        for nm in enriched_markets:
+                        def fetch_midpoint(token_id):
+                            """Fetch midpoint price for a single token from CLOB API."""
                             try:
-                                outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
-                                if isinstance(outcome_prices, str):
-                                    outcome_prices = json.loads(outcome_prices)
+                                resp = httpx.get(
+                                    f"https://clob.polymarket.com/midpoint?token_id={token_id}",
+                                    timeout=5.0
+                                )
+                                if resp.status_code == 200:
+                                    data = resp.json()
+                                    mid = data.get('mid')
+                                    if mid is not None:
+                                        return (token_id, float(mid))
+                            except Exception:
+                                pass
+                            # Fallback: try /price endpoint (last trade price)
+                            try:
+                                resp = httpx.get(
+                                    f"https://clob.polymarket.com/price?token_id={token_id}&side=buy",
+                                    timeout=5.0
+                                )
+                                if resp.status_code == 200:
+                                    data = resp.json()
+                                    price = data.get('price')
+                                    if price is not None:
+                                        return (token_id, float(price))
+                            except Exception:
+                                pass
+                            return (token_id, 0.0)
 
-                                # Handle None outcomePrices
-                                if not outcome_prices:
-                                    outcome_prices = [0.5, 0.5]
+                        # Use ThreadPoolExecutor for parallel CLOB requests
+                        with ThreadPoolExecutor(max_workers=20) as executor:
+                            futures = {
+                                executor.submit(fetch_midpoint, token_id): token_id
+                                for token_id, _ in yes_tokens
+                            }
+                            for future in as_completed(futures):
+                                try:
+                                    token_id, price = future.result()
+                                    clob_prices[token_id] = price
+                                except Exception as e:
+                                    logger.warning(f"Price fetch failed: {e}")
 
-                                yes_price = float(outcome_prices[0]) if len(outcome_prices) > 0 else 0.5
-                                no_price = float(outcome_prices[1]) if len(outcome_prices) > 1 else 0.5
+                        logger.info(f"Got {len(clob_prices)} live prices from CLOB")
+
+                        # Build outcomes with parsed names and live prices
+                        for yes_token, nm in yes_tokens:
+                            try:
+                                # NAME FIX: Parse real name from question field
+                                # e.g., "Will Kamala Harris be the Democratic..." → "Kamala Harris"
+                                question = nm.get('question', '')
+                                raw_name = nm.get('groupItemTitle', '')
+
+                                outcome_name = raw_name
+                                # If groupItemTitle is a placeholder like "Person P", parse from question
+                                if not outcome_name or 'Person' in outcome_name or 'Outcome' in outcome_name or len(outcome_name) <= 3:
+                                    # Try regex patterns to extract the real name
+                                    match = re.search(r'Will (.*?) (?:be |win |have |become )', question)
+                                    if match:
+                                        outcome_name = match.group(1)
+                                    else:
+                                        # Fallback: use question without common prefixes
+                                        outcome_name = question.replace('Will ', '').split('?')[0] if question else raw_name or 'Unknown'
+
+                                # PRICE FIX: Use live CLOB price instead of stale outcomePrices
+                                yes_price = clob_prices.get(yes_token, 0.0)
+
+                                # If CLOB returned 0 (no data), fall back to outcomePrices
+                                if yes_price == 0.0:
+                                    outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
+                                    if isinstance(outcome_prices, str):
+                                        outcome_prices = json.loads(outcome_prices)
+                                    if outcome_prices and len(outcome_prices) > 0:
+                                        yes_price = float(outcome_prices[0])
+
+                                no_price = 1.0 - yes_price if yes_price > 0 else 0.5
 
                                 # Skip fully resolved outcomes (YES >= 99%)
                                 if yes_price >= 0.99:
                                     continue
 
-                                # Skip closed markets
-                                if nm.get('closed', False):
-                                    continue
-
-                                # Parse clobTokenIds
                                 clob_ids = nm.get('clobTokenIds', [])
                                 if isinstance(clob_ids, str):
                                     try:
                                         clob_ids = json.loads(clob_ids)
                                     except:
                                         clob_ids = []
-                                if clob_ids is None:
-                                    clob_ids = []
-
-                                # Get the best available name
-                                outcome_name = nm.get('groupItemTitle') or ''
-                                if not outcome_name:
-                                    # Try to extract a clean name from the question
-                                    question = nm.get('question', 'Unknown')
-                                    outcome_name = question
 
                                 market['outcomes'].append({
                                     'name': outcome_name,
-                                    'question': nm.get('question'),
+                                    'question': question,
                                     'yes_price': yes_price,
                                     'no_price': no_price,
                                     'price': yes_price,
                                     'market_id': nm.get('id'),
-                                    'clobTokenIds': clob_ids
+                                    'clobTokenIds': clob_ids if clob_ids else []
                                 })
                             except Exception as e:
                                 logger.warning(f"Failed to parse outcome: {e}")
