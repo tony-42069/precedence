@@ -52,12 +52,44 @@ async def analyze_market_with_llm(payload: Dict[str, Any]):
             raise HTTPException(status_code=400, detail="Question is required for analysis")
         
         description = payload.get("description", "")
+
+        # Validate numeric inputs
         current_yes_price = payload.get("current_yes_price", 0.5)
+        if not isinstance(current_yes_price, (int, float)):
+            try:
+                current_yes_price = float(current_yes_price)
+            except (ValueError, TypeError):
+                current_yes_price = 0.5
+        current_yes_price = max(0.01, min(0.99, current_yes_price))
+
         current_no_price = payload.get("current_no_price", 0.5)
+        if not isinstance(current_no_price, (int, float)):
+            try:
+                current_no_price = float(current_no_price)
+            except (ValueError, TypeError):
+                current_no_price = 0.5
+        current_no_price = max(0.01, min(0.99, current_no_price))
+
         volume = payload.get("volume", 0)
+        if not isinstance(volume, (int, float)):
+            try:
+                volume = float(volume)
+            except (ValueError, TypeError):
+                volume = 0
+
         end_date = payload.get("end_date")
         category = payload.get("category", "General")
+
+        # Ensure outcomes is a list, not a string
         outcomes = payload.get("outcomes", [])
+        if isinstance(outcomes, str):
+            try:
+                import json as json_lib
+                outcomes = json_lib.loads(outcomes)
+            except (json_lib.JSONDecodeError, TypeError):
+                outcomes = []
+        if not isinstance(outcomes, list):
+            outcomes = []
         
         logger.info(f"🤖 Market Analysis requested for: {question[:60]}...")
         logger.info(f"📊 Current prices - YES: {current_yes_price*100:.0f}%, NO: {current_no_price*100:.0f}%")
