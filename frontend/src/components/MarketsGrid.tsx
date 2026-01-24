@@ -80,8 +80,8 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
-        // Fetch trending markets (all categories, higher limit)
-        const response = await fetch(`${API_URL}/api/markets/trending?limit=50&exclude_sports=true`);
+        // Fetch trending markets (all categories)
+        const response = await fetch(`${API_URL}/api/markets/trending?limit=30&exclude_sports=true`);
         if (response.ok) {
           const data = await response.json();
           let rawMarkets = Array.isArray(data) ? data : (data.trending || data.markets || []);
@@ -206,10 +206,32 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-sm font-mono text-blue-400 animate-pulse">LOADING MARKETS...</p>
+      <div className="space-y-6">
+        <div className="flex flex-wrap gap-3">
+          {['All Markets', 'Politics', 'Economy', 'Crypto'].map((label) => (
+            <div key={label} className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
+              <span className="text-sm text-slate-600">{label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-[#0A0A0C]/80 rounded-xl border border-white/10 overflow-hidden animate-pulse">
+              <div className="w-full h-44 bg-white/5" />
+              <div className="p-6 space-y-4">
+                <div className="flex justify-between">
+                  <div className="h-5 w-16 bg-white/5 rounded-full" />
+                  <div className="h-5 w-24 bg-white/5 rounded" />
+                </div>
+                <div className="h-6 w-full bg-white/5 rounded" />
+                <div className="h-6 w-3/4 bg-white/5 rounded" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="h-12 bg-white/5 rounded" />
+                  <div className="h-12 bg-white/5 rounded" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -261,9 +283,9 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
               >
                 {/* Market Image Header */}
                 {(market.image || market.icon) && (
-                  <div className="w-full h-32 overflow-hidden border-b border-white/5">
-                    <img 
-                      src={market.image || market.icon} 
+                  <div className="w-full h-44 overflow-hidden border-b border-white/5">
+                    <img
+                      src={market.image || market.icon}
                       alt=""
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       onError={(e) => {
@@ -321,35 +343,30 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
 
                   {/* Price Display - Different for binary vs multi-outcome */}
                   {isMulti ? (
-                    // Multi-outcome: Show top 3 outcomes with YES/NO
-                    <div className="space-y-2 mb-4">
-                      {outcomes.slice(0, 3).map((outcome, idx) => {
-                        const yesPrice = outcome.yes_price ?? outcome.price;
-                        const noPrice = outcome.no_price ?? (1 - outcome.price);
-                        return (
-                          <div 
-                            key={outcome.id || idx}
-                            className="bg-white/5 rounded p-2 border border-white/10 font-mono text-sm"
-                          >
-                            <div className="text-slate-300 text-xs truncate mb-1">
-                              {outcome.name}
-                            </div>
-                            <div className="flex gap-2">
-                              <div className="flex-1 flex justify-between">
-                                <span className="text-slate-500 text-[10px]">YES</span>
-                                <span className="text-green-400 text-xs font-bold">${yesPrice.toFixed(2)}</span>
+                    // Multi-outcome: Show top outcomes in two-column grid
+                    <div className="mb-4">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {outcomes.slice(0, 6).map((outcome, idx) => {
+                          const yesPrice = outcome.yes_price ?? outcome.price;
+                          return (
+                            <div
+                              key={outcome.id || idx}
+                              className="bg-white/5 rounded px-2 py-1.5 border border-white/10 font-mono"
+                            >
+                              <div className="text-slate-300 text-[11px] truncate mb-0.5">
+                                {outcome.name}
                               </div>
-                              <div className="flex-1 flex justify-between">
-                                <span className="text-slate-500 text-[10px]">NO</span>
-                                <span className="text-red-400 text-xs font-bold">${noPrice.toFixed(2)}</span>
+                              <div className="flex items-center justify-between">
+                                <span className="text-green-400 text-xs font-bold">{Math.round(yesPrice * 100)}&#xA2;</span>
+                                <span className="text-slate-600 text-[9px]">YES</span>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                      {outcomes.length > 3 && (
-                        <div className="text-xs text-slate-500 text-center">
-                          +{outcomes.length - 3} more outcomes
+                          );
+                        })}
+                      </div>
+                      {outcomes.length > 6 && (
+                        <div className="text-xs text-slate-500 text-center mt-2">
+                          +{outcomes.length - 6} more outcomes
                         </div>
                       )}
                     </div>

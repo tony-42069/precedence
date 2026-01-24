@@ -1,7 +1,7 @@
 'use client';
 
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface PricePoint {
@@ -156,13 +156,55 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
   }
 
   // Multi-outcome chart rendering
+  // Track which line is closest to cursor for highlighting
+  const [hoveredLine, setHoveredLine] = useState<string | null>(null);
+
+  const handleMouseMove = useCallback((state: any) => {
+    if (!state || !state.activePayload || !state.chartY) return;
+    const payload = state.activePayload;
+    if (!payload.length) return;
+
+    // Find which line value is closest to the cursor Y position
+    // activeCoordinate.y gives pixel position, but we need to compare values
+    const chartHeight = 280;
+    const yAxisTop = 10; // margin top
+    const yAxisBottom = chartHeight;
+    const cursorY = state.chartY;
+
+    let closest: string | null = null;
+    let minDist = Infinity;
+
+    for (const entry of payload) {
+      if (entry.value == null) continue;
+      // Approximate Y pixel from value using domain
+      const domain = yAxisDomain as [number, number];
+      const ratio = 1 - ((entry.value as number) - domain[0]) / (domain[1] - domain[0]);
+      const approxY = yAxisTop + ratio * (yAxisBottom - yAxisTop - 20);
+      const dist = Math.abs(approxY - cursorY);
+      if (dist < minDist) {
+        minDist = dist;
+        closest = entry.dataKey as string;
+      }
+    }
+    setHoveredLine(closest);
+  }, [yAxisDomain]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredLine(null);
+  }, []);
+
   if (isMultiOutcome && multiOutcomeData && multiChartData.length > 0) {
     return (
       <div>
         {/* Multi-Outcome Legend */}
         <div className="flex flex-wrap gap-3 mb-4">
           {multiOutcomeData.map((outcome) => (
-            <div key={outcome.outcomeName} className="flex items-center gap-2">
+            <div
+              key={outcome.outcomeName}
+              className={`flex items-center gap-2 transition-opacity duration-150 ${
+                hoveredLine && hoveredLine !== outcome.outcomeName ? 'opacity-40' : 'opacity-100'
+              }`}
+            >
               <div
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: outcome.color }}
@@ -180,7 +222,12 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
         {/* Multi-Line Chart */}
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={multiChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <LineChart
+              data={multiChartData}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
               <XAxis
                 dataKey="timeLabel"
                 axisLine={false}
@@ -203,13 +250,38 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                   border: '1px solid #374151',
                   borderRadius: '8px',
                   color: '#fff',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                  padding: '8px 12px'
                 }}
-                formatter={(value, name) => [
-                  `${((value as number) * 100).toFixed(2)}%`,
-                  name
-                ]}
-                labelFormatter={(label) => label}
+                content={({ payload, label }) => {
+                  if (!payload || !payload.length) return null;
+                  // Sort: hovered line first, then by value desc
+                  const sorted = [...payload].sort((a, b) => {
+                    if (a.dataKey === hoveredLine) return -1;
+                    if (b.dataKey === hoveredLine) return 1;
+                    return ((b.value as number) || 0) - ((a.value as number) || 0);
+                  });
+                  return (
+                    <div style={{ backgroundColor: '#1E1E24', border: '1px solid #374151', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{label}</div>
+                      {sorted.map((entry) => {
+                        const isHovered = entry.dataKey === hoveredLine;
+                        return (
+                          <div
+                            key={entry.dataKey as string}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 0', opacity: hoveredLine && !isHovered ? 0.4 : 1, fontWeight: isHovered ? 700 : 400 }}
+                          >
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: entry.color as string }} />
+                            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>{entry.dataKey as string}</span>
+                            <span style={{ fontSize: '12px', color: entry.color as string, marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace' }}>
+                              {((entry.value as number) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }}
               />
               {multiOutcomeData.map((outcome) => (
                 <Line
@@ -217,8 +289,10 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                   type="monotone"
                   dataKey={outcome.outcomeName}
                   stroke={outcome.color}
-                  strokeWidth={2}
+                  strokeWidth={hoveredLine === outcome.outcomeName ? 3 : hoveredLine ? 1 : 2}
+                  strokeOpacity={hoveredLine && hoveredLine !== outcome.outcomeName ? 0.3 : 1}
                   dot={false}
+                  activeDot={hoveredLine === outcome.outcomeName ? { r: 5, stroke: outcome.color, fill: '#1E1E24', strokeWidth: 2 } : false}
                   connectNulls
                   animationDuration={1000}
                 />
