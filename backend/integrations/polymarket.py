@@ -182,7 +182,11 @@ class PolymarketClient:
                     nested_markets = event.get('markets', [])
                     
                     # Check if this is a multi-outcome event (more than 2 markets)
-                    active_markets = [nm for nm in nested_markets if not nm.get('closed', False)]
+                    # Filter: exclude closed markets AND inactive markets (Person P placeholders)
+                    active_markets = [
+                        nm for nm in nested_markets
+                        if not nm.get('closed', False) and nm.get('active', True)
+                    ]
                     
                     if len(active_markets) > 2:
                         # MULTI-OUTCOME EVENT: Return event with all outcomes
@@ -208,8 +212,8 @@ class PolymarketClient:
                         yes_tokens = []  # List of (token_id, market_data) tuples
 
                         for nm in active_markets:
-                            # Skip closed markets
-                            if nm.get('closed', False):
+                            # Skip closed or inactive markets
+                            if nm.get('closed', False) or not nm.get('active', True):
                                 continue
 
                             # Parse clobTokenIds
