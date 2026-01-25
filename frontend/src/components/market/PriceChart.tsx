@@ -138,25 +138,7 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
   const strokeColor = isPositive ? '#10B981' : '#EF4444';
   const gradientId = `priceGradient-${isPositive ? 'up' : 'down'}`;
 
-  // Check if we have any data to display
-  const hasData = isMultiOutcome
-    ? multiChartData.length > 0
-    : chartData.length > 0;
-
-  if (!hasData) {
-    return (
-      <div className="h-[300px] flex items-center justify-center text-gray-500 bg-white/5 rounded-lg border border-dashed border-gray-700">
-        <div className="text-center">
-          <div className="text-4xl mb-2">📊</div>
-          <p>No price history available</p>
-          <p className="text-sm text-gray-600 mt-1">Price data will appear once trading begins</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Multi-outcome chart rendering
-  // Track which line is closest to cursor for highlighting
+  // Track which line is closest to cursor for highlighting (multi-outcome)
   const [hoveredLine, setHoveredLine] = useState<string | null>(null);
 
   const handleMouseMove = useCallback((state: any) => {
@@ -192,6 +174,23 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
   const handleMouseLeave = useCallback(() => {
     setHoveredLine(null);
   }, []);
+
+  // Check if we have any data to display
+  const hasData = isMultiOutcome
+    ? multiChartData.length > 0
+    : chartData.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="h-[300px] flex items-center justify-center text-gray-500 bg-white/5 rounded-lg border border-dashed border-gray-700">
+        <div className="text-center">
+          <div className="text-4xl mb-2">📊</div>
+          <p>No price history available</p>
+          <p className="text-sm text-gray-600 mt-1">Price data will appear once trading begins</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isMultiOutcome && multiOutcomeData && multiChartData.length > 0) {
     return (
