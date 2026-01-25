@@ -43,20 +43,32 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
     }));
   }, [data]);
 
-  // Transform multi-outcome data for combined chart
+  // Transform multi-outcome data for combined chart with forward-fill interpolation
   const multiChartData = useMemo(() => {
     if (!multiOutcomeData || multiOutcomeData.length === 0) return [];
 
+    // Pre-sort each outcome's data by timestamp
+    const sortedOutcomeData = multiOutcomeData.map(outcome => ({
+      ...outcome,
+      data: [...outcome.data].sort((a, b) => a.t - b.t)
+    }));
+
     // Get all unique timestamps across all outcomes
     const allTimestamps = new Set<number>();
-    multiOutcomeData.forEach(outcome => {
+    sortedOutcomeData.forEach(outcome => {
       outcome.data.forEach(point => allTimestamps.add(point.t));
     });
 
-    // Sort timestamps
+    // Sort timestamps chronologically
     const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
 
-    // Create data points with all outcome prices at each timestamp
+    // Track last known price for each outcome (for forward-fill)
+    const lastKnownPrices: Record<string, number | null> = {};
+    sortedOutcomeData.forEach(outcome => {
+      lastKnownPrices[outcome.outcomeName] = null;
+    });
+
+    // Create data points with forward-filled prices
     return sortedTimestamps.map(timestamp => {
       const dataPoint: Record<string, any> = {
         time: timestamp * 1000,
@@ -68,10 +80,15 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
         })
       };
 
-      multiOutcomeData.forEach(outcome => {
-        // Find closest data point for this outcome
+      sortedOutcomeData.forEach(outcome => {
+        // Check if this outcome has a data point at this exact timestamp
         const point = outcome.data.find(p => p.t === timestamp);
-        dataPoint[outcome.outcomeName] = point?.p ?? null;
+        if (point) {
+          // Update last known price
+          lastKnownPrices[outcome.outcomeName] = point.p;
+        }
+        // Use last known price (forward-fill)
+        dataPoint[outcome.outcomeName] = lastKnownPrices[outcome.outcomeName];
       });
 
       return dataPoint;
