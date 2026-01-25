@@ -348,12 +348,19 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
                       <div className="grid grid-cols-2 gap-1.5">
                         {outcomes.slice(0, 6).map((outcome, idx) => {
                           const yesPrice = outcome.yes_price ?? outcome.price;
+                          const outcomeMarketId = outcome.market_id || outcome.id;
                           return (
                             <div
                               key={outcome.id || idx}
-                              className="bg-white/5 rounded px-2 py-1.5 border border-white/10 font-mono"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (outcomeMarketId) {
+                                  router.push(`/markets/${outcomeMarketId}`);
+                                }
+                              }}
+                              className="bg-white/5 rounded px-2 py-1.5 border border-white/10 font-mono cursor-pointer hover:bg-white/10 hover:border-purple-500/30 transition-all"
                             >
-                              <div className="text-slate-300 text-[11px] truncate mb-0.5">
+                              <div className="text-slate-300 text-[11px] truncate mb-0.5 hover:text-purple-300 transition-colors">
                                 {outcome.name}
                               </div>
                               <div className="flex items-center justify-between">
