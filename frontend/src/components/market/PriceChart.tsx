@@ -1,7 +1,7 @@
 'use client';
 
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useMemo, useState, useCallback } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { useMemo } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface PricePoint {
@@ -138,42 +138,6 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
   const strokeColor = isPositive ? '#10B981' : '#EF4444';
   const gradientId = `priceGradient-${isPositive ? 'up' : 'down'}`;
 
-  // Track which line is closest to cursor for highlighting (multi-outcome)
-  const [hoveredLine, setHoveredLine] = useState<string | null>(null);
-
-  const handleMouseMove = useCallback((state: any) => {
-    if (!state || !state.activePayload || !state.chartY) return;
-    const payload = state.activePayload;
-    if (!payload.length) return;
-
-    // Find which line value is closest to the cursor Y position
-    // activeCoordinate.y gives pixel position, but we need to compare values
-    const chartHeight = 280;
-    const yAxisTop = 10; // margin top
-    const yAxisBottom = chartHeight;
-    const cursorY = state.chartY;
-
-    let closest: string | null = null;
-    let minDist = Infinity;
-
-    for (const entry of payload) {
-      if (entry.value == null) continue;
-      // Approximate Y pixel from value using domain
-      const domain = yAxisDomain as [number, number];
-      const ratio = 1 - ((entry.value as number) - domain[0]) / (domain[1] - domain[0]);
-      const approxY = yAxisTop + ratio * (yAxisBottom - yAxisTop - 20);
-      const dist = Math.abs(approxY - cursorY);
-      if (dist < minDist) {
-        minDist = dist;
-        closest = entry.dataKey as string;
-      }
-    }
-    setHoveredLine(closest);
-  }, [yAxisDomain]);
-
-  const handleMouseLeave = useCallback(() => {
-    setHoveredLine(null);
-  }, []);
 
   // Check if we have any data to display
   const hasData = isMultiOutcome
@@ -200,9 +164,7 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
           {multiOutcomeData.map((outcome) => (
             <div
               key={outcome.outcomeName}
-              className={`flex items-center gap-2 transition-opacity duration-150 ${
-                hoveredLine && hoveredLine !== outcome.outcomeName ? 'opacity-40' : 'opacity-100'
-              }`}
+              className="flex items-center gap-2"
             >
               <div
                 className="w-3 h-3 rounded-full"
@@ -218,14 +180,12 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
           ))}
         </div>
 
-        {/* Multi-Line Chart */}
+        {/* Multi-Line Chart with Vertical Crosshair */}
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={multiChartData}
               margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
             >
               <XAxis
                 dataKey="timeLabel"
@@ -244,40 +204,36 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                 width={45}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1E1E24',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                  padding: '8px 12px'
-                }}
+                cursor={{ stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 1, strokeDasharray: '4 4' }}
                 content={({ payload, label }) => {
                   if (!payload || !payload.length) return null;
-                  // Sort: hovered line first, then by value desc
-                  const sorted = [...payload].sort((a, b) => {
-                    if (a.dataKey === hoveredLine) return -1;
-                    if (b.dataKey === hoveredLine) return 1;
-                    return ((b.value as number) || 0) - ((a.value as number) || 0);
-                  });
+                  // Sort by value descending (highest probability first)
+                  const sorted = [...payload]
+                    .filter(entry => entry.value != null)
+                    .sort((a, b) => ((b.value as number) || 0) - ((a.value as number) || 0));
                   return (
-                    <div style={{ backgroundColor: '#1E1E24', border: '1px solid #374151', borderRadius: '8px', padding: '8px 12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
-                      <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{label}</div>
-                      {sorted.map((entry) => {
-                        const isHovered = entry.dataKey === hoveredLine;
-                        return (
+                    <div className="bg-[#1E1E24] border border-gray-700 rounded-lg p-3 shadow-xl min-w-[180px]">
+                      <div className="text-xs text-gray-500 mb-2 pb-2 border-b border-gray-700">{label}</div>
+                      {sorted.map((entry) => (
+                        <div
+                          key={entry.dataKey as string}
+                          className="flex items-center gap-2 py-1"
+                        >
                           <div
-                            key={entry.dataKey as string}
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 0', opacity: hoveredLine && !isHovered ? 0.4 : 1, fontWeight: isHovered ? 700 : 400 }}
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: entry.color as string }}
+                          />
+                          <span className="text-xs text-gray-300 truncate flex-1">
+                            {entry.dataKey as string}
+                          </span>
+                          <span
+                            className="text-sm font-mono font-semibold"
+                            style={{ color: entry.color as string }}
                           >
-                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: entry.color as string }} />
-                            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>{entry.dataKey as string}</span>
-                            <span style={{ fontSize: '12px', color: entry.color as string, marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace' }}>
-                              {((entry.value as number) * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                        );
-                      })}
+                            {((entry.value as number) * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   );
                 }}
@@ -288,10 +244,9 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                   type="monotone"
                   dataKey={outcome.outcomeName}
                   stroke={outcome.color}
-                  strokeWidth={hoveredLine === outcome.outcomeName ? 3 : hoveredLine ? 1 : 2}
-                  strokeOpacity={hoveredLine && hoveredLine !== outcome.outcomeName ? 0.3 : 1}
+                  strokeWidth={2}
                   dot={false}
-                  activeDot={hoveredLine === outcome.outcomeName ? { r: 5, stroke: outcome.color, fill: '#1E1E24', strokeWidth: 2 } : false}
+                  activeDot={{ r: 4, stroke: outcome.color, fill: '#1E1E24', strokeWidth: 2 }}
                   connectNulls
                   animationDuration={1000}
                 />
