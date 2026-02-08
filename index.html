@@ -410,26 +410,29 @@
 
         .outcome-bar {
             display: flex; height: 48px; border-radius: 8px; overflow: hidden; margin-top: 20px;
-            border: 1px solid var(--glass-border);
+            border: none;
         }
         .outcome-btn {
             flex: 1; display: flex; align-items: center; justify-content: center;
             font-weight: 700; font-size: 14px; cursor: pointer;
-            border: none; transition: background 0.2s;
+            border: none; transition: background 0.2s, transform 0.2s;
+            color: white;
         }
         .outcome-btn:focus-visible {
             outline: 2px solid var(--gold);
             outline-offset: -2px;
         }
         .outcome-yes {
-            background: rgba(16, 185, 129, 0.1); color: var(--success);
+            background: #10B981;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
         }
         .outcome-no {
-            background: rgba(239, 68, 68, 0.1); color: var(--error);
-            border-left: 1px solid var(--glass-border);
+            background: #EF4444;
+            border-left: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
         }
-        .outcome-yes:hover { background: rgba(16, 185, 129, 0.2); }
-        .outcome-no:hover { background: rgba(239, 68, 68, 0.2); }
+        .outcome-yes:hover { background: #059669; transform: translateY(-1px); }
+        .outcome-no:hover { background: #DC2626; transform: translateY(-1px); }
 
         /* --- FOOTER --- */
         footer { border-top: 1px solid var(--glass-border); margin-top: 100px; padding: 80px 0 40px; background: #020203; }

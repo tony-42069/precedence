@@ -30,7 +30,7 @@ class MarketSearchRequest(BaseModel):
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def get_polymarket_markets(
-    limit: int = Query(20, description="Maximum number of markets to return", ge=1, le=100)
+    limit: int = Query(50, description="Maximum number of markets to return", ge=1, le=200)
 ):
     """
     Get available prediction markets from Polymarket.
@@ -52,7 +52,7 @@ async def get_polymarket_markets(
 @router.get("/search")
 async def search_polymarket_markets(
     query: str = Query(..., description="Search query for markets"),
-    limit: int = Query(20, description="Maximum number of results", ge=1, le=50)
+    limit: int = Query(50, description="Maximum number of results", ge=1, le=100)
 ):
     """
     Search for prediction markets by text query.
@@ -289,7 +289,7 @@ async def lookup_market(
 
 @router.get("/trending")
 async def get_trending_markets(
-    limit: int = Query(10, description="Maximum number of trending markets to return", ge=1, le=50),
+    limit: int = Query(50, description="Maximum number of trending markets to return", ge=1, le=100),
     category: Optional[str] = Query(None, description="Filter by category (Legal, Politics, Crypto, Culture, Sports, Economics)"),
     exclude_sports: bool = Query(True, description="Exclude sports markets from trending"),
     sort_by: str = Query("volume1wk", description="Sort by: volume, volume24hr, volume1wk, volume1mo")
@@ -407,6 +407,11 @@ async def get_trending_markets(
                         # SKIP CLOSED/RESOLVED markets - these are already decided
                         if nm.get('closed', False):
                             continue
+
+                        # SKIP INACTIVE markets - these are placeholders ("Person P", "Individual T")
+                        # with no real data (default 0.50/0.50 prices, no CLOB book)
+                        if not nm.get('active', True):
+                            continue
                         
                         # Parse outcome prices: [0] = YES price, [1] = NO price
                         outcome_prices = nm.get('outcomePrices', '["0.5", "0.5"]')
@@ -428,11 +433,27 @@ async def get_trending_markets(
                             if nested_desc and len(nested_desc) > 50:  # Only if it's substantial
                                 detailed_description = nested_desc
                         
-                        # Use groupItemTitle for display name (cleaner than question)
-                        outcome_name = nm.get('groupItemTitle', '') or nm.get('question', 'Unknown')
+                        # Parse name: prefer groupItemTitle, but for large events it's abbreviated
+                        # ("Person P", "Individual T") - extract real name from question field
+                        outcome_name = nm.get('groupItemTitle', '')
+                        outcome_question = nm.get('question', '')
 
-                        # Get the full question for the trading modal
-                        outcome_question = nm.get('question', outcome_name)
+                        # If groupItemTitle looks like a placeholder, try parsing from question
+                        if (not outcome_name or
+                            outcome_name.startswith('Person ') or
+                            outcome_name.startswith('Individual ') or
+                            len(outcome_name) <= 3):
+                            # Try to parse name from question: "Will X be/win/become..."
+                            import re
+                            name_match = re.search(r'Will (.*?) (?:be |win |have |become |reach |hit )', outcome_question)
+                            if name_match:
+                                outcome_name = name_match.group(1).strip()
+                            elif outcome_question:
+                                # Fallback: use first part of question
+                                outcome_name = outcome_question[:60]
+
+                        if not outcome_name:
+                            outcome_name = outcome_question or 'Unknown'
 
                         # Get outcome-specific description for context
                         outcome_description = nm.get('description', '')

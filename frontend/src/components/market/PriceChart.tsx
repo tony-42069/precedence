@@ -1,6 +1,6 @@
 'use client';
 
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useMemo } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -43,20 +43,32 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
     }));
   }, [data]);
 
-  // Transform multi-outcome data for combined chart
+  // Transform multi-outcome data for combined chart with forward-fill interpolation
   const multiChartData = useMemo(() => {
     if (!multiOutcomeData || multiOutcomeData.length === 0) return [];
 
+    // Pre-sort each outcome's data by timestamp
+    const sortedOutcomeData = multiOutcomeData.map(outcome => ({
+      ...outcome,
+      data: [...outcome.data].sort((a, b) => a.t - b.t)
+    }));
+
     // Get all unique timestamps across all outcomes
     const allTimestamps = new Set<number>();
-    multiOutcomeData.forEach(outcome => {
+    sortedOutcomeData.forEach(outcome => {
       outcome.data.forEach(point => allTimestamps.add(point.t));
     });
 
-    // Sort timestamps
+    // Sort timestamps chronologically
     const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
 
-    // Create data points with all outcome prices at each timestamp
+    // Track last known price for each outcome (for forward-fill)
+    const lastKnownPrices: Record<string, number | null> = {};
+    sortedOutcomeData.forEach(outcome => {
+      lastKnownPrices[outcome.outcomeName] = null;
+    });
+
+    // Create data points with forward-filled prices
     return sortedTimestamps.map(timestamp => {
       const dataPoint: Record<string, any> = {
         time: timestamp * 1000,
@@ -68,10 +80,15 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
         })
       };
 
-      multiOutcomeData.forEach(outcome => {
-        // Find closest data point for this outcome
+      sortedOutcomeData.forEach(outcome => {
+        // Check if this outcome has a data point at this exact timestamp
         const point = outcome.data.find(p => p.t === timestamp);
-        dataPoint[outcome.outcomeName] = point?.p ?? null;
+        if (point) {
+          // Update last known price
+          lastKnownPrices[outcome.outcomeName] = point.p;
+        }
+        // Use last known price (forward-fill)
+        dataPoint[outcome.outcomeName] = lastKnownPrices[outcome.outcomeName];
       });
 
       return dataPoint;
@@ -138,6 +155,7 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
   const strokeColor = isPositive ? '#10B981' : '#EF4444';
   const gradientId = `priceGradient-${isPositive ? 'up' : 'down'}`;
 
+
   // Check if we have any data to display
   const hasData = isMultiOutcome
     ? multiChartData.length > 0
@@ -155,14 +173,16 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
     );
   }
 
-  // Multi-outcome chart rendering
   if (isMultiOutcome && multiOutcomeData && multiChartData.length > 0) {
     return (
       <div>
         {/* Multi-Outcome Legend */}
         <div className="flex flex-wrap gap-3 mb-4">
           {multiOutcomeData.map((outcome) => (
-            <div key={outcome.outcomeName} className="flex items-center gap-2">
+            <div
+              key={outcome.outcomeName}
+              className="flex items-center gap-2"
+            >
               <div
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: outcome.color }}
@@ -177,10 +197,13 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
           ))}
         </div>
 
-        {/* Multi-Line Chart */}
+        {/* Multi-Line Chart with Vertical Crosshair */}
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={multiChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <LineChart
+              data={multiChartData}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+            >
               <XAxis
                 dataKey="timeLabel"
                 axisLine={false}
@@ -198,18 +221,39 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                 width={45}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: '#1E1E24',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
+                cursor={{ stroke: 'rgba(255, 255, 255, 0.3)', strokeWidth: 1, strokeDasharray: '4 4' }}
+                content={({ payload, label }) => {
+                  if (!payload || !payload.length) return null;
+                  // Sort by value descending (highest probability first)
+                  const sorted = [...payload]
+                    .filter(entry => entry.value != null)
+                    .sort((a, b) => ((b.value as number) || 0) - ((a.value as number) || 0));
+                  return (
+                    <div className="bg-[#1E1E24] border border-gray-700 rounded-lg p-3 shadow-xl min-w-[180px]">
+                      <div className="text-xs text-gray-500 mb-2 pb-2 border-b border-gray-700">{label}</div>
+                      {sorted.map((entry) => (
+                        <div
+                          key={entry.dataKey as string}
+                          className="flex items-center gap-2 py-1"
+                        >
+                          <div
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: entry.color as string }}
+                          />
+                          <span className="text-xs text-gray-300 truncate flex-1">
+                            {entry.dataKey as string}
+                          </span>
+                          <span
+                            className="text-sm font-mono font-semibold"
+                            style={{ color: entry.color as string }}
+                          >
+                            {((entry.value as number) * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
                 }}
-                formatter={(value, name) => [
-                  `${((value as number) * 100).toFixed(2)}%`,
-                  name
-                ]}
-                labelFormatter={(label) => label}
               />
               {multiOutcomeData.map((outcome) => (
                 <Line
@@ -219,6 +263,7 @@ export default function PriceChart({ data, currentPrice, multiOutcomeData }: Pri
                   stroke={outcome.color}
                   strokeWidth={2}
                   dot={false}
+                  activeDot={{ r: 4, stroke: outcome.color, fill: '#1E1E24', strokeWidth: 2 }}
                   connectNulls
                   animationDuration={1000}
                 />

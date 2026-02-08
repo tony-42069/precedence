@@ -18,7 +18,13 @@ import { POLYGON_CHAIN_ID } from '../constants/polymarket';
 // USDC addresses on Polygon
 const USDC_BRIDGED = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
 const USDC_NATIVE = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
-const POLYGON_RPC_URL = 'https://polygon-rpc.com';
+
+// Multiple RPC endpoints for reliability (primary + fallbacks)
+const POLYGON_RPC_URLS = [
+  'https://polygon-rpc.com',
+  'https://rpc.ankr.com/polygon',
+  'https://polygon-mainnet.public.blastapi.io',
+];
 
 // Polymarket APIs
 const CLOB_API_URL = 'https://clob.polymarket.com';
@@ -83,7 +89,8 @@ export const useSafeAddress = () => {
   }, []);
 
   /**
-   * Fetch USDC balance - checks BOTH native and bridged
+   * Fetch USDC balance - checks BOTH native and bridged.
+   * Tries multiple RPC endpoints for reliability.
    */
   const fetchBalance = useCallback(async (safeAddr: string) => {
     if (!safeAddr) {
@@ -93,36 +100,46 @@ export const useSafeAddress = () => {
     }
 
     setBalanceLoading(true);
-    try {
-      const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URL);
-      const erc20Abi = ['function balanceOf(address) view returns (uint256)'];
-      
-      const bridgedContract = new ethers.Contract(USDC_BRIDGED, erc20Abi, provider);
-      const nativeContract = new ethers.Contract(USDC_NATIVE, erc20Abi, provider);
-      
-      const [bridgedBalance, nativeBalance] = await Promise.all([
-        bridgedContract.balanceOf(safeAddr),
-        nativeContract.balanceOf(safeAddr),
-      ]);
-      
-      const bridgedFormatted = ethers.utils.formatUnits(bridgedBalance, 6);
-      const nativeFormatted = ethers.utils.formatUnits(nativeBalance, 6);
-      const totalBalance = bridgedBalance.add(nativeBalance);
-      const totalFormatted = ethers.utils.formatUnits(totalBalance, 6);
-      
-      setBalances({
-        native: nativeFormatted,
-        bridged: bridgedFormatted,
-        total: totalFormatted,
-      });
-      setBalance(totalFormatted);
-    } catch (err) {
-      console.error('Failed to fetch USDC balance:', err);
-      setBalance('0');
-      setBalances({ native: '0', bridged: '0', total: '0' });
-    } finally {
-      setBalanceLoading(false);
+
+    // Try each RPC endpoint until one succeeds
+    for (let i = 0; i < POLYGON_RPC_URLS.length; i++) {
+      try {
+        const provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC_URLS[i]);
+        const erc20Abi = ['function balanceOf(address) view returns (uint256)'];
+
+        const bridgedContract = new ethers.Contract(USDC_BRIDGED, erc20Abi, provider);
+        const nativeContract = new ethers.Contract(USDC_NATIVE, erc20Abi, provider);
+
+        const [bridgedBalance, nativeBalance] = await Promise.all([
+          bridgedContract.balanceOf(safeAddr),
+          nativeContract.balanceOf(safeAddr),
+        ]);
+
+        const bridgedFormatted = ethers.utils.formatUnits(bridgedBalance, 6);
+        const nativeFormatted = ethers.utils.formatUnits(nativeBalance, 6);
+        const totalBalance = bridgedBalance.add(nativeBalance);
+        const totalFormatted = ethers.utils.formatUnits(totalBalance, 6);
+
+        setBalances({
+          native: nativeFormatted,
+          bridged: bridgedFormatted,
+          total: totalFormatted,
+        });
+        setBalance(totalFormatted);
+        setBalanceLoading(false);
+        return; // Success - exit the retry loop
+      } catch (err) {
+        console.warn(`RPC ${POLYGON_RPC_URLS[i]} failed:`, err);
+        if (i === POLYGON_RPC_URLS.length - 1) {
+          // All RPCs failed
+          console.error('All RPC endpoints failed for balance fetch');
+          setBalance('0');
+          setBalances({ native: '0', bridged: '0', total: '0' });
+        }
+        // Otherwise try next RPC
+      }
     }
+    setBalanceLoading(false);
   }, []);
 
   /**

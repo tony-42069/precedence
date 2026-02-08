@@ -116,14 +116,14 @@ export function HeroSection({ markets, marketsCount, totalVolume, loading = fals
             </div>
             
             <h1 className="text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
-              Legal Intelligence
+              Market Intelligence
               <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-blue-400 animate-gradient">
                 Terminal
               </span>
             </h1>
-            
+
             <p className="text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              AI-powered legal analytics meets prediction market trading. Analyze judges, track cases, trade outcomes.
+              AI-powered analysis meets prediction market execution. Politics. Legal. Crypto. Economics.
             </p>
           </div>
 
