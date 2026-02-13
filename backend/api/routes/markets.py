@@ -526,22 +526,95 @@ async def get_trending_markets(
         if category:
             category_lower = category.lower()
             filtered_markets = []
-            
+
             category_keywords = {
-                'legal': ['court', 'scotus', 'supreme', 'ruling', 'judge', 'lawsuit', 'sec', 'ftc', 'doj', 'legal', 'trial', 'case', 'indictment', 'prosecutor', 'impeach', 'convicted', 'verdict', 'sentence'],
+                'legal': ['court', 'scotus', 'supreme court', 'ruling', 'judge', 'lawsuit', 'doj', 'legal', 'trial',
+                          'indictment', 'prosecutor', 'convicted', 'verdict', 'sentence', 'guilty', 'prison',
+                          'charged', 'custody', 'arrest', 'extradition', 'case against', 'antitrust',
+                          'weinstein', 'epstein', 'mangione', 'abortion case'],
                 'politics': ['election', 'president', 'congress', 'senate', 'democrat', 'republican', 'vote', 'political', 'campaign', 'poll', 'trump', 'biden', 'governor', 'nominee', 'primary', 'caucus'],
-                'crypto': ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'btc', 'eth', 'defi', 'nft', 'coinbase', 'binance', 'usdt', 'tether', 'solana', 'token', 'altcoin'],
+                'crypto': ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'btc', 'eth', 'defi', 'nft', 'coinbase', 'binance', 'usdt', 'tether', 'solana', 'token', 'altcoin', 'megaeth', 'metamask'],
                 'culture': ['celebrity', 'music', 'movie', 'entertainment', 'award', 'grammy', 'oscar', 'emmy', 'netflix', 'spotify', 'film', 'grossing', 'box office'],
                 'economics': ['fed', 'interest rate', 'inflation', 'gdp', 'unemployment', 'recession', 'powell', 'fomc', 'economy', 'rate cut', 'rate hike', 'tariff', 'trade war']
             }
-            
+
             keywords = category_keywords.get(category_lower, [])
-            
+
             for market in all_markets:
                 combined_text = f"{market.get('question', '')} {market.get('description', '')}".lower()
                 if any(keyword in combined_text for keyword in keywords):
                     filtered_markets.append(market)
-            
+
+            # For Legal category: supplement with markets from the Gamma markets API
+            # since legal markets are often low-volume and don't appear in top events
+            if category_lower == 'legal' and len(filtered_markets) < limit:
+                try:
+                    logger.info(f"⚖️ Legal markets from events: {len(filtered_markets)}, supplementing from markets API...")
+                    existing_ids = {m.get('id') for m in filtered_markets}
+
+                    # Fetch from markets API with multiple search queries
+                    legal_search_terms = ['court', 'trial', 'guilty', 'scotus', 'charged', 'prison',
+                                          'convicted', 'custody', 'lawsuit', 'case against']
+                    supplementary = []
+
+                    for search_term in legal_search_terms:
+                        try:
+                            search_params = {
+                                "active": True,
+                                "closed": False,
+                                "limit": 50,
+                            }
+                            search_url = f"https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=50"
+                            search_response = httpx.get(search_url, params=search_params, timeout=10.0)
+                            if search_response.status_code == 200:
+                                search_markets = search_response.json()
+                                for sm in search_markets:
+                                    sm_text = f"{sm.get('question', '')} {sm.get('description', '')}".lower()
+                                    sm_id = sm.get('id')
+                                    if sm_id not in existing_ids and any(kw in sm_text for kw in keywords):
+                                        # Parse prices
+                                        try:
+                                            op = sm.get('outcomePrices', '["0.5", "0.5"]')
+                                            if isinstance(op, str):
+                                                op = json.loads(op)
+                                            yes_p = float(op[0]) if len(op) > 0 else 0.5
+                                            no_p = float(op[1]) if len(op) > 1 else 0.5
+                                        except:
+                                            yes_p, no_p = 0.5, 0.5
+
+                                        supplementary.append({
+                                            'id': sm_id,
+                                            'question': sm.get('question', ''),
+                                            'slug': sm.get('slug', ''),
+                                            'description': sm.get('description', ''),
+                                            'image': sm.get('image', ''),
+                                            'icon': sm.get('icon', ''),
+                                            'volume': float(sm.get('volume', 0) or 0),
+                                            'volume24hr': float(sm.get('volume24hr', 0) or 0),
+                                            'volume1wk': float(sm.get('volume1wk', 0) or 0),
+                                            'volume1mo': float(sm.get('volume1mo', 0) or 0),
+                                            'liquidity': float(sm.get('liquidity', 0) or 0),
+                                            'active': sm.get('active', True),
+                                            'closed': sm.get('closed', False),
+                                            'endDate': sm.get('endDate', ''),
+                                            'startDate': sm.get('startDate', ''),
+                                            'is_binary': True,
+                                            'num_outcomes': 2,
+                                            'outcomes': [],
+                                            'current_yes_price': yes_p,
+                                            'current_no_price': no_p,
+                                        })
+                                        existing_ids.add(sm_id)
+                        except Exception as search_err:
+                            logger.warning(f"Legal search for '{search_term}' failed: {search_err}")
+
+                    if supplementary:
+                        supplementary.sort(key=lambda m: float(m.get('volume', 0) or 0), reverse=True)
+                        filtered_markets.extend(supplementary)
+                        logger.info(f"⚖️ Added {len(supplementary)} supplementary legal markets")
+                except Exception as supp_err:
+                    logger.warning(f"Failed to supplement legal markets: {supp_err}")
+
             all_markets = filtered_markets
             logger.info(f"✅ Filtered to {len(all_markets)} {category} markets")
         

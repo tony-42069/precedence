@@ -58,7 +58,10 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
   const { authenticated, login } = usePrivy();
 
   const [markets, setMarkets] = useState<Market[]>([]);
+  const [legalMarkets, setLegalMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
+  const [legalLoading, setLegalLoading] = useState(false);
+  const [legalFetched, setLegalFetched] = useState(false);
   const [filter, setFilter] = useState('all');
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<MarketOutcome | null>(null);
@@ -141,6 +144,25 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
     }
   }, [highlightId, loading, markets]);
 
+  // Fetch legal markets on demand (separate API call since they're low-volume)
+  const fetchLegalMarkets = async () => {
+    if (legalFetched) return;
+    setLegalLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/markets/trending?limit=30&category=Legal&exclude_sports=true`);
+      if (response.ok) {
+        const data = await response.json();
+        const rawMarkets = Array.isArray(data) ? data : (data.trending || data.markets || []);
+        setLegalMarkets(rawMarkets);
+        setLegalFetched(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch legal markets:', error);
+    } finally {
+      setLegalLoading(false);
+    }
+  };
+
   // Handler for binary market trade clicks
   const handleTradeClick = (market: Market) => {
     setSelectedMarket(market);
@@ -189,26 +211,29 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
     return false;
   };
 
-  const filteredMarkets = markets.filter(market => {
-    if (filter === 'all') return true;
-    const q = market.question?.toLowerCase() || '';
-    if (filter === 'politics') {
-      return q.includes('trump') || q.includes('biden') || q.includes('election') || q.includes('president') || q.includes('congress') || q.includes('republican') || q.includes('democrat') || q.includes('governor') || q.includes('senate') || q.includes('vote');
-    }
-    if (filter === 'economy') {
-      return q.includes('fed') || q.includes('rate') || q.includes('recession') || q.includes('inflation') || q.includes('gdp') || q.includes('tariff') || q.includes('stock') || q.includes('market') || q.includes('economy');
-    }
-    if (filter === 'crypto') {
-      return q.includes('bitcoin') || q.includes('btc') || q.includes('ethereum') || q.includes('eth') || q.includes('crypto') || q.includes('usdt') || q.includes('tether') || q.includes('solana') || q.includes('coinbase');
-    }
-    return true;
-  });
+  // Legal tab uses separately-fetched legal markets; other tabs filter the main list
+  const filteredMarkets = filter === 'legal'
+    ? legalMarkets
+    : markets.filter(market => {
+      if (filter === 'all') return true;
+      const q = market.question?.toLowerCase() || '';
+      if (filter === 'politics') {
+        return q.includes('trump') || q.includes('biden') || q.includes('election') || q.includes('president') || q.includes('congress') || q.includes('republican') || q.includes('democrat') || q.includes('governor') || q.includes('senate') || q.includes('vote');
+      }
+      if (filter === 'economy') {
+        return q.includes('fed') || q.includes('rate') || q.includes('recession') || q.includes('inflation') || q.includes('gdp') || q.includes('tariff') || q.includes('stock') || q.includes('market') || q.includes('economy');
+      }
+      if (filter === 'crypto') {
+        return q.includes('bitcoin') || q.includes('btc') || q.includes('ethereum') || q.includes('eth') || q.includes('crypto') || q.includes('usdt') || q.includes('tether') || q.includes('solana') || q.includes('coinbase') || q.includes('metamask') || q.includes('token');
+      }
+      return true;
+    });
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap gap-3">
-          {['All Markets', 'Politics', 'Economy', 'Crypto'].map((label) => (
+          {['All Markets', 'Legal', 'Politics', 'Economy', 'Crypto'].map((label) => (
             <div key={label} className="px-4 py-2 rounded-full bg-white/5 border border-white/10">
               <span className="text-sm text-slate-600">{label}</span>
             </div>
@@ -243,13 +268,17 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       <div className="flex flex-wrap gap-3">
         {[
           { id: 'all', label: 'All Markets' },
+          { id: 'legal', label: '⚖️ Legal' },
           { id: 'politics', label: '🏛️ Politics' },
           { id: 'economy', label: '💰 Economy' },
           { id: 'crypto', label: '🪙 Crypto' }
         ].map(cat => (
           <button
             key={cat.id}
-            onClick={() => setFilter(cat.id)}
+            onClick={() => {
+              setFilter(cat.id);
+              if (cat.id === 'legal') fetchLegalMarkets();
+            }}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${
               filter === cat.id
                 ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(37,99,235,0.2)]'
@@ -262,7 +291,13 @@ export function MarketsGrid({ highlightId }: MarketsGridProps) {
       </div>
 
       {/* Markets Grid */}
-      {filteredMarkets.length > 0 ? (
+      {filter === 'legal' && legalLoading ? (
+        <div className="text-center py-20">
+          <div className="text-4xl mb-4 animate-pulse">⚖️</div>
+          <h3 className="text-lg font-semibold text-white mb-2">Loading legal markets...</h3>
+          <p className="text-slate-400 text-sm">Searching Polymarket for court cases, trials, and legal outcomes</p>
+        </div>
+      ) : filteredMarkets.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredMarkets.map((market, index) => {
             const isHighlighted = highlightedMarketId === market.id;
