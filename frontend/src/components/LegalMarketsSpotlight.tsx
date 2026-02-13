@@ -69,10 +69,23 @@ export function LegalMarketsSpotlight() {
           return LEGAL_KEYWORDS.some(keyword => question.includes(keyword.toLowerCase()));
         });
 
-        // Sort by volume and take top 4
-        const sorted = filtered
-          .sort((a: LegalMarket, b: LegalMarket) => (b.volume || 0) - (a.volume || 0))
-          .slice(0, 4);
+        // Sort by volume, deduplicate similar markets, take top 4
+        filtered.sort((a: LegalMarket, b: LegalMarket) => (b.volume || 0) - (a.volume || 0));
+
+        // Deduplicate: if two markets share most key words, keep the higher-volume one
+        const deduplicated: LegalMarket[] = [];
+        const getKeyWords = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(w => w.length > 3);
+        for (const market of filtered) {
+          const words = getKeyWords(market.question || '');
+          const isDuplicate = deduplicated.some(existing => {
+            const existingWords = getKeyWords(existing.question || '');
+            const overlap = words.filter(w => existingWords.includes(w)).length;
+            return overlap >= Math.min(words.length, existingWords.length) * 0.5;
+          });
+          if (!isDuplicate) deduplicated.push(market);
+        }
+
+        const sorted = deduplicated.slice(0, 4);
 
         setLegalMarkets(sorted);
       } catch (err) {
