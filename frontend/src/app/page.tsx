@@ -121,10 +121,10 @@ const handleDisconnect = async () => {
         const response = await fetch(`${API_URL}/health`);
         if (response.ok) {
           setBackendStatus('online');
-          const marketsResponse = await fetch(`${API_URL}/api/markets/legal`);
+          const marketsResponse = await fetch(`${API_URL}/api/markets/trending?limit=50&exclude_sports=true`);
           if (marketsResponse.ok) {
             const data = await marketsResponse.json();
-            const rawMarkets = Array.isArray(data) ? data : (data.markets || []);
+            const rawMarkets = Array.isArray(data) ? data : (data.trending || data.markets || []);
             setMarkets(rawMarkets);
           }
         } else {
