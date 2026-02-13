@@ -183,7 +183,7 @@ function MarketsContent() {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                     <input
                       type="text"
-                      placeholder="Search any market on Polymarket..."
+                      placeholder="Search active markets on Polymarket..."
                       value={searchQuery}
                       onChange={(e) => handleSearchChange(e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pl-11 pr-10 text-white placeholder-slate-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/20 font-mono text-sm transition-colors"
