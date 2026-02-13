@@ -531,7 +531,8 @@ async def get_trending_markets(
                 'legal': ['court', 'scotus', 'supreme court', 'ruling', 'judge', 'lawsuit', 'doj', 'legal', 'trial',
                           'indictment', 'prosecutor', 'convicted', 'verdict', 'sentence', 'guilty', 'prison',
                           'charged', 'custody', 'arrest', 'extradition', 'case against', 'antitrust',
-                          'weinstein', 'epstein', 'mangione', 'abortion case'],
+                          'weinstein', 'epstein', 'mangione', 'abortion case', 'tariff', 'sam altman',
+                          'bitboy', 'federally charged'],
                 'politics': ['election', 'president', 'congress', 'senate', 'democrat', 'republican', 'vote', 'political', 'campaign', 'poll', 'trump', 'biden', 'governor', 'nominee', 'primary', 'caucus'],
                 'crypto': ['bitcoin', 'ethereum', 'crypto', 'blockchain', 'btc', 'eth', 'defi', 'nft', 'coinbase', 'binance', 'usdt', 'tether', 'solana', 'token', 'altcoin', 'megaeth', 'metamask'],
                 'culture': ['celebrity', 'music', 'movie', 'entertainment', 'award', 'grammy', 'oscar', 'emmy', 'netflix', 'spotify', 'film', 'grossing', 'box office'],
@@ -541,8 +542,13 @@ async def get_trending_markets(
             keywords = category_keywords.get(category_lower, [])
 
             for market in all_markets:
-                combined_text = f"{market.get('question', '')} {market.get('description', '')}".lower()
-                if any(keyword in combined_text for keyword in keywords):
+                # For legal category, match on question only (not description)
+                # to avoid political markets whose descriptions mention "court" or "ruling"
+                if category_lower == 'legal':
+                    match_text = market.get('question', '').lower()
+                else:
+                    match_text = f"{market.get('question', '')} {market.get('description', '')}".lower()
+                if any(keyword in match_text for keyword in keywords):
                     filtered_markets.append(market)
 
             # For Legal category: supplement with markets from the Gamma markets API
