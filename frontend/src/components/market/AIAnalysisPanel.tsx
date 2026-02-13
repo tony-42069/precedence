@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { 
-  BrainCircuit, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  BrainCircuit,
+  TrendingUp,
+  TrendingDown,
   AlertTriangle,
   CheckCircle,
   Loader2,
@@ -64,10 +64,12 @@ export default function AIAnalysisPanel({
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(true);
 
+  const isMultiOutcome = outcomes && Array.isArray(outcomes) && outcomes.length > 2;
+
   const runAnalysis = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch(`${API_URL}/api/predictions/analyze-market`, {
         method: 'POST',
@@ -100,8 +102,15 @@ export default function AIAnalysisPanel({
     }
   };
 
+  // Safe number formatting — prevents NaN display
+  const formatPct = (value: number | undefined | null, decimals: number = 0): string => {
+    if (value === undefined || value === null || isNaN(value)) return '--';
+    return (value * 100).toFixed(decimals);
+  };
+
   // Get edge color
   const getEdgeColor = (edge: number) => {
+    if (isNaN(edge)) return 'text-gray-400';
     const absEdge = Math.abs(edge);
     if (absEdge < 0.03) return 'text-gray-400';
     if (edge > 0) return 'text-green-400';
@@ -125,10 +134,34 @@ export default function AIAnalysisPanel({
     }
   };
 
+  // Get sorted outcome probabilities for display
+  const getSortedOutcomeProbabilities = () => {
+    if (!analysis?.outcome_probabilities) return [];
+    return Object.entries(analysis.outcome_probabilities)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5);
+  };
+
+  // Find the market price for an outcome name
+  const getMarketPrice = (outcomeName: string): number | null => {
+    if (!outcomes || !Array.isArray(outcomes)) return null;
+    const match = outcomes.find(o =>
+      typeof o === 'object' && o.name?.toLowerCase() === outcomeName.toLowerCase()
+    );
+    if (!match) return null;
+    const price = match.price ?? match.yes_price ?? null;
+    if (price === null) return null;
+    try {
+      return parseFloat(String(price));
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <div className="bg-[#12131A] rounded-xl border border-gray-800 overflow-hidden">
       {/* Header */}
-      <div 
+      <div
         className="p-4 border-b border-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-800/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
@@ -147,9 +180,9 @@ export default function AIAnalysisPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {analysis && (
+          {analysis && !isNaN(analysis.edge) && (
             <div className={`text-sm font-mono font-bold ${getEdgeColor(analysis.edge)}`}>
-              {analysis.edge > 0 ? '+' : ''}{(analysis.edge * 100).toFixed(1)}% edge
+              {analysis.edge > 0 ? '+' : ''}{formatPct(analysis.edge, 1)}% edge
             </div>
           )}
           {expanded ? <ChevronUp size={18} className="text-gray-500" /> : <ChevronDown size={18} className="text-gray-500" />}
@@ -204,7 +237,7 @@ export default function AIAnalysisPanel({
           {/* Analysis Results */}
           {analysis && !loading && (
             <div className="space-y-4">
-              
+
               {/* Main Prediction Card */}
               <div className="grid grid-cols-2 gap-4">
                 {/* AI Estimate */}
@@ -214,7 +247,7 @@ export default function AIAnalysisPanel({
                     <span className="text-xs text-purple-400 uppercase font-mono">AI Estimate</span>
                   </div>
                   <div className="text-3xl font-mono font-bold text-white mb-1">
-                    {(analysis.ai_probability * 100).toFixed(0)}%
+                    {formatPct(analysis.ai_probability)}%
                   </div>
                   <div className="text-sm text-gray-400">
                     {analysis.predicted_outcome}
@@ -228,25 +261,25 @@ export default function AIAnalysisPanel({
                     <span className="text-xs text-gray-400 uppercase font-mono">Market Price</span>
                   </div>
                   <div className="text-3xl font-mono font-bold text-white mb-1">
-                    {(analysis.market_probability * 100).toFixed(0)}%
+                    {formatPct(analysis.market_probability)}%
                   </div>
                   <div className="text-sm text-gray-500">
-                    Current YES price
+                    {isMultiOutcome ? `${analysis.predicted_outcome} YES price` : 'Current YES price'}
                   </div>
                 </div>
               </div>
 
               {/* Edge Detection */}
               <div className={`rounded-xl p-4 border ${
-                Math.abs(analysis.edge) >= 0.03 
-                  ? analysis.edge > 0 
-                    ? 'bg-green-900/20 border-green-500/30' 
+                !isNaN(analysis.edge) && Math.abs(analysis.edge) >= 0.03
+                  ? analysis.edge > 0
+                    ? 'bg-green-900/20 border-green-500/30'
                     : 'bg-red-900/20 border-red-500/30'
                   : 'bg-gray-800/50 border-gray-700'
               }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {Math.abs(analysis.edge) >= 0.03 ? (
+                    {!isNaN(analysis.edge) && Math.abs(analysis.edge) >= 0.03 ? (
                       analysis.edge > 0 ? (
                         <TrendingUp size={24} className="text-green-400" />
                       ) : (
@@ -257,10 +290,10 @@ export default function AIAnalysisPanel({
                     )}
                     <div>
                       <div className={`text-lg font-bold ${getEdgeColor(analysis.edge)}`}>
-                        {analysis.edge_direction}
+                        {analysis.edge_direction || 'Fair price'}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {Math.abs(analysis.edge) >= 0.03 
+                        {!isNaN(analysis.edge) && Math.abs(analysis.edge) >= 0.03
                           ? `AI sees ${Math.abs(analysis.edge * 100).toFixed(1)}% mispricing`
                           : 'Market appears fairly priced'
                         }
@@ -268,17 +301,60 @@ export default function AIAnalysisPanel({
                     </div>
                   </div>
                   <div className={`text-2xl font-mono font-bold ${getEdgeColor(analysis.edge)}`}>
-                    {analysis.edge > 0 ? '+' : ''}{(analysis.edge * 100).toFixed(1)}%
+                    {!isNaN(analysis.edge) ? `${analysis.edge > 0 ? '+' : ''}${formatPct(analysis.edge, 1)}%` : '--'}
                   </div>
                 </div>
               </div>
+
+              {/* Multi-Outcome Probabilities */}
+              {analysis.market_type === 'multi_outcome' && analysis.outcome_probabilities && (
+                <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                  <div className="text-xs text-gray-400 uppercase mb-3 font-mono">AI Outcome Estimates</div>
+                  <div className="space-y-2">
+                    {getSortedOutcomeProbabilities().map(([name, prob]) => {
+                      const marketPrice = getMarketPrice(name);
+                      const probNum = typeof prob === 'number' ? prob : 0;
+                      const diff = marketPrice !== null ? probNum - marketPrice : null;
+                      return (
+                        <div key={name} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-300 truncate flex-1 mr-3">{name}</span>
+                          <div className="flex items-center gap-3 font-mono">
+                            <span className="text-purple-400 font-medium">
+                              {formatPct(probNum)}%
+                            </span>
+                            {marketPrice !== null && (
+                              <>
+                                <span className="text-gray-600">vs</span>
+                                <span className="text-gray-400">
+                                  {formatPct(marketPrice)}%
+                                </span>
+                                {diff !== null && Math.abs(diff) >= 0.02 && (
+                                  <span className={diff > 0 ? 'text-green-400 text-xs' : 'text-red-400 text-xs'}>
+                                    {diff > 0 ? '+' : ''}{formatPct(diff, 1)}%
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {analysis.best_value && (
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <span className="text-xs text-gray-500">Best value: </span>
+                      <span className="text-xs text-green-400 font-medium">{analysis.best_value}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Confidence & Risk */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
                   <div className="text-xs text-gray-500 uppercase mb-1">Confidence</div>
                   <div className={`text-xl font-mono font-bold ${getConfidenceColor(analysis.confidence)}`}>
-                    {(analysis.confidence * 100).toFixed(0)}%
+                    {formatPct(analysis.confidence)}%
                   </div>
                 </div>
                 <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">

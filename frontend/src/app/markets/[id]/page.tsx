@@ -580,8 +580,8 @@ export default function MarketDetailPage() {
             <AIAnalysisPanel
               marketId={market.id}
               marketQuestion={market.question}
-              currentYesPrice={currentPrice}
-              currentNoPrice={1 - currentPrice}
+              currentYesPrice={isMultiOutcome && selectedOutcome ? (selectedOutcome.price || selectedOutcome.yes_price || currentPrice) : currentPrice}
+              currentNoPrice={isMultiOutcome && selectedOutcome ? (1 - (selectedOutcome.price || selectedOutcome.yes_price || currentPrice)) : (1 - currentPrice)}
               description={market.description}
               volume={market.volume}
               endDate={market.end_date || market.endDate}

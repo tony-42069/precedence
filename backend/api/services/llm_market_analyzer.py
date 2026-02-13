@@ -246,9 +246,11 @@ IMPORTANT:
         category: Optional[str] = None
     ) -> str:
         """Build prompt for multi-outcome market analysis."""
-        
+
         # Format outcomes with their current prices
         outcomes_text = ""
+        top_outcome_name = ""
+        top_outcome_price = 0
         for i, outcome in enumerate(outcomes[:10], 1):  # Limit to 10 outcomes
             if isinstance(outcome, dict):
                 name = outcome.get('name', f'Outcome {i}')
@@ -258,14 +260,17 @@ IMPORTANT:
                 except (ValueError, TypeError):
                     price = 0
                 price_cents = round(price * 100)
+                if price > top_outcome_price:
+                    top_outcome_price = price
+                    top_outcome_name = name
             elif isinstance(outcome, str):
                 name = outcome
                 price_cents = 0
             else:
                 name = f'Outcome {i}'
                 price_cents = 0
-            outcomes_text += f"  {i}. {name}: {price_cents}¢\n"
-        
+            outcomes_text += f"  {i}. {name}: {price_cents}¢ (implies {price_cents}% probability)\n"
+
         # Format volume
         volume_str = "Unknown"
         if volume:
@@ -275,14 +280,15 @@ IMPORTANT:
                 volume_str = f"${volume/1_000:.0f}K"
             else:
                 volume_str = f"${volume:.0f}"
-        
+
         prompt = f"""Analyze this multi-outcome prediction market.
 
 MARKET QUESTION:
 {question}
 
-CURRENT OUTCOME PRICES:
+CURRENT OUTCOME PRICES (each price = market-implied probability):
 {outcomes_text}
+NOTE: The leading outcome is "{top_outcome_name}" at {round(top_outcome_price * 100)}¢. Prices above 90¢ indicate near-certainty in the market's view.
 
 MARKET DETAILS:
 - Category: {category or "General"}
@@ -294,26 +300,41 @@ RESOLUTION RULES:
 {description[:2000] if description else "Standard resolution rules apply."}
 
 ANALYSIS TASK:
-1. Identify the most likely outcome
-2. Provide probability estimates for the top outcomes
-3. Identify any mispriced outcomes (potential edges)
-4. Explain key factors driving the prediction
+1. Identify the most likely outcome and estimate its TRUE probability (your own estimate, not just the market price)
+2. Provide your probability estimates for the top 3-5 outcomes
+3. Compare your estimates to market prices — identify any mispriced outcomes
+4. Reference SPECIFIC prices in your reasoning (e.g., "At 96¢, the market implies near-certainty...")
+5. If an outcome is priced above 90¢, seriously evaluate whether that level of confidence is warranted
 
 RESPONSE FORMAT (JSON):
 {{
   "predicted_outcome": "Name of most likely outcome",
+  "ai_probability": 0.95,
+  "market_probability": {top_outcome_price},
   "outcome_probabilities": {{
-    "Outcome Name 1": 0.35,
-    "Outcome Name 2": 0.25,
-    "Outcome Name 3": 0.20
+    "Outcome Name 1": 0.95,
+    "Outcome Name 2": 0.03,
+    "Outcome Name 3": 0.02
   }},
-  "best_value": "Outcome name that appears undervalued",
+  "best_value": "Outcome name that appears most undervalued relative to its true probability",
+  "edge": 0.02,
+  "edge_direction": "Outcome X undervalued" or "Outcome X overvalued" or "Fair price",
   "confidence": 0.70,
-  "reasoning": "2-3 sentence explanation",
+  "reasoning": "3-4 sentences referencing specific prices and explaining your probability estimate. Acknowledge when a leader is dominant but assess whether the price fully reflects the risk.",
   "key_factors": ["Factor 1", "Factor 2", "Factor 3"],
-  "risk_assessment": "low" or "medium" or "high"
-}}"""
-        
+  "bull_case": "Brief argument for the leading outcome winning",
+  "bear_case": "Brief argument for an upset or alternative outcome",
+  "risk_assessment": "low" or "medium" or "high",
+  "time_sensitivity": "How might probabilities shift as resolution approaches?"
+}}
+
+IMPORTANT:
+- ai_probability is YOUR estimate for the predicted_outcome, not a copy of the market price
+- market_probability is the CURRENT market price for the predicted_outcome (provided above)
+- edge = ai_probability - market_probability (positive = undervalued, negative = overvalued)
+- outcome_probabilities should sum to approximately 1.0
+- Be specific in reasoning — reference actual prices and names, not generic statements"""
+
         return prompt
 
     def _structure_binary_response(self, analysis: Dict[str, Any], market_price: float) -> Dict[str, Any]:
@@ -360,20 +381,80 @@ RESPONSE FORMAT (JSON):
 
     def _structure_multi_outcome_response(self, analysis: Dict[str, Any], outcomes: list) -> Dict[str, Any]:
         """Validate and structure the LLM response for multi-outcome markets."""
-        
+
         confidence = analysis.get("confidence", 0.5)
         if confidence > 1:
             confidence = confidence / 100
-        
+
+        predicted_outcome = analysis.get("predicted_outcome", "Unknown")
+        outcome_probs = analysis.get("outcome_probabilities", {})
+
+        # Get ai_probability — from LLM response, or derive from outcome_probabilities
+        ai_prob = analysis.get("ai_probability", 0.5)
+        if ai_prob is None:
+            ai_prob = 0.5
+        if isinstance(ai_prob, str):
+            try:
+                ai_prob = float(ai_prob)
+            except (ValueError, TypeError):
+                ai_prob = 0.5
+        if ai_prob > 1:
+            ai_prob = ai_prob / 100
+        # If LLM didn't return ai_probability, try to get it from outcome_probabilities
+        if ai_prob == 0.5 and outcome_probs and predicted_outcome in outcome_probs:
+            ai_prob = outcome_probs[predicted_outcome]
+            if ai_prob > 1:
+                ai_prob = ai_prob / 100
+        ai_prob = max(0.01, min(0.99, ai_prob))
+
+        # Get market_probability — from LLM response, or look up from outcomes list
+        market_prob = analysis.get("market_probability", None)
+        if market_prob is None or not isinstance(market_prob, (int, float)):
+            # Look up the predicted outcome's current market price from the outcomes list
+            market_prob = 0.5
+            for outcome in outcomes:
+                if isinstance(outcome, dict):
+                    name = outcome.get('name', '')
+                    if name.lower() == predicted_outcome.lower():
+                        price = outcome.get('price', outcome.get('yes_price', 0.5))
+                        try:
+                            market_prob = float(price)
+                        except (ValueError, TypeError):
+                            market_prob = 0.5
+                        break
+        if market_prob > 1:
+            market_prob = market_prob / 100
+        market_prob = max(0.01, min(0.99, market_prob))
+
+        # Calculate edge
+        edge = ai_prob - market_prob
+
+        # Determine edge direction
+        edge_direction = analysis.get("edge_direction", "")
+        if not edge_direction:
+            if abs(edge) < 0.03:
+                edge_direction = "Fair price"
+            elif edge > 0:
+                edge_direction = f"{predicted_outcome} undervalued"
+            else:
+                edge_direction = f"{predicted_outcome} overvalued"
+
         return {
             "market_type": "multi_outcome",
-            "predicted_outcome": analysis.get("predicted_outcome", "Unknown"),
-            "outcome_probabilities": analysis.get("outcome_probabilities", {}),
+            "predicted_outcome": predicted_outcome,
+            "ai_probability": round(ai_prob, 3),
+            "market_probability": round(market_prob, 3),
+            "edge": round(edge, 3),
+            "edge_direction": edge_direction,
+            "outcome_probabilities": outcome_probs,
             "best_value": analysis.get("best_value", ""),
             "confidence": round(confidence, 2),
             "reasoning": analysis.get("reasoning", "Analysis based on available information."),
             "key_factors": analysis.get("key_factors", []),
+            "bull_case": analysis.get("bull_case", ""),
+            "bear_case": analysis.get("bear_case", ""),
             "risk_assessment": analysis.get("risk_assessment", "medium"),
+            "time_sensitivity": analysis.get("time_sensitivity", ""),
             "analysis_method": "llm_gpt4"
         }
 
