@@ -32,14 +32,93 @@ export function TopMarketsWidget() {
   const [trendingMarkets, setTrendingMarkets] = useState<TrendingMarket[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Categorize a market by its question text
+  const categorizeMarket = (question: string): string => {
+    const q = question.toLowerCase();
+    const legal = ['court', 'scotus', 'supreme court', 'trial', 'guilty', 'convicted', 'charged',
+      'prison', 'custody', 'lawsuit', 'verdict', 'tariff', 'epstein', 'weinstein', 'mangione'];
+    const crypto = ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'token', 'metamask',
+      'megaeth', 'coinbase'];
+    const economics = ['fed ', 'rate cut', 'rate hike', 'inflation', 'gdp', 'recession', 'fomc',
+      'revenue', 'economy'];
+    if (legal.some(k => q.includes(k))) return 'legal';
+    if (crypto.some(k => q.includes(k))) return 'crypto';
+    if (economics.some(k => q.includes(k))) return 'economics';
+    return 'politics';
+  };
+
+  // Check if two markets are about the same topic (50%+ keyword overlap)
+  const isSimilar = (a: string, b: string): boolean => {
+    const getWords = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(w => w.length > 3);
+    const wordsA = getWords(a);
+    const wordsB = getWords(b);
+    const overlap = wordsA.filter(w => wordsB.includes(w)).length;
+    return overlap >= Math.min(wordsA.length, wordsB.length) * 0.5;
+  };
+
   useEffect(() => {
     const fetchTrendingMarkets = async () => {
       try {
-        // Fetch trending markets sorted by weekly volume, excluding sports
-        const response = await fetch(`${API_URL}/api/markets/trending?limit=5&sort_by=volume1wk&exclude_sports=true`);
+        // Fetch more markets than needed so we can diversify
+        const response = await fetch(`${API_URL}/api/markets/trending?limit=30&sort_by=volume1wk&exclude_sports=true`);
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
-        setTrendingMarkets(data.trending || []);
+        const allMarkets: TrendingMarket[] = data.trending || [];
+
+        // Step 1: Dedup similar topics (keep highest volume)
+        const deduped: TrendingMarket[] = [];
+        for (const market of allMarkets) {
+          const isDuplicate = deduped.some(existing =>
+            isSimilar(existing.question, market.question)
+          );
+          if (!isDuplicate) deduped.push(market);
+        }
+
+        // Step 2: Categorize all markets
+        const byCategory: Record<string, TrendingMarket[]> = {
+          politics: [], legal: [], crypto: [], economics: []
+        };
+        for (const market of deduped) {
+          const cat = categorizeMarket(market.question);
+          byCategory[cat].push(market);
+        }
+
+        // Step 3: Build diversified list
+        // Slot 1-2: Top 2 by volume (usually politics — that's fine, they're the biggest)
+        // Slot 3: Best from an underrepresented category (legal > crypto > economics)
+        // Slot 4: Best from another underrepresented category
+        // Slot 5: Next best by volume that hasn't been picked
+        const picked: TrendingMarket[] = [];
+        const pickedIds = new Set<string>();
+
+        // Pick top 2 overall by volume
+        for (const market of deduped) {
+          if (picked.length >= 2) break;
+          picked.push(market);
+          pickedIds.add(market.id);
+        }
+
+        // Pick 1 from each underrepresented category (in priority order)
+        const priorityCategories = ['legal', 'crypto', 'economics'];
+        for (const cat of priorityCategories) {
+          if (picked.length >= 4) break;
+          const candidate = byCategory[cat]?.find(m => !pickedIds.has(m.id));
+          if (candidate) {
+            picked.push(candidate);
+            pickedIds.add(candidate.id);
+          }
+        }
+
+        // Fill remaining slots with next best by volume
+        for (const market of deduped) {
+          if (picked.length >= 5) break;
+          if (!pickedIds.has(market.id)) {
+            picked.push(market);
+            pickedIds.add(market.id);
+          }
+        }
+
+        setTrendingMarkets(picked);
       } catch (err) {
         console.error('Error fetching trending markets:', err);
       } finally {
