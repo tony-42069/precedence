@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth" style="color-scheme: dark;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#030304">
+    <title>Precedence | White Paper</title>
+    <meta name="description" content="Precedence White Paper — AI-powered edge detection for prediction markets. Architecture, AI analysis, gasless trading, and roadmap.">
+    <link rel="icon" href="public/precedence-logo-transparent.png" type="image/png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #0052FF;
+            --primary-dark: #0040cc;
+            --secondary: #6366F1;
+            --gold: #FBBF24;
+            --success: #10B981;
+            --error: #EF4444;
+            --bg-main: #030304;
+            --bg-surface: #0A0A0C;
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(255, 255, 255, 0.02);
+            --text-white: #ffffff;
+            --text-gray: #94A3B8;
+            --text-muted: #475569;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-main);
+            color: var(--text-gray);
+            line-height: 1.8;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Instrument Serif', 'Cormorant Garamond', serif;
+            color: var(--text-white);
+        }
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Layout */
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Nav */
+        nav {
+            position: fixed; top: 0; width: 100%; z-index: 100;
+            padding: 16px 0;
+            background: rgba(3, 3, 4, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .nav-inner { max-width: 820px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: space-between; align-items: center; }
+        .nav-links { display: flex; gap: 24px; list-style: none; }
+        .nav-links a { color: var(--text-gray); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+        .nav-links a:hover { color: white; }
+
+        /* Hero */
+        .wp-hero {
+            padding: 140px 0 80px;
+            text-align: center;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .wp-hero h1 {
+            font-size: 56px;
+            font-weight: 700;
+            line-height: 1.15;
+            margin-bottom: 24px;
+            letter-spacing: -1px;
+        }
+        .wp-hero .subtitle {
+            font-size: 20px;
+            color: var(--text-gray);
+            max-width: 600px;
+            margin: 0 auto 32px;
+        }
+        .wp-meta {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Sections */
+        .wp-section {
+            padding: 64px 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .wp-section:last-of-type { border-bottom: none; }
+
+        .wp-section h2 {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+        .section-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--primary);
+            letter-spacing: 2px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .wp-section h3 {
+            font-size: 24px;
+            margin: 32px 0 12px;
+        }
+        .wp-section p {
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+        .wp-section ul, .wp-section ol {
+            margin: 0 0 16px 20px;
+        }
+        .wp-section li {
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        /* Highlight boxes */
+        .highlight-box {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        .highlight-box.blue {
+            background: rgba(0, 82, 255, 0.05);
+            border-color: rgba(0, 82, 255, 0.2);
+        }
+        .highlight-box.gold {
+            background: rgba(251, 191, 36, 0.05);
+            border-color: rgba(251, 191, 36, 0.2);
+        }
+        .highlight-box.green {
+            background: rgba(16, 185, 129, 0.05);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 16px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-gray);
+            overflow-x: auto;
+            line-height: 1.6;
+        }
+
+        /* Architecture diagram */
+        .arch-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .arch-box {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .arch-box h4 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--primary);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .arch-box p {
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        th {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        td { color: var(--text-gray); }
+
+        /* Roadmap */
+        .roadmap-item {
+            display: flex;
+            gap: 16px;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .roadmap-item:last-child { border-bottom: none; }
+        .roadmap-status {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .status-done { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .status-progress { background: rgba(251, 191, 36, 0.15); color: var(--gold); }
+        .status-planned { background: rgba(255, 255, 255, 0.05); color: var(--text-muted); }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--glass-border);
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        /* Gold text */
+        .text-gold {
+            background: linear-gradient(135deg, var(--gold) 0%, #FFD700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .text-brand {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .wp-hero h1 { font-size: 36px; }
+            .wp-hero { padding: 120px 0 60px; }
+            .wp-section h2 { font-size: 28px; }
+            .wp-meta { flex-direction: column; gap: 8px; }
+            .arch-row { grid-template-columns: 1fr; }
+        }
+
+        /* TOC */
+        .toc {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 24px 32px;
+            margin: 32px 0;
+        }
+        .toc h3 { margin: 0 0 16px; font-size: 18px; }
+        .toc ol { margin: 0; padding-left: 20px; }
+        .toc li { margin-bottom: 6px; }
+        .toc a {
+            color: var(--text-gray);
+            text-decoration: none;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+        .toc a:hover { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+    <div class="nav-inner">
+        <a href="index.html" style="display:flex; align-items:center; gap:10px; color:white; text-decoration:none; font-weight:700; font-size:22px;">
+            <img src="public/precedence-logo-transparent.png" width="32" height="32" alt="">
+            <span style="font-family: 'Instrument Serif', 'Cormorant Garamond', serif; background: linear-gradient(135deg, var(--gold) 0%, #FFD700 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Precedence</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="https://www.precedence.fun/app" target="_blank">Launch App</a></li>
+            <li><a href="https://github.com/tony-42069/precedence" target="_blank">GitHub</a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- HERO -->
+<div class="wp-hero">
+    <div class="container">
+        <div style="display:inline-flex; align-items:center; gap:8px; margin-bottom:24px; padding:6px 14px; border-radius:100px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05);">
+            <span style="font-size:12px; color:var(--gold); font-weight:500; font-family:'JetBrains Mono',monospace;">WHITE PAPER v1.0</span>
+        </div>
+        <h1>Trade the <span class="text-gold">Signal,</span><br>Not the <span class="text-brand">Noise.</span></h1>
+        <p class="subtitle">AI-powered edge detection for prediction markets. Probability estimation, mispricing analysis, and gasless execution across politics, legal, crypto, and economics.</p>
+        <div class="wp-meta">
+            <span>February 2026</span>
+            <span>|</span>
+            <span>Precedence Markets</span>
+            <span>|</span>
+            <span>precedence.fun</span>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- TABLE OF CONTENTS -->
+    <div class="toc">
+        <h3>Contents</h3>
+        <ol>
+            <li><a href="#abstract">Abstract</a></li>
+            <li><a href="#problem">The Problem</a></li>
+            <li><a href="#solution">The Precedence Solution</a></li>
+            <li><a href="#ai-engine">AI Edge Detection Engine</a></li>
+            <li><a href="#architecture">Platform Architecture</a></li>
+            <li><a href="#trading">Gasless Trading Infrastructure</a></li>
+            <li><a href="#legal">Legal Market Intelligence</a></li>
+            <li><a href="#categories">Market Categories</a></li>
+            <li><a href="#business">Business Model</a></li>
+            <li><a href="#roadmap">Roadmap</a></li>
+            <li><a href="#team">Team</a></li>
+        </ol>
+    </div>
+
+    <!-- 1. ABSTRACT -->
+    <section id="abstract" class="wp-section">
+        <span class="section-number">01</span>
+        <h2>Abstract</h2>
+        <p>Prediction markets are among the most accurate forecasting mechanisms ever created, consistently outperforming polls, pundits, and expert panels. Yet most traders operate without systematic tools to identify mispricings, relying instead on gut instinct and manual research.</p>
+        <p><strong style="color:white;">Precedence</strong> is an AI-powered prediction market terminal that estimates true probabilities for every market outcome, compares them to current prices, and shows traders exactly where the edge is. By combining GPT-4o analysis with Polymarket's Central Limit Order Book and gasless trading infrastructure, Precedence transforms prediction market trading from intuition-driven to intelligence-driven.</p>
+        <div class="highlight-box blue">
+            <p style="margin:0; color:white; font-size:18px; font-family:'Instrument Serif',serif;">
+                "Our AI estimates true probabilities, detects market mispricing, and shows you exactly where the edge is."
+            </p>
+        </div>
+    </section>
+
+    <!-- 2. THE PROBLEM -->
+    <section id="problem" class="wp-section">
+        <span class="section-number">02</span>
+        <h2>The Problem</h2>
+        <p>Prediction markets on platforms like Polymarket process hundreds of millions of dollars in volume across thousands of simultaneous markets. However, individual traders face several challenges:</p>
+
+        <h3>Information Overload</h3>
+        <p>With thousands of active markets across politics, legal, crypto, economics, and culture, no human can systematically evaluate every market for mispricing. High-value edge opportunities are buried beneath the noise of high-profile, efficiently priced markets.</p>
+
+        <h3>No Systematic Edge Detection</h3>
+        <p>Traditional trading terminals show prices and order books but offer no opinion on whether those prices are correct. Traders must form their own probability estimates through manual research &mdash; a time-intensive process that doesn't scale across thousands of markets.</p>
+
+        <h3>Legal Markets Are Underserved</h3>
+        <p>Court cases, SCOTUS rulings, regulatory battles, and criminal trials represent some of the most intellectually rigorous prediction challenges. Yet legal markets receive far less attention than political or crypto markets, creating persistent mispricings for those with domain expertise.</p>
+
+        <h3>Friction in Execution</h3>
+        <p>Most prediction market platforms require gas fees, complex wallet management, and multiple transaction signatures. This friction discourages participation, particularly from users new to blockchain-based trading.</p>
+    </section>
+
+    <!-- 3. THE SOLUTION -->
+    <section id="solution" class="wp-section">
+        <span class="section-number">03</span>
+        <h2>The Precedence Solution</h2>
+        <p>Precedence addresses each of these challenges through four integrated capabilities:</p>
+
+        <div class="arch-row">
+            <div class="arch-box">
+                <h4>AI EDGE DETECTION</h4>
+                <p>GPT-4o estimates true probabilities for every market outcome, calculates the edge versus market price, and identifies the best value opportunities.</p>
+            </div>
+            <div class="arch-box">
+                <h4>MULTI-OUTCOME ANALYSIS</h4>
+                <p>For markets with 2 to 100+ outcomes, AI ranks every candidate with probability estimates, market price comparisons, and mispricing flags.</p>
+            </div>
+            <div class="arch-box">
+                <h4>LEGAL INTELLIGENCE</h4>
+                <p>CourtListener integration provides access to millions of court cases. AI analyzes judge behavior, case precedents, and legal patterns to predict outcomes.</p>
+            </div>
+            <div class="arch-box">
+                <h4>GASLESS TRADING</h4>
+                <p>Polymarket Builder program enables zero-gas-fee trading through Gnosis Safe smart wallets. Users trade with one signature, no ETH required.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. AI ENGINE -->
+    <section id="ai-engine" class="wp-section">
+        <span class="section-number">04</span>
+        <h2>AI Edge Detection Engine</h2>
+        <p>The core innovation of Precedence is the AI Edge Detection Engine &mdash; a system that transforms raw market data into actionable trading intelligence.</p>
+
+        <h3>How It Works</h3>
+        <p>For each market, the engine performs a multi-step analysis:</p>
+        <ol>
+            <li><strong style="color:white;">Independent Probability Estimation</strong> &mdash; GPT-4o forms its own probability estimate for each outcome, independent of the current market price. This estimate is grounded in the model's knowledge of politics, law, economics, technology, and historical patterns.</li>
+            <li><strong style="color:white;">Market Price Comparison</strong> &mdash; The AI compares its estimate to the live market price from Polymarket's CLOB. The difference is the <em>edge</em> &mdash; a quantified measure of potential mispricing.</li>
+            <li><strong style="color:white;">Edge Direction Analysis</strong> &mdash; If the AI probability exceeds the market price, the outcome is flagged as "undervalued." If it's lower, the outcome is "overvalued." Edges below 3% are classified as "fairly priced."</li>
+            <li><strong style="color:white;">Confidence Scoring</strong> &mdash; Each analysis includes a confidence score (0&ndash;100%) reflecting how certain the AI is in its estimate. Low-information markets receive lower confidence.</li>
+            <li><strong style="color:white;">Risk Assessment</strong> &mdash; Markets are classified as low, medium, or high risk based on volatility potential, time to resolution, and information asymmetry.</li>
+        </ol>
+
+        <h3>Binary Markets</h3>
+        <p>For YES/NO markets, the engine returns a single probability estimate with edge calculation, bull and bear cases, and key factors analysis.</p>
+
+        <h3>Multi-Outcome Markets</h3>
+        <p>For markets with multiple outcomes (e.g., "Who will win the 2028 Presidential Election?" with 30+ candidates), the engine:</p>
+        <ul>
+            <li>Estimates probabilities for all top outcomes</li>
+            <li>Compares each to its market price</li>
+            <li>Identifies the "best value" outcome with the largest positive edge</li>
+            <li>Provides time sensitivity analysis for how probabilities may shift</li>
+        </ul>
+
+        <div class="highlight-box gold">
+            <p style="margin:0 0 8px; color:var(--gold); font-family:'JetBrains Mono',monospace; font-size:12px; text-transform:uppercase;">Example Output</p>
+            <p style="margin:0; color:var(--text-gray); font-size:14px;">
+                Market: "Democratic Presidential Nominee 2028"<br>
+                AI Estimate: Gavin Newsom at <strong style="color:white;">30%</strong> (market price: 27%) &mdash; <strong style="color:var(--success);">+3% edge</strong><br>
+                Best Value: Alexandria Ocasio-Cortez at <strong style="color:white;">15%</strong> (market price: 10%) &mdash; <strong style="color:var(--success);">+5% edge</strong><br>
+                Confidence: 70% | Risk: Medium
+            </p>
+        </div>
+
+        <h3>Legal Case Analysis</h3>
+        <p>For court cases searched via CourtListener, a specialized legal analysis pipeline activates:</p>
+        <ul>
+            <li>Fetches full case details: opinions, procedural history, disposition, parties</li>
+            <li>Analyzes judge ideology and historical ruling patterns</li>
+            <li>Estimates plaintiff win, defendant win, and settlement probabilities</li>
+            <li>Identifies key legal factors driving the prediction</li>
+        </ul>
+    </section>
+
+    <!-- 5. ARCHITECTURE -->
+    <section id="architecture" class="wp-section">
+        <span class="section-number">05</span>
+        <h2>Platform Architecture</h2>
+        <p>Precedence is built as a multi-service architecture deployed across Vercel (frontend) and Railway (backend + database).</p>
+
+        <div class="code-block">
+<pre>
+PRECEDENCE PLATFORM ARCHITECTURE
+
+Frontend (Next.js 16)                    Vercel
+  - Dashboard + trending markets         www.precedence.fun/app
+  - Markets (5 category filters)
+  - AI Market Analysis
+  - Case search + LLM analysis
+  - Portfolio + positions
+  - Profile + wallet management
+
+Backend (FastAPI)                        Railway
+  - /api/markets/* endpoints             PostgreSQL database
+  - /api/predictions/* (GPT-4o)
+  - /api/cases/* (CourtListener)
+  - /api/users/* (profiles)
+
+Trading (Frontend-side)                  Polymarket Builder
+  - Safe wallet deployment               Gasless via Relayer
+  - Credential derivation                HMAC-signed orders
+  - CLOB order placement                 Session caching
+
+External APIs
+  - Polymarket Gamma API (market data)
+  - Polymarket CLOB API (trading + order books)
+  - Polymarket Relayer (gasless transactions)
+  - CourtListener API (legal case data)
+  - OpenAI GPT-4o (AI market + case analysis)
+  - Privy (wallet authentication)
+</pre>
+        </div>
+
+        <h3>Technology Stack</h3>
+        <table>
+            <tr><th>Layer</th><th>Technology</th></tr>
+            <tr><td>Frontend</td><td>Next.js 16, TypeScript, Tailwind CSS, Recharts</td></tr>
+            <tr><td>Backend</td><td>FastAPI (Python 3.11+), SQLAlchemy</td></tr>
+            <tr><td>Database</td><td>PostgreSQL on Railway</td></tr>
+            <tr><td>AI/ML</td><td>OpenAI GPT-4o, structured JSON responses</td></tr>
+            <tr><td>Authentication</td><td>Privy (email, Google, wallet login)</td></tr>
+            <tr><td>Trading</td><td>Polymarket CLOB Client, Builder SDK, Relayer</td></tr>
+            <tr><td>Wallets</td><td>Gnosis Safe smart wallets (gasless deployment)</td></tr>
+            <tr><td>Charts</td><td>Recharts (price history, multi-outcome)</td></tr>
+            <tr><td>Fonts</td><td>Instrument Serif, DM Sans, JetBrains Mono</td></tr>
+        </table>
+    </section>
+
+    <!-- 6. TRADING -->
+    <section id="trading" class="wp-section">
+        <span class="section-number">06</span>
+        <h2>Gasless Trading Infrastructure</h2>
+        <p>Precedence leverages Polymarket's Builder Program to deliver a zero-gas-fee trading experience. Users never need ETH or MATIC to trade.</p>
+
+        <h3>Two-Wallet Architecture</h3>
+        <p>The system uses two wallets per user, each with a distinct role:</p>
+        <table>
+            <tr><th>Wallet</th><th>Purpose</th><th>Contains</th></tr>
+            <tr><td style="color:white;">EOA (Externally Owned Account)</td><td>Signing only &mdash; proves user intent</td><td>No funds</td></tr>
+            <tr><td style="color:white;">Safe (Gnosis Safe Smart Wallet)</td><td>Holds funds, executes trades</td><td>USDC for trading</td></tr>
+        </table>
+        <p>This separation enables gasless trading: the user signs with their EOA, and Polymarket's Relayer executes the transaction from the Safe wallet, paying gas on the user's behalf.</p>
+
+        <h3>Trading Flow</h3>
+        <ol>
+            <li><strong style="color:white;">Connect</strong> &mdash; User authenticates via Privy (email, Google, or wallet). A Gnosis Safe is deployed gaslessly.</li>
+            <li><strong style="color:white;">Fund</strong> &mdash; User sends USDC to their Safe address. Both native USDC and USDC.e are detected.</li>
+            <li><strong style="color:white;">Analyze</strong> &mdash; AI analyzes the market and shows probability estimate, edge, and risk.</li>
+            <li><strong style="color:white;">Trade</strong> &mdash; User clicks Buy/Sell. A Fill-or-Kill market order is placed on Polymarket's CLOB. One signature required.</li>
+            <li><strong style="color:white;">Settle</strong> &mdash; When the market resolves, UMA Oracle verifies the outcome. USDC is distributed to winning positions automatically.</li>
+        </ol>
+
+        <div class="highlight-box green">
+            <p style="margin:0; color:var(--success); font-family:'JetBrains Mono',monospace; font-size:14px;">
+                Target: 1 signature per trade for returning users.<br>
+                Session credentials cached for 30 days in localStorage.
+            </p>
+        </div>
+    </section>
+
+    <!-- 7. LEGAL -->
+    <section id="legal" class="wp-section">
+        <span class="section-number">07</span>
+        <h2>Legal Market Intelligence</h2>
+        <p>Precedence was founded with a legal-first thesis: court cases, regulatory battles, and criminal trials are among the most underserved and inefficiently priced markets in the prediction market ecosystem.</p>
+
+        <h3>CourtListener Integration</h3>
+        <p>Through the CourtListener API, Precedence provides access to millions of federal court cases across all circuits:</p>
+        <ul>
+            <li>Supreme Court (SCOTUS)</li>
+            <li>All 13 Circuit Courts of Appeals</li>
+            <li>Federal Circuit and DC Circuit</li>
+            <li>Full case details: opinions, procedural history, parties, timeline</li>
+        </ul>
+
+        <h3>AI Case Analysis</h3>
+        <p>When a user triggers AI Analysis on a case, the system:</p>
+        <ol>
+            <li>Fetches complete case data from CourtListener (opinions up to 8,000 characters, procedural history, disposition)</li>
+            <li>Constructs a comprehensive prompt with all case facts</li>
+            <li>GPT-4o analyzes the case and returns structured predictions</li>
+        </ol>
+        <p>The output includes plaintiff win probability, defendant win probability, settlement probability, judge ideology assessment, key legal factors, and a confidence score.</p>
+
+        <h3>Legal Markets on Polymarket</h3>
+        <p>Precedence surfaces legal prediction markets that are typically buried beneath high-volume political markets. Active legal markets include:</p>
+        <ul>
+            <li>SCOTUS rulings (tariff cases, sports contracts)</li>
+            <li>Criminal trials (Weinstein, Epstein disclosures, Mangione)</li>
+            <li>Regulatory actions (Jerome Powell, BitBoy)</li>
+            <li>Civil litigation (Musk vs. Altman)</li>
+        </ul>
+        <p>A dedicated Legal filter tab on the Markets page ensures these markets are always accessible, regardless of their trading volume relative to political markets.</p>
+    </section>
+
+    <!-- 8. CATEGORIES -->
+    <section id="categories" class="wp-section">
+        <span class="section-number">08</span>
+        <h2>Market Categories</h2>
+        <p>Precedence organizes markets into five filterable categories, each with keyword-based classification:</p>
+
+        <table>
+            <tr><th>Category</th><th>Examples</th><th>Keywords</th></tr>
+            <tr><td style="color:white;">Legal</td><td>SCOTUS tariff ruling, Weinstein prison time, Epstein charges</td><td>court, trial, guilty, scotus, charged, prison, verdict</td></tr>
+            <tr><td style="color:white;">Politics</td><td>Presidential nominees, Fed Chair, elections</td><td>election, president, congress, nominee, primary</td></tr>
+            <tr><td style="color:white;">Crypto</td><td>Bitcoin price, MegaETH FDV, MetaMask token</td><td>bitcoin, ethereum, crypto, solana, token</td></tr>
+            <tr><td style="color:white;">Economics</td><td>Fed rate cuts, tariff revenue, inflation</td><td>fed, interest rate, inflation, gdp, recession</td></tr>
+            <tr><td style="color:white;">All Markets</td><td>Everything above + culture, geopolitics</td><td>No filter applied</td></tr>
+        </table>
+
+        <p>The dashboard Trending Markets section uses a diversification algorithm to ensure representation across categories, rather than displaying only the highest-volume markets (which skew heavily toward politics).</p>
+    </section>
+
+    <!-- 9. BUSINESS MODEL -->
+    <section id="business" class="wp-section">
+        <span class="section-number">09</span>
+        <h2>Business Model</h2>
+        <p>Precedence generates revenue through two mechanisms:</p>
+
+        <h3>Platform Fee</h3>
+        <p>A 1% fee is applied to all SELL orders, collected in USDC and transferred to the Precedence treasury via gasless relay. This fee is transparent and displayed in the trading interface.</p>
+
+        <h3>Builder Revenue Sharing</h3>
+        <p>As a Polymarket Builder, all trading volume attributed to Precedence is tracked via HMAC-signed order headers. Polymarket's Builder program shares a percentage of protocol revenue with builders based on their attributed volume.</p>
+
+        <div class="highlight-box">
+            <table style="margin:0;">
+                <tr><th>Revenue Stream</th><th>Rate</th><th>Mechanism</th></tr>
+                <tr><td>Platform Fee</td><td>1% on sells</td><td>USDC transfer via Relayer</td></tr>
+                <tr><td>Builder Revenue</td><td>Variable</td><td>Polymarket volume attribution</td></tr>
+            </table>
+        </div>
+    </section>
+
+    <!-- 10. ROADMAP -->
+    <section id="roadmap" class="wp-section">
+        <span class="section-number">10</span>
+        <h2>Roadmap</h2>
+
+        <h3>Completed</h3>
+        <div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">AI Market Analysis</strong><br>GPT-4o edge detection for binary and multi-outcome markets</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">Polymarket Builder Integration</strong><br>Gasless trading, Safe wallet deployment, HMAC attribution</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">Multi-Outcome Market Support</strong><br>Price charts, order books, and trading for markets with 2-100+ outcomes</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">Legal Markets Filter</strong><br>Dedicated tab surfacing SCOTUS, trials, and regulatory markets</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">CourtListener Integration</strong><br>Federal case search with AI-powered outcome predictions</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">Portfolio & Position Tracking</strong><br>Combined database + Polymarket API position display</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-done">&#10003;</div><div><strong style="color:white;">Privy Authentication</strong><br>Email, Google, and wallet login with embedded wallet creation</div></div>
+        </div>
+
+        <h3>In Progress</h3>
+        <div>
+            <div class="roadmap-item"><div class="roadmap-status status-progress">&#9679;</div><div><strong style="color:white;">Trade History</strong><br>Complete trade log with P&L tracking</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-progress">&#9679;</div><div><strong style="color:white;">Signature Reduction</strong><br>Target: 1 signature per trade via session caching</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-progress">&#9679;</div><div><strong style="color:white;">USDC Auto-Swap</strong><br>Automatic native USDC to USDC.e conversion via Uniswap V3</div></div>
+        </div>
+
+        <h3>Planned</h3>
+        <div>
+            <div class="roadmap-item"><div class="roadmap-status status-planned">&#9675;</div><div><strong style="color:white;">Leaderboards & Reputation</strong><br>User rankings by profit, volume, and prediction accuracy</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-planned">&#9675;</div><div><strong style="color:white;">Real-Time Comments</strong><br>WebSocket-powered market discussion via Polymarket RTDS</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-planned">&#9675;</div><div><strong style="color:white;">AI Portfolio Advisor</strong><br>Automated portfolio analysis with rebalancing suggestions</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-planned">&#9675;</div><div><strong style="color:white;">Mobile App</strong><br>Native mobile experience for iOS and Android</div></div>
+            <div class="roadmap-item"><div class="roadmap-status status-planned">&#9675;</div><div><strong style="color:white;">Notification System</strong><br>Price alerts, edge detection alerts, and resolution notifications</div></div>
+        </div>
+    </section>
+
+    <!-- 11. TEAM -->
+    <section id="team" class="wp-section">
+        <span class="section-number">11</span>
+        <h2>Team</h2>
+        <div class="highlight-box">
+            <div style="display:flex; align-items:center; gap:20px;">
+                <div style="width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg, var(--primary), var(--secondary)); display:flex; align-items:center; justify-content:center; font-size:24px; color:white; font-weight:bold; flex-shrink:0;">T</div>
+                <div>
+                    <h3 style="margin:0 0 4px; font-size:20px;">Tony</h3>
+                    <p style="margin:0 0 8px; color:var(--text-muted); font-size:14px;">Founder & Developer</p>
+                    <p style="margin:0; font-size:14px;">Full-stack builder. Designed and built the entire Precedence platform &mdash; from AI analysis engine to gasless trading infrastructure to the frontend terminal experience.</p>
+                    <div style="margin-top:12px; display:flex; gap:16px;">
+                        <a href="https://x.com/tony42069_" target="_blank" rel="noopener noreferrer" style="color:var(--text-gray); text-decoration:none; font-size:13px; font-family:'JetBrains Mono',monospace;">&#x1D54F; @tony42069_</a>
+                        <a href="https://github.com/tony-42069" target="_blank" rel="noopener noreferrer" style="color:var(--text-gray); text-decoration:none; font-size:13px; font-family:'JetBrains Mono',monospace;">GitHub</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- FOOTER -->
+<footer>
+    <div class="container">
+        <div style="margin-bottom:16px;">
+            <a href="index.html" style="display:inline-flex; align-items:center; gap:8px; color:white; text-decoration:none; font-weight:700; font-size:18px;">
+                <img src="public/precedence-logo-transparent.png" width="24" height="24" alt="">
+                <span style="font-family: 'Instrument Serif', 'Cormorant Garamond', serif; background: linear-gradient(135deg, var(--gold) 0%, #FFD700 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Precedence</span>
+            </a>
+        </div>
+        <p style="margin-bottom:8px;">&copy; 2026 Precedence Markets. All rights reserved.</p>
+        <p>This white paper is for informational purposes only. Not financial or legal advice. Trading involves risk.</p>
+        <div style="margin-top:16px; display:flex; justify-content:center; gap:24px;">
+            <a href="https://www.precedence.fun" style="color:var(--text-muted); text-decoration:none; font-size:12px;">Platform</a>
+            <a href="https://x.com/precedenceai" target="_blank" rel="noopener noreferrer" style="color:var(--text-muted); text-decoration:none; font-size:12px;">X/Twitter</a>
+            <a href="https://github.com/tony-42069/precedence" target="_blank" rel="noopener noreferrer" style="color:var(--text-muted); text-decoration:none; font-size:12px;">GitHub</a>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
