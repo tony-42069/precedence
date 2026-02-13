@@ -4,9 +4,9 @@
 
 <img src="public/precedence-logo-transparent.png" alt="Precedence Logo" width="400">
 
-### *"Know What Comes Next"*
+### *"Trade the Signal, Not the Noise."*
 
-**Legal Prediction Markets Platform**
+**AI-Powered Prediction Market Terminal**
 
 [![Live](https://img.shields.io/badge/Live-www.precedence.fun-00C853?style=for-the-badge)](https://www.precedence.fun)
 [![Polymarket](https://img.shields.io/badge/Polymarket-Builder-7C3AED?style=for-the-badge&logo=ethereum&logoColor=white)](https://polymarket.com/)
@@ -22,63 +22,63 @@
 
 ## 🎯 Overview
 
-**Precedence** is an AI-powered legal prediction market platform that enables trading on high-profile case outcomes. Users can bet on Supreme Court rulings, major criminal trials, and regulatory battles. By leveraging **Polymarket's Builder Program** for gasless trading infrastructure and **CourtListener's API** for legal data, Precedence provides unprecedented insights into judicial behavior and case outcomes.
+**Precedence** is an AI-powered prediction market trading terminal. Our AI estimates true probabilities, detects market mispricing, and shows you exactly where the edge is — across politics, legal, crypto, and economics. Built on **Polymarket's Builder Program** for gasless trading and **CourtListener's API** for legal case data, Precedence gives traders an unfair advantage with AI-driven edge detection on every market.
 
 ---
 
 ## ✨ Key Features
 
+### 🧠 AI Market Analysis (Edge Detection)
+- **Probability Estimates** - AI estimates true probabilities independent of market price
+- **Mispricing Detection** - Compares AI estimates to market prices to find edges
+- **Multi-Outcome Analysis** - AI ranks all outcomes with probability vs market price comparison
+- **Bull/Bear Cases** - Balanced arguments for and against each position
+- **Key Factors & Risk Assessment** - Identifies what drives the outcome with confidence scoring
+
 ### 🔍 AI-Powered Case Search
-- **CourtListener Integration** - Search millions of court cases
-- **LLM Case Analysis** - AI-generated outcome predictions with confidence scores
-- **Full Opinion Text** - Analysis includes actual court opinion text
+- **CourtListener Integration** - Search millions of court cases across all federal courts
+- **LLM Case Analysis** - GPT-4o generated outcome predictions with confidence scores
+- **Judge Behavior Analysis** - Historical patterns and ideological leaning assessment
 - **Key Factors Extraction** - Identifies critical legal factors affecting outcomes
 
-### 🤖 ML Case Predictions
-- **Judge Behavior Analysis** - ML models trained on  judicial opinions
-- **Case Outcome Predictions** - Confidence scores and probability distributions
-- **Historical Pattern Recognition** - Identify how judges rule on similar cases
-- **Sentiment Analysis** - Track media and public sentiment around cases
+### 💰 Gasless Trading via Polymarket
+- **Zero Gas Fees** - Safe wallet deployment and trading via Polymarket Relayer
+- **Builder Program** - Full HMAC-signed attribution for trading volume
+- **CLOB Integration** - Direct access to Polymarket's Central Limit Order Book
+- **Live Prices** - Real-time Yes/No outcome prices with order book depth
+- **Multi-Outcome Support** - Trade on markets with 2 to 100+ outcomes
 
-### 💰 Polymarket Trading Integration
-- **Gasless Trading** - Safe wallet deployment, no gas fees for users
-- **Builder Program** - Full attribution for trading volume
-- **Real Market Access** - Direct integration with Polymarket CLOB
-- **Live Prices** - Real-time Yes/No outcome prices
-
-### 📊 Market Intelligence
-- **Legal-Focused Markets** - Supreme Court, regulatory, political-legal markets
+### 📊 Market Intelligence Terminal
+- **5 Category Filters** - Legal, Politics, Economy, Crypto, and All Markets
+- **Legal Markets** - SCOTUS rulings, criminal trials, regulatory battles, extraditions
+- **Multi-Outcome Charts** - Price history with up to 4 colored outcome lines
 - **Volume & Liquidity Data** - 24hr, weekly, monthly trading stats
-- **Price Change Indicators** - Track market movements
-- **Market Images** - Visual market cards from Polymarket
+- **Real-Time Order Books** - Live bids/asks from Polymarket CLOB
 
 ---
 
 ### PROTOCOL FLOW
-How markets get created and how you win.
+From discovery to profit in 5 steps.
 
-- **STEP 01 // DISCOVER**  
-*Search Live Legal Events*  
-Browse thousands of active Supreme Court and Federal cases. Use our AI-powered search to find high-impact motions, rulings, and appeals worth trading on.
+- **STEP 01 // DISCOVER**
+*Browse Live Markets*
+Explore thousands of active prediction markets across politics, legal, crypto, and economics. Filter by category or search for specific markets on Polymarket.
 
-- **STEP 02 // ANALYZE**  
-*AI Probability Engine*  
-Our AI models analyze judicial history, case precedents, and legal patterns to generate probability forecasts. Know the odds before you trade.
+- **STEP 02 // ANALYZE**
+*AI Edge Detection*
+Our AI estimates true probabilities, compares them to market prices, and shows you exactly where the edge is. Get bull/bear cases, key factors, risk assessment, and confidence scores — all in one click.
 
-- **STEP 03 // REQUEST ⭐**  
-*Submit Market Proposals*  
-Found a case with trading potential? Request a new prediction market. If approved by Polymarket, you earn a percentage of trading volume as the market creator. Turn legal insight into passive income.
+- **STEP 03 // CONNECT**
+*Gasless Onboarding*
+Connect with email, social login, or existing wallet via Privy. A Smart Wallet (Gnosis Safe) is deployed for you at zero cost. Send USDC to your wallet address to start trading.
 
-*Market Creators Earn 0.5%*  
-*Lifetime earnings on trading volume*
+- **STEP 04 // TRADE**
+*Execute Positions Instantly*
+Trade on Polymarket's Central Limit Order Book. Zero gas fees. Millisecond execution. Your funds stay in your self-custodial wallet. Supports both binary and multi-outcome markets.
 
-- **STEP 04 // TRADE**  
-*Execute Positions Instantly*  
-Once markets go live, trade on Polymarket's Central Limit Order Book. Zero gas fees. Millisecond execution. Your funds stay in your self-custodial wallet.
-
-- **STEP 05 // SETTLE**  
-*Automated Smart Contract Payouts*  
-When cases resolve, UMA Oracle verifies outcomes and smart contracts automatically distribute USDC to winning positions. No disputes. No delays.
+- **STEP 05 // SETTLE**
+*Automated Smart Contract Payouts*
+When markets resolve, UMA Oracle verifies outcomes and smart contracts automatically distribute USDC to winning positions. No disputes. No delays.
 
 ---
 
@@ -91,38 +91,35 @@ When cases resolve, UMA Oracle verifies outcomes and smart contracts automatical
 
 
 
-## ✅ Current Status (November 2025)
-
-### Polymarket Builder Integration - COMPLETE ✅
-
-| Component | Status | Details |
-|-----------|--------|---------|
-| Safe Wallet Deployment | ✅ | Gasless wallet deployment via Polymarket Relayer |
-| User API Credentials | ✅ | Derived via wallet signature (EIP-712) |
-| Token Approvals | ✅ | 7 contracts approved (USDC + CTF exchanges) |
-| Market Resolution | ✅ | Slug/conditionId → tokenIds mapping |
-| Order Placement | ✅ | Full pipeline with Builder attribution |
-| Builder Attribution | ✅ | HMAC-signed headers for volume tracking |
+## ✅ Current Status (February 2026)
 
 ### Platform Features - LIVE ✅
 
 | Feature | Status |
 |---------|--------|
-| Dashboard with market overview | ✅ Live |
-| Legal prediction markets display | ✅ Live |
-| AI-powered case search | ✅ Live |
-| Case outcome predictions (LLM) | ✅ Live |
+| Dashboard with trending markets | ✅ Live |
+| AI Market Analysis (edge detection) | ✅ Live |
+| Multi-outcome market support (2-100+ outcomes) | ✅ Live |
+| Legal markets filter tab | ✅ Live |
+| AI case search & LLM predictions | ✅ Live |
 | CourtListener integration | ✅ Live |
-| Real-time market prices | ✅ Live |
-| User profile persistence | ✅ Live |
+| Gasless trading via Polymarket Builder | ✅ Live |
+| Safe wallet deployment | ✅ Live |
+| USDC balance tracking (native + bridged) | ✅ Live |
+| Order placement via CLOB | ✅ Live |
+| Portfolio position tracking | ✅ Live |
+| User profile system | ✅ Live |
+| Price history charts (binary + multi-outcome) | ✅ Live |
+| Real-time order books | ✅ Live |
+| Privy wallet authentication | ✅ Live |
 
 ### In Development 🚧
 
 | Feature | Status |
 |---------|--------|
-| Portfolio tracking | 🚧 Planned |
-| Trade history | 🚧 Planned |
-| Leaderboards | 🚧 Planned |
+| Trade history tab | 🚧 In Progress |
+| Reduce signatures to 1 per trade | 🚧 In Progress |
+| WebSocket real-time comments | 🚧 Blocked (Railway deploy) |
 
 ---
 
@@ -132,60 +129,58 @@ When cases resolve, UMA Oracle verifies outcomes and smart contracts automatical
 ┌─────────────────────────────────────────────────────────────┐
 │                    PRECEDENCE PLATFORM                       │
 ├─────────────────────────────────────────────────────────────┤
-│  Frontend (Next.js 14)          │  Hosted on Vercel         │
-│  • Dashboard                    │  • www.precedence.fun/app │
-│  • Markets listing              │                           │
-│  • Case search + AI analysis    │                           │
-│  • Portfolio (coming soon)      │                           │
+│  Frontend (Next.js 16)          │  Hosted on Vercel         │
+│  • Dashboard + trending markets │  • www.precedence.fun/app │
+│  • Markets (5 category filters) │                           │
+│  • AI Market Analysis           │                           │
+│  • Case search + LLM analysis   │                           │
+│  • Portfolio + positions        │                           │
+│  • Profile + wallet management  │                           │
 ├─────────────────────────────────────────────────────────────┤
-│  Backend (FastAPI + Node.js)    │  Hosted on Railway        │
-│  • /api/markets/* endpoints     │                           │
-│  • /api/predictions/* endpoints │                           │
-│  • /api/cases/* endpoints       │                           │
+│  Backend (FastAPI)              │  Hosted on Railway        │
+│  • /api/markets/* endpoints     │  • PostgreSQL database    │
+│  • /api/predictions/* (GPT-4o)  │                           │
+│  • /api/cases/* (CourtListener) │                           │
+│  • /api/users/* (profiles)      │                           │
 ├─────────────────────────────────────────────────────────────┤
-│  Trading Service (Node.js)      │  Port 5002                │
-│  • /init-session                │                           │
-│  • /deploy-safe                 │                           │
-│  • /derive-credentials          │                           │
-│  • /set-approvals               │                           │
-│  • /resolve-market              │                           │
-│  • /place-order                 │                           │
-├─────────────────────────────────────────────────────────────┤
-│  Signing Server (Node.js)       │  Port 5001                │
-│  • HMAC signature generation    │                           │
-│  • Builder credential management│                           │
+│  Trading (Frontend-side)        │  Polymarket Builder       │
+│  • Safe wallet deployment       │  • Gasless via Relayer    │
+│  • Credential derivation        │  • HMAC-signed orders     │
+│  • CLOB order placement         │  • Session caching        │
 ├─────────────────────────────────────────────────────────────┤
 │  External APIs                                              │
-│  • Polymarket Gamma API (markets)                           │
-│  • Polymarket CLOB API (trading)                            │
+│  • Polymarket Gamma API (market data)                       │
+│  • Polymarket CLOB API (trading + order books)              │
 │  • Polymarket Relayer (gasless transactions)                │
-│  • CourtListener API (legal data)                           │
-│  • OpenAI API (LLM analysis)                                │
+│  • CourtListener API (legal case data)                      │
+│  • OpenAI GPT-4o (AI market + case analysis)                │
+│  • Privy (wallet authentication)                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 ---
 ## Technical Components
 Frontend:
 
-- Next.js 14+ with App Router
-- Wallet integration (Phantom, MetaMask)
-- Real-time WebSocket updates
-- Responsive mobile-first design
+- Next.js 16+ with App Router
+- Privy wallet authentication (email, Google, wallet)
+- Recharts price history charts (binary + multi-outcome)
+- Tailwind CSS with custom design system
+- Instrument Serif + DM Sans + JetBrains Mono fonts
 
 Backend:
 
 - FastAPI (Python 3.11+)
-- PostgreSQL for case/judge data
-- Redis for caching
+- PostgreSQL on Railway (users, positions, trades)
+- Polymarket Gamma/CLOB API integration
 - CourtListener API integration
-- Polymarket CLOB client
+- CORS proxy for Gamma API
 
 AI/ML:
 
-- Judge behavior models
-- Case outcome predictors
-- Semantic search integration
-- ModernBERT embeddings
+- GPT-4o market analysis (edge detection, probability estimates)
+- GPT-4o case analysis (judge behavior, outcome prediction)
+- Multi-outcome probability comparison
+- Semantic case search
 
 ---
 
@@ -331,30 +326,34 @@ GET  /health                    # Health check
 ## 🎯 Roadmap
 
 ### ✅ Completed
-- [x] Polymarket Builder integration
-- [x] Safe wallet deployment (gasless)
-- [x] User credential derivation
+- [x] Polymarket Builder integration (gasless trading)
+- [x] Safe wallet deployment via Relayer
+- [x] User credential derivation (EIP-712)
 - [x] Token approvals (7 contracts)
-- [x] Market resolution (slug → tokenIds)
-- [x] Order placement pipeline
-- [x] Frontend dashboard
-- [x] Legal markets display
-- [x] AI case search & analysis
+- [x] Order placement with Builder attribution
+- [x] AI Market Analysis with edge detection
+- [x] Multi-outcome market support (price charts, order books, trading)
+- [x] Legal markets filter tab (SCOTUS, trials, regulatory)
+- [x] AI case search & LLM predictions (GPT-4o)
 - [x] CourtListener integration
+- [x] User profile system with PostgreSQL
+- [x] Portfolio position tracking
+- [x] USDC balance tracking (native + bridged)
+- [x] Privy wallet authentication (email, Google, wallet)
 - [x] Vercel + Railway deployment
+- [x] Custom font system (Instrument Serif + DM Sans)
 
 ### 🚧 In Progress
-- [ ] User profile system
-- [ ] Database persistence
-- [ ] Portfolio tracking
-- [ ] Trade history
+- [ ] Trade history tracking
+- [ ] Signature reduction (target: 1 per trade)
+- [ ] USDC auto-swap (native to USDC.e)
 
 ### 📋 Planned
-- [ ] Leaderboards
-- [ ] Badge/reputation system
-- [ ] Mobile responsive improvements
-- [ ] Real-time WebSocket updates
+- [ ] Leaderboards & reputation system
+- [ ] Real-time WebSocket comments
+- [ ] Fee collection (1% on sells)
 - [ ] Email/push notifications
+- [ ] Mobile app
 
 ---
 
@@ -397,8 +396,9 @@ Prediction markets may not be legal in all jurisdictions. Users are responsible 
 
 - **Live Platform:** [www.precedence.fun](https://www.precedence.fun)
 - **App Dashboard:** [www.precedence.fun/app](https://www.precedence.fun/app)
+- **X/Twitter:** [@precedenceai](https://x.com/precedenceai)
 - **GitHub:** [@tony-42069](https://github.com/tony-42069)
-- **Polymarket Builder:** [polymarket.com/settings?tab=builder](https://polymarket.com/settings?tab=builder)
+- **Polymarket Builder:** [polymarket.com](https://polymarket.com/)
 - **CourtListener API:** [courtlistener.com/help/api](https://www.courtlistener.com/help/api/)
 
 ---
@@ -407,7 +407,7 @@ Prediction markets may not be legal in all jurisdictions. Users are responsible 
 
 **Built by [@tony-42069](https://github.com/tony-42069)**
 
-*Powered by Polymarket • CourtListener • OpenAI*
+*Powered by Polymarket • CourtListener • OpenAI • Privy*
 
 **[⬆ Back to Top](#-precedence)**
 
