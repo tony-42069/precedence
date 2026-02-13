@@ -109,8 +109,6 @@ export default function CasesPage() {
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<any>(null);
   const [showTradingModal, setShowTradingModal] = useState(false);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [requestedCase, setRequestedCase] = useState<CourtCase | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -253,25 +251,6 @@ export default function CasesPage() {
     }
   };
 
-  // Request Market Handler
-  const requestMarket = (caseItem: CourtCase) => {
-    setRequestedCase(caseItem);
-    setShowRequestModal(true);
-  };
-
-  // Submit Market Request
-  const submitMarketRequest = () => {
-    if (!requestedCase) return;
-
-    // Log the request for now
-    console.log('Market request submitted for case:', requestedCase.caseName, requestedCase.docketNumber);
-
-    // Send to Polymarket Discord or log (placeholder)
-    alert(`Market request logged for "${requestedCase.caseName}". This would be sent to Polymarket Discord for review.`);
-
-    setShowRequestModal(false);
-    setRequestedCase(null);
-  };
 
   return (
     <div className="min-h-screen bg-[#030304] text-slate-200 font-sans selection:bg-blue-500/30 relative overflow-hidden">
@@ -561,17 +540,6 @@ export default function CasesPage() {
                            <span className="hidden md:inline">AI Analysis</span>
                         </button>
 
-                        {/* Primary CTA: Request Market */}
-                        <button
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             requestMarket(caseItem);
-                           }}
-                           className="flex-1 md:flex-none px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(37,99,235,0.3)]"
-                        >
-                           <span className="text-lg font-bold">+</span>
-                           <span>Request Market</span>
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -772,30 +740,17 @@ export default function CasesPage() {
 
             {/* Footer Actions */}
             <div className="p-6 border-t border-white/10 bg-[#151518] flex-shrink-0">
-              <div className="flex gap-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDetailsModal(false);
-                    openAnalysis(selectedCase);
-                  }}
-                  className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                >
-                  <BrainCircuit size={16} />
-                  AI ANALYSIS
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDetailsModal(false);
-                    requestMarket(selectedCase);
-                  }}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.3)]"
-                >
-                  <span className="text-lg font-bold">+</span>
-                  REQUEST MARKET
-                </button>
-              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDetailsModal(false);
+                  openAnalysis(selectedCase);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(37,99,235,0.3)]"
+              >
+                <BrainCircuit size={16} />
+                AI ANALYSIS
+              </button>
             </div>
           </div>
         </div>
@@ -914,17 +869,11 @@ export default function CasesPage() {
               </div>
 
               <div className="p-6 border-t border-white/10 bg-[#151518] flex-shrink-0">
-                 <button 
-                   onClick={() => {
-                     setShowAnalysisModal(false);
-                     if (selectedCase) {
-                       requestMarket(selectedCase);
-                     }
-                   }} 
-                   className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                 <button
+                   onClick={() => setShowAnalysisModal(false)}
+                   className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
                  >
-                    <span className="text-lg font-bold">+</span>
-                    REQUEST MARKET
+                    Close
                  </button>
               </div>
            </div>
@@ -940,69 +889,6 @@ export default function CasesPage() {
         />
       )}
 
-            {/* --- REQUEST MARKET MODAL --- */}
-      {showRequestModal && requestedCase && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowRequestModal(false)}></div>
-          <div className="relative bg-[#0F0F11] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-
-            {/* Header */}
-            <div className="p-6 border-b border-white/10 bg-[#151518]">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-white">Request Market Creation</h2>
-                <button onClick={() => setShowRequestModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-4">
-              <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-xl">
-                <p className="text-sm text-orange-300 mb-3">
-                  Request a new prediction market for this case. Our team will review and create the market if it meets trading criteria.
-                </p>
-                <div className="text-xs text-slate-400 space-y-1">
-                  <p>📝 Will be sent to Polymarket Discord for review</p>
-                  <p>⏱️ Usually 1-3 business days for approval</p>
-                  <p>📊 Requires sufficient trading volume potential</p>
-                </div>
-              </div>
-
-              <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                <h3 className="text-sm font-semibold text-slate-300 mb-2">Case Details</h3>
-                <p className="text-sm text-slate-400 mb-1">{requestedCase.caseName}</p>
-                <p className="text-xs text-slate-500">Docket: {requestedCase.docketNumber}</p>
-                <p className="text-xs text-slate-500">Court: {requestedCase.court}</p>
-              </div>
-
-              <div className="bg-blue-500/5 border border-blue-500/20 p-3 rounded-lg">
-                <p className="text-xs text-blue-300">
-                  💡 Market requests help expand our coverage. Thank you for contributing to the platform!
-                </p>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-6 border-t border-white/10 bg-[#151518]">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowRequestModal(false)}
-                  className="flex-1 bg-white/10 hover:bg-white/20 text-slate-300 font-medium py-3 rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={submitMarketRequest}
-                  className="flex-1 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(251,146,60,0.3)]"
-                >
-                  Submit Request
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
