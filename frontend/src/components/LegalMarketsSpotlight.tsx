@@ -3,7 +3,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 import React, { useState, useEffect } from 'react';
-import { Scale, Plus } from 'lucide-react';
+import { Scale } from 'lucide-react';
 
 interface LegalMarket {
   id: string;
@@ -14,21 +14,24 @@ interface LegalMarket {
   icon?: string;
 }
 
-// EXPANDED keywords to catch more legal/political/regulatory markets
+// Keywords to catch legal/court/regulatory markets
 const LEGAL_KEYWORDS = [
   // Courts & Legal
-  'court', 'judge', 'trial', 'ruling', 'scotus', 'supreme court', 'verdict', 
+  'court', 'judge', 'trial', 'ruling', 'scotus', 'supreme court', 'verdict',
   'guilty', 'lawsuit', 'indictment', 'conviction', 'sentenced', 'legal',
+  'charged', 'custody', 'prison', 'arrest', 'extradition', 'case against',
+  'convicted', 'prosecutor', 'antitrust',
   // Regulatory agencies
-  'sec', 'doj', 'ftc', 'dea', 'fda', 'epa', 'fcc', 'federal',
+  'sec', 'doj', 'ftc', 'dea', 'fda', 'epa', 'fcc',
   // Policy & Law
-  'law', 'legislation', 'bill', 'regulation', 'regulatory', 'policy',
-  'rescheduled', 'scheduled', 'ban', 'tariff', 'sanction',
+  'legislation', 'bill', 'regulation', 'regulatory', 'policy',
+  'ban', 'tariff', 'sanction', 'deport',
   // International/Treaty
-  'treaty', 'ceasefire', 'agreement', 'nato', 'un ', 'united nations',
+  'ceasefire', 'nato',
   // Political/Government
-  'impeach', 'pardon', 'executive order', 'supreme leader', 'constitutional',
-  'government', 'congress', 'senate', 'house of rep'
+  'impeach', 'pardon', 'executive order', 'constitutional',
+  // Known legal-adjacent names/events
+  'weinstein', 'epstein', 'mangione', 'combs',
 ];
 
 export function LegalMarketsSpotlight() {
@@ -114,13 +117,6 @@ export function LegalMarketsSpotlight() {
           <Scale size={16} className="text-blue-400" />
           <span className="text-sm font-mono text-slate-400">LEGAL & POLICY MARKETS</span>
         </div>
-        <a 
-          href="/app/cases"
-          className="flex items-center gap-1 text-xs font-mono text-yellow-400 hover:text-yellow-300"
-        >
-          <Plus size={12} />
-          Request Market
-        </a>
       </div>
 
       {legalMarkets.length > 0 ? (
@@ -175,9 +171,6 @@ export function LegalMarketsSpotlight() {
         <div className="text-center py-6 border border-dashed border-white/10 rounded-lg">
           <Scale size={20} className="text-slate-600 mx-auto mb-2" />
           <p className="text-sm text-slate-500">No legal markets found</p>
-          <a href="/app/cases" className="text-xs font-mono text-blue-400 hover:text-blue-300">
-            Request a market →
-          </a>
         </div>
       )}
     </div>
