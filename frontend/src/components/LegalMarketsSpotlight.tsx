@@ -14,26 +14,6 @@ interface LegalMarket {
   icon?: string;
 }
 
-// Keywords to catch legal/court/regulatory markets
-const LEGAL_KEYWORDS = [
-  // Courts & Legal
-  'court', 'judge', 'trial', 'ruling', 'scotus', 'supreme court', 'verdict',
-  'guilty', 'lawsuit', 'indictment', 'conviction', 'sentenced', 'legal',
-  'charged', 'custody', 'prison', 'arrest', 'extradition', 'case against',
-  'convicted', 'prosecutor', 'antitrust',
-  // Regulatory agencies
-  'sec', 'doj', 'ftc', 'dea', 'fda', 'epa', 'fcc',
-  // Policy & Law
-  'legislation', 'bill', 'regulation', 'regulatory', 'policy',
-  'ban', 'tariff', 'sanction', 'deport',
-  // International/Treaty
-  'ceasefire', 'nato',
-  // Political/Government
-  'impeach', 'pardon', 'executive order', 'constitutional',
-  // Known legal-adjacent names/events
-  'weinstein', 'epstein', 'mangione', 'combs',
-];
-
 export function LegalMarketsSpotlight() {
   const [legalMarkets, setLegalMarkets] = useState<LegalMarket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,53 +21,27 @@ export function LegalMarketsSpotlight() {
   useEffect(() => {
     const fetchLegalMarkets = async () => {
       try {
-        let allMarkets: LegalMarket[] = [];
-        
-        // Try legal endpoint first
-        try {
-          const legalRes = await fetch(`${API_URL}/api/markets/legal?limit=50`);
-          if (legalRes.ok) {
-            const data = await legalRes.json();
-            allMarkets = Array.isArray(data) ? data : (data.markets || []);
+        // Use the same endpoint as the Legal tab on the Markets page
+        const res = await fetch(`${API_URL}/api/markets/trending?category=Legal&limit=10&exclude_sports=true`);
+        if (res.ok) {
+          const data = await res.json();
+          const markets = Array.isArray(data) ? data : (data.trending || data.markets || []);
+
+          // Deduplicate similar markets (same event, different outcomes)
+          const deduplicated: LegalMarket[] = [];
+          const getKeyWords = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(w => w.length > 3);
+          for (const market of markets) {
+            const words = getKeyWords(market.question || '');
+            const isDuplicate = deduplicated.some(existing => {
+              const existingWords = getKeyWords(existing.question || '');
+              const overlap = words.filter((w: string) => existingWords.includes(w)).length;
+              return overlap >= Math.min(words.length, existingWords.length) * 0.5;
+            });
+            if (!isDuplicate) deduplicated.push(market);
           }
-        } catch (e) {
-          console.log('Legal endpoint failed, trying main markets');
+
+          setLegalMarkets(deduplicated.slice(0, 4));
         }
-
-        // If no results, try main markets endpoint
-        if (allMarkets.length === 0) {
-          const mainRes = await fetch(`${API_URL}/api/markets?limit=100`);
-          if (mainRes.ok) {
-            const data = await mainRes.json();
-            allMarkets = Array.isArray(data) ? data : (data.markets || []);
-          }
-        }
-
-        // Filter for legal-related markets with EXPANDED keywords
-        const filtered = allMarkets.filter((market: LegalMarket) => {
-          const question = (market.question || '').toLowerCase();
-          return LEGAL_KEYWORDS.some(keyword => question.includes(keyword.toLowerCase()));
-        });
-
-        // Sort by volume, deduplicate similar markets, take top 4
-        filtered.sort((a: LegalMarket, b: LegalMarket) => (b.volume || 0) - (a.volume || 0));
-
-        // Deduplicate: if two markets share most key words, keep the higher-volume one
-        const deduplicated: LegalMarket[] = [];
-        const getKeyWords = (q: string) => q.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(w => w.length > 3);
-        for (const market of filtered) {
-          const words = getKeyWords(market.question || '');
-          const isDuplicate = deduplicated.some(existing => {
-            const existingWords = getKeyWords(existing.question || '');
-            const overlap = words.filter(w => existingWords.includes(w)).length;
-            return overlap >= Math.min(words.length, existingWords.length) * 0.5;
-          });
-          if (!isDuplicate) deduplicated.push(market);
-        }
-
-        const sorted = deduplicated.slice(0, 4);
-
-        setLegalMarkets(sorted);
       } catch (err) {
         console.error('Error fetching legal markets:', err);
       } finally {
@@ -143,8 +97,8 @@ export function LegalMarketsSpotlight() {
               {/* Market Image */}
               <div className="flex-shrink-0">
                 {(market.image || market.icon) ? (
-                  <img 
-                    src={market.image || market.icon} 
+                  <img
+                    src={market.image || market.icon}
                     alt=""
                     className="w-16 h-16 rounded-lg object-cover border border-white/10"
                     onError={(e) => {
@@ -163,7 +117,7 @@ export function LegalMarketsSpotlight() {
                 <p className="text-sm text-slate-300 group-hover:text-white line-clamp-2 mb-2">
                   {market.question}
                 </p>
-                
+
                 {/* Yes/No Prices */}
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/20 rounded px-1.5 py-0.5">
